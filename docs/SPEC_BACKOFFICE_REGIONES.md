@@ -28,6 +28,7 @@ Falta la aplicación que las contenga: **Mobility BackOffice**.
 | D4 | Tres roles en ITManager: **SUPERADMIN, ADMIN, MARKETING** | Mínimo que cubre las tres funcionalidades del brief sin roles muertos |
 | D5 | Misma arquitectura que MM: monorepo npm workspaces, NestJS 11 + Prisma (`apps/api`), React 18 + Vite 6 (`apps/web`), despliegue **single-port** | Requisito explícito del brief; el equipo ya opera este stack |
 | D6 | `Continents` sigue siendo **solo lectura** | Tabla compartida con DuwyDashy y el Middleware. El módulo nunca la escribe |
+| D7 | **BackOffice emite su propio JWT** con el rol adentro, en vez de reusar el de ManageIT (revisa la decisión implícita de §3.1 en la versión 0.1.0 de esta spec) | El JWT de ManageIT no incluye los roleKeys: viajan solo en el body del login. Un guard que verifique ese token solo puede autorizar por `isAdmin`, que es global (`IsAdmin` OR cualquier `*_SUPERADMIN` de **cualquier** app). Sin este cambio, `MOBILITYBO_ADMIN` no podría escribir y un superadmin de otro sistema sí. Ver `docs/AUTENTICACION.md` |
 
 ## 3. Qué se construye
 
@@ -39,9 +40,10 @@ DuwyChat). Se conserva:
 - Monorepo con `apps/api` y `apps/web`, versión sincronizada en `package.json` raíz, `apps/api/src/version.ts`
   y `apps/web/src/version.ts` (las tres, siempre iguales — en MM derivaron y es un defecto a no heredar).
 - **Login por gateway a ITManager**: `POST /api/auth/login` → cliente ITManager → resolución de rol desde
-  `accessMatrix` filtrado por `appId` → JWT de ManageIT reusado (BackOffice **no emite JWT propio**),
-  verificado localmente con `JWT_SECRET` compartido HS256.
-- Guards: `JwtGuard` (popula `req.user` con `{email, guid, isAdmin}`), `AdminGuard`, `RoleGuard` en el front.
+  `accessMatrix` filtrado por `appId` → **BackOffice firma su propio JWT** (HS256, secret propio) con
+  el rol como claim. Ver D7 y `docs/AUTENTICACION.md`.
+- Guards: `JwtGuard` (verifica el token propio y popula `req.user`), `RolesGuard` + decorador
+  `@Roles(...)` (autoriza por el claim `role`; `SuperAdmin` pasa siempre), `RoleGuard` en el front.
 - Shell de navegación: `AppLayout` (TopBar + Sidebar colapsable + `<Outlet>`), tokens CSS, Inter self-hosted,
   iconos SVG inline, `ComingSoon` para secciones aún vacías.
 - `GET /api/health` → `{success, name, version, status}`.

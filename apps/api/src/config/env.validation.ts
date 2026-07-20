@@ -15,11 +15,16 @@ export const envValidationSchema = Joi.object({
   // Base de datos (compartida con MobilityManager — solo cliente Prisma)
   DATABASE_URL: Joi.string().required(),
 
-  // ITManager
+  // ITManager — autoridad de credenciales y de roles asignados
   ITMANAGER_AUTH_URL: Joi.string().uri().required(),
   APP_ID: Joi.string().default('MobilityBackOffice'),
   PERM_PREFIX: Joi.string().default('MOBILITYBO_'),
-  JWT_SECRET: Joi.string().required(),
+
+  // Token propio de BackOffice (HS256). Secret PROPIO, distinto del de ManageIT:
+  // firmamos el rol de la app dentro del token porque el JWT de ManageIT no lleva
+  // los roleKeys. Ver docs/AUTENTICACION.md.
+  BACKOFFICE_JWT_SECRET: Joi.string().min(16).required(),
+  JWT_EXPIRES_IN: Joi.string().default('1h'),
 
   // Regiones comerciales — key del web service de sync (x-api-key). Si no está
   // seteada, el endpoint POST /api/regions/sync queda deshabilitado (403).

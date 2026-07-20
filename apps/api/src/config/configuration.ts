@@ -11,7 +11,14 @@ export default () => ({
     authUrl: process.env.ITMANAGER_AUTH_URL,
     appId: process.env.APP_ID ?? 'MobilityBackOffice',
     permPrefix: process.env.PERM_PREFIX ?? 'MOBILITYBO_',
-    jwtSecret: process.env.JWT_SECRET,
+  },
+
+  // Token PROPIO de BackOffice. No es el de ManageIT y no comparte su secret:
+  // el JWT de ManageIT no incluye los roleKeys, así que la autorización en runtime
+  // se degradaría a `isAdmin`, que es global y cruza aplicaciones.
+  jwt: {
+    secret: process.env.BACKOFFICE_JWT_SECRET,
+    expiresIn: process.env.JWT_EXPIRES_IN ?? '1h',
   },
 
   // Regiones comerciales — key del web service de sync (x-api-key). Vacío = deshabilitado.

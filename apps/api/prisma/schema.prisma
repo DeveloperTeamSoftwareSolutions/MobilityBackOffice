@@ -1,0 +1,81 @@
+// Prisma schema — Mobility BackOffice
+//
+// La base es COMPARTIDA con MobilityManager (Mobility_QATEST / Mobility-PROD).
+// BackOffice no la posee: Prisma se usa SOLO como cliente. Prohibido `prisma migrate`
+// y `prisma db push`. Los cambios de esquema van por scripts idempotentes en
+// `prisma/sql/`, aplicados a mano (ver docs/DEPLOY_SQL_PENDIENTE.md).
+//
+// Nota de collation: el default de la base es Latin1_General_100_CI_AS_SC
+// (accent-SENSITIVE). Las queries que joinean contra [SAPServices] fuerzan
+// COLLATE Latin1_General_100_CI_AI_SC explícito y van por $queryRaw.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+/// Tabla central de auditoría (compartida, ya usada por ITManager y MobilityManager).
+/// BackOffice escribe sus eventos con AppId='MobilityBackOffice'.
+model AuditLogs {
+  id                  Int     @id @default(autoincrement()) @map("Id")
+  guid                String  @unique @default(uuid()) @map("Guid") @db.Char(36)
+  guidUsers           String? @map("GuidUsers") @db.Char(36)
+  guidApiLoginClients String? @map("GuidApiLoginClients") @db.Char(36)
+  action              String  @map("Action") @db.VarChar(50) // LOGIN | REGION_CEBE_LINK | ...
+  entity              String  @map("Entity") @db.VarChar(50)
+  entityId            String? @map("EntityId") @db.Char(36)
+  detail              String? @map("Detail") @db.NVarChar(Max)
+  ipAddress           String? @map("IpAddress") @db.VarChar(45)
+  category            String  @map("Category") @db.VarChar(30)
+  timeStamp           BigInt  @map("TimeStamp")
+  serverTimestamp     BigInt  @map("ServerTimestamp")
+  deletedTimestamp    BigInt? @map("DeletedTimestamp")
+  appId               String? @map("AppId") @db.NVarChar(64)
+
+  @@map("AuditLogs")
+}
+
+/// Catálogo de regiones comerciales — REUSA la tabla geográfica compartida
+/// `Continents` (CA=Centroamérica, CB=Caribe, AN=Andina, NA=Norteamérica) en
+/// SOLO LECTURA. BackOffice nunca la modifica: la usan DuwyDashy y el Middleware.
+/// Las agrupaciones tipo CAYCAR (CA+CB) se resuelven por configuración en el
+/// código (`regions/region-groups.ts`), no en la base.
+model Continents {
+  id               Int     @id @default(autoincrement()) @map("Id")
+  guid             String  @unique @default(uuid()) @map("Guid") @db.Char(36)
+  timeStamp        BigInt  @map("TimeStamp")
+  serverTimestamp  BigInt  @map("ServerTimestamp")
+  deletedTimestamp BigInt? @map("DeletedTimestamp")
+  name             String  @map("Name") @db.NVarChar(64)
+  code             String? @map("Code") @db.NVarChar(8)
+  sortOrder        Int     @map("SortOrder")
+
+  @@map("Continents")
+}
+
+/// Mapeo atomizado CEBE↔región (M:N). Una fila = un CEBE (`profitCenterCode`,
+/// ref. `[SAPServices].[dbo].[ProfitCenters]`) vinculado a una región (`Continents`)
+/// para una sociedad (`companyCode`). La clave única es TRIPLE: hay CEBEs
+/// transversales que aparecen en más de una sociedad. Unlink = soft-delete.
+/// Ver `prisma/sql/002_ContinentProfitCenters.sql` y `003_...CompanyCode.sql`.
+model ContinentProfitCenters {
+  id               Int     @id @default(autoincrement()) @map("Id")
+  guid             String  @unique @default(uuid()) @map("Guid") @db.Char(36)
+  timeStamp        BigInt  @map("TimeStamp")
+  serverTimestamp  BigInt  @map("ServerTimestamp")
+  deletedTimestamp BigInt? @map("DeletedTimestamp")
+  guidContinents   String  @map("GuidContinents") @db.Char(36)
+  profitCenterCode String  @map("ProfitCenterCode") @db.NVarChar(32)
+  profitCenterName String? @map("ProfitCenterName") @db.NVarChar(256)
+  companyCode      String  @map("CompanyCode") @db.NVarChar(8)
+  source           String  @map("Source") @db.NVarChar(16)
+  createdBy        String? @map("CreatedBy") @db.NVarChar(200)
+  updatedBy        String? @map("UpdatedBy") @db.NVarChar(200)
+  version          Int     @map("Version")
+
+  @@map("ContinentProfitCenters")
+}

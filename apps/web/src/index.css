@@ -1,0 +1,42 @@
+@import './theme/tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--bo-font);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--bo-text);
+  background: var(--bo-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--bo-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--bo-accent-hover);
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--bo-accent);
+  outline-offset: 2px;
+}

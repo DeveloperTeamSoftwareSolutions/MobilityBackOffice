@@ -1,0 +1,46 @@
+/* Design tokens — Mobility BackOffice
+   Paleta Slate alineada con MobilityManager e ITManager, con acento teal para
+   diferenciar visualmente el back-office del portal gerencial. */
+:root {
+  /* Azul corporativo (branding compartido) */
+  --bo-primary: #2c5282;
+  --bo-primary-dark: #1e3a5f;
+  --bo-primary-light: #3b6aa8;
+
+  /* Acento (teal — identidad propia del back-office) */
+  --bo-accent: #0d9488;
+  --bo-accent-hover: #0f766e;
+  --bo-accent-soft: #14b8a6;
+  --bo-focus-ring: rgba(13, 148, 136, 0.2);
+
+  /* Neutrales (Slate) */
+  --bo-bg: #f1f5f9;
+  --bo-surface: #ffffff;
+  --bo-border: #e2e8f0;
+  --bo-text: #1e293b;
+  --bo-text-muted: #64748b;
+
+  /* Estados */
+  --bo-danger: #c53030;
+  --bo-success: #2f855a;
+  --bo-warning: #b45309;
+
+  /* Sidebar (Slate-900) */
+  --bo-sidebar-bg: #0f172a;
+  --bo-sidebar-text: rgba(255, 255, 255, 0.66);
+  --bo-sidebar-hover: rgba(20, 184, 166, 0.12);
+  --bo-sidebar-active-bg: rgba(20, 184, 166, 0.2);
+  --bo-sidebar-accent: #14b8a6;
+  --bo-sidebar-section: #64748b;
+
+  /* Layout */
+  --bo-sidebar-width: 248px;
+  --bo-topbar-height: 60px;
+  --bo-radius: 12px;
+  --bo-radius-sm: 8px;
+  --bo-shadow: 0 1px 3px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+
+  /* Tipografía */
+  --bo-font: 'Inter', 'Segoe UI', system-ui, -apple-system, Roboto, Helvetica,
+    Arial, sans-serif;
+}

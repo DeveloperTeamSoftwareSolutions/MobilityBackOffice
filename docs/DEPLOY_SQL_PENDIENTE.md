@@ -27,16 +27,36 @@ Documento **vivo**: marcar la casilla y anotar la fecha al aplicar cada script e
 
 | # | Script | Contenido | QATEST | PROD |
 |---|---|---|---|---|
-| 001 | `001_RegisterMobilityBackOfficeApp.sql` | Registro de la app + 3 roles en ITManager (`Applications`, `Roles`) | [ ] | [ ] |
-| 002 | `002_ContinentProfitCenters.sql` | Tabla M:N region↔CEBE + 2 indices | [x] ya aplicado por MM — **verificar** | [ ] |
-| 003 | `003_ContinentProfitCentersCompanyCode.sql` | `CompanyCode` + clave unica triple | [x] ya aplicado por MM — **verificar** | [ ] |
-| 004 | `004_ViewProfitCentersMobility.sql` | Versiona `dbo.VIEW_ProfitCentersMobility` (se consumia sin estar en ningun repo) | [ ] verificar existencia | [ ] verificar existencia |
+| 001 | `001_RegisterMobilityBackOfficeApp.sql` | Registro de la app + 3 roles en ITManager (`Applications`, `Roles`) | [x] **aplicado 2026-07-20** | [ ] |
+| 002 | `002_ContinentProfitCenters.sql` | Tabla M:N region↔CEBE + 2 indices | [x] verificado 2026-07-20 (aplicado por MM) | [ ] |
+| 003 | `003_ContinentProfitCentersCompanyCode.sql` | `CompanyCode` + clave unica triple | [x] verificado 2026-07-20 (aplicado por MM) | [ ] |
+| 004 | `004_ViewProfitCentersMobility.sql` | Versiona `dbo.VIEW_ProfitCentersMobility` (se consumia sin estar en ningun repo) | [x] verificado 2026-07-20 (ya existia; **el script NO la modifico**) | [ ] |
 
 Orden de ejecucion: **001 → 002 → 003 → 004**. El 003 requiere que el 002 ya exista.
 
-Los scripts 002 y 003 son los `004_` y `006_` del repo MobilityManager, renumerados. Ya fueron
-aplicados a QATEST desde alli, por eso figuran como "verificar" y no como pendientes: hay que
-confirmar que los objetos existen antes de asumirlo.
+Los scripts 002 y 003 son los `004_` y `006_` del repo MobilityManager, renumerados.
+
+### Estado verificado en QATEST — 2026-07-20
+
+Verificado por consulta directa, no asumido:
+
+- `ContinentProfitCenters` y `Continents`: existen.
+- Columna `CompanyCode`: existe (`NVARCHAR(32)`).
+- Indices de `ContinentProfitCenters`: `PK_`, `UQ_..._Guid`, `IX_..._CompanyCode`,
+  `IX_..._ProfitCenterCode`, y el unico filtrado triple
+  `UX_ContinentProfitCenters_Cont_Cebe_Company_Active`. El unico por par ya no esta:
+  confirma que el 003 corrio completo.
+- `VIEW_ProfitCentersMobility`: existe. El script 004 la detecto y **no la modifico**.
+- App `MobilityBackOffice` + 3 roles: creados por el 001. Re-ejecutado para confirmar
+  idempotencia: sigue habiendo 1 fila en `Applications` y 3 en `Roles`.
+
+### PROD — NO verificado
+
+**No se pudo conectar a `Mobility-PROD`**: las credenciales disponibles son de QATEST y el
+login del usuario `sa` es rechazado en PROD. Todo lo que figura como pendiente en la columna
+PROD esta **sin confirmar**, en ambos sentidos: puede que algun objeto ya exista.
+
+Antes de desplegar a produccion hay que correr la verificacion de abajo con credenciales de PROD.
 
 ## Riesgo abierto — renombre SA → AN
 
@@ -47,8 +67,29 @@ que verificar que ningun otro sistema (DuwyDashy, MobilityMiddleWare) filtre por
 ## Verificacion rapida de objetos
 
 ```sql
-SELECT name FROM sys.tables  WHERE name IN ('ContinentProfitCenters', 'Continents');
-SELECT name FROM sys.views   WHERE name = 'VIEW_ProfitCentersMobility';
-SELECT name FROM sys.columns WHERE object_id = OBJECT_ID('ContinentProfitCenters') AND name = 'CompanyCode';
-SELECT name FROM sys.indexes WHERE object_id = OBJECT_ID('ContinentProfitCenters');
+SELECT 'tabla ContinentProfitCenters' AS objeto,
+       CASE WHEN OBJECT_ID('dbo.ContinentProfitCenters') IS NULL THEN 'FALTA' ELSE 'OK' END AS estado
+UNION ALL SELECT 'tabla Continents',
+       CASE WHEN OBJECT_ID('dbo.Continents') IS NULL THEN 'FALTA' ELSE 'OK' END
+UNION ALL SELECT 'columna CompanyCode',
+       CASE WHEN COL_LENGTH('dbo.ContinentProfitCenters','CompanyCode') IS NULL THEN 'FALTA' ELSE 'OK' END
+UNION ALL SELECT 'vista VIEW_ProfitCentersMobility',
+       CASE WHEN OBJECT_ID('dbo.VIEW_ProfitCentersMobility') IS NULL THEN 'FALTA' ELSE 'OK' END
+UNION ALL SELECT 'app MobilityBackOffice registrada',
+       CASE WHEN NOT EXISTS (SELECT 1 FROM dbo.Applications WHERE AppId='MobilityBackOffice')
+            THEN 'FALTA' ELSE 'OK' END;
+
+-- Indices: debe estar el unico filtrado TRIPLE, no el de par.
+SELECT i.name, i.is_unique, i.has_filter
+FROM sys.indexes i
+WHERE i.object_id = OBJECT_ID('dbo.ContinentProfitCenters') AND i.name IS NOT NULL
+ORDER BY i.name;
+```
+
+Ejecucion con sqlcmd (recordar `-I`, y correr desde el directorio del script: sqlcmd rompe
+con rutas absolutas de Windows en `-i`):
+
+```bash
+cd apps/api/prisma/sql
+sqlcmd -S <host>,1433 -U <user> -d Mobility_QATEST -C -I -b -i 001_RegisterMobilityBackOfficeApp.sql
 ```

@@ -71,7 +71,7 @@ model ContinentProfitCenters {
   guidContinents   String  @map("GuidContinents") @db.Char(36)
   profitCenterCode String  @map("ProfitCenterCode") @db.NVarChar(32)
   profitCenterName String? @map("ProfitCenterName") @db.NVarChar(256)
-  companyCode      String  @map("CompanyCode") @db.NVarChar(8)
+  companyCode      String  @map("CompanyCode") @db.NVarChar(32)
   source           String  @map("Source") @db.NVarChar(16)
   createdBy        String? @map("CreatedBy") @db.NVarChar(200)
   updatedBy        String? @map("UpdatedBy") @db.NVarChar(200)

@@ -23,6 +23,9 @@ export default defineConfig({
     },
   },
   test: {
+    // `globals: true` es necesario para que el auto-cleanup de Testing Library
+    // se registre entre tests; sin esto los renders se acumulan en el mismo DOM.
+    globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: false,

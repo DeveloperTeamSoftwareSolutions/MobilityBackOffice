@@ -1,7 +1,7 @@
 # Variables de Entorno — Mobility BackOffice
 
 > Ultima actualizacion: 2026-07-20
-> Version: 0.2.0
+> Version: 0.3.0
 
 Fuente de verdad del backend: `apps/api/src/config/env.validation.ts` (Joi) y
 `apps/api/src/config/configuration.ts`. Si falta una variable **requerida**, el arranque falla.

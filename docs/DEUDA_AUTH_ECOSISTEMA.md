@@ -120,6 +120,27 @@ branch, su propia validacion y — en el caso de ManageIT — acuerdo con quien 
 | 5 | ManageIT | Evaluar incluir los roleKeys de la app solicitada en el JWT. **Lo arreglaria en el origen para todo el ecosistema** y volveria innecesarios los tokens propios | media, alto impacto |
 | 6 | ManageIT | Revisar si `isAdmin` deberia calcularse por `appId` en vez de global. Es un cambio con riesgo de regresion: hoy varias apps dependen de ese comportamiento | media |
 | 7 | DuwyChat | Implementar lo que describe su `docs/ROLES_AND_PERMISSIONS.md`, o borrar el documento | baja |
+| 8 | MobilityManager | **Bug**: acotar el timer de expiracion de sesion en `apps/web/src/auth/AuthProvider.tsx:122` | media |
+
+### Detalle de la tarea 8
+
+`MobilityManager/apps/web/src/auth/AuthProvider.tsx:122`:
+
+```ts
+timer = window.setTimeout(logout, Math.max(0, expMs - Date.now()));
+```
+
+`setTimeout` guarda el delay en **32 bits con signo**: cualquier valor mayor a `2147483647`
+(unos 24.8 dias) se trunca y el timer dispara **de inmediato**. Con un token de expiracion
+lejana, el usuario queda deslogueado apenas entra.
+
+Hoy no se manifiesta porque el token de ManageIT vence en 1 hora, pero es una bomba de tiempo:
+basta con que alguien suba el `expiresIn` para que la app se vuelva inusable, y el sintoma
+(«me saca al login apenas entro») no apunta para nada a la causa.
+
+BackOffice lo corrigio armando el timer solo si el restante entra en el rango, y dejando el
+re-chequeo al volver el foco para lo demas. Detectado por un test de integracion, no por
+revision de codigo.
 
 La tarea **5 es la de mayor retorno**: resuelve la causa raiz en el proveedor de identidad. Las
 demas son mitigaciones por app. Conviene evaluarla antes de replicar el patron A en cada sistema.

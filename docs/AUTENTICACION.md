@@ -1,7 +1,7 @@
 # Autenticacion y autorizacion — Mobility BackOffice
 
 > Ultima actualizacion: 2026-07-20
-> Version: 0.3.0
+> Version: 0.4.0
 
 ## Resumen
 

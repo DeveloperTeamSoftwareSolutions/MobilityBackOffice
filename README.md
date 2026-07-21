@@ -19,7 +19,7 @@ usa el dev server de Vite en `:5173`, que proxyea `/api` al backend.
 
 | Modulo | Estado | Roles |
 |---|---|---|
-| Regiones comerciales | en construccion | SUPERADMIN, Administrador |
+| Regiones comerciales | **completo** (v1.0.0) | SUPERADMIN, Administrador |
 | Templates de WhatsApp (Marketing) | pendiente | SUPERADMIN, Marketing |
 | Carga de documentacion del RAG | pendiente | SUPERADMIN, Marketing |
 
@@ -27,12 +27,16 @@ usa el dev server de Vite en `:5173`, que proxyea `/api` al backend.
 
 ```bash
 npm install
-cp apps/api/.env.example apps/api/.env    # completar DATABASE_URL y JWT_SECRET
+cp apps/api/.env.example apps/api/.env    # completar DATABASE_URL y BACKOFFICE_JWT_SECRET
 npm run dev:api                            # :3000
 npm run dev:web                            # :5173
+npm test                                   # backend (jest) + frontend (vitest)
 ```
 
 Verificacion: `GET http://localhost:3000/api/health` devuelve nombre, version y estado.
+
+En produccion se sirve todo desde un solo puerto: `npm run build` genera el build de Vite y el
+backend lo sirve. No hace falta el dev server de Vite.
 
 ## Base de datos
 
@@ -44,6 +48,12 @@ Ver `docs/DEPLOY_SQL_PENDIENTE.md` para el estado por entorno.
 
 ## Documentacion
 
-- `docs/SPEC_BACKOFFICE_REGIONES.md` — spec de la fase 1 (fundacion + Regiones)
+- `docs/SPEC_BACKOFFICE_REGIONES.md` — spec (fundacion + Regiones)
+- `docs/AUTENTICACION.md` — login, token propio y guards; por que no se reusa el JWT de ManageIT
+- `docs/API_ENDPOINTS.md` — contrato de la API
+- `docs/JERARQUIA_Y_VISIBILIDAD.md` — que ve cada rol; Regiones no tiene eje jerarquico
+- `docs/AUDITORIA.md` — catalogo de acciones auditadas
 - `docs/ENV_VARIABLES.md` — variables de entorno
+- `docs/EXTERNAL_APIS.md` — integraciones externas
 - `docs/DEPLOY_SQL_PENDIENTE.md` — checklist de scripts SQL por entorno
+- `docs/DEUDA_AUTH_ECOSISTEMA.md` — deuda de autorizacion detectada en otras apps (pendiente)

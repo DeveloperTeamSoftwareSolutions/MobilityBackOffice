@@ -190,7 +190,7 @@ Una branch por fase, commit + push, sin PR salvo pedido explícito.
 | **2** | Backend fundación: config, Prisma, Audit, Health, Auth completo (login gateway + guards + resolver de 3 roles) | 1 |
 | **3** | Frontend fundación: login, AuthProvider, shell de navegación, tokens, ProtectedRoute/RoleGuard | 2 (contrato de auth) |
 | **4** | Backend Regiones: types, repository, service, controllers, guards, tests unitarios de mappers y reconcile | 2 |
-| **5** | Frontend Regiones: panel, listado, detalle, pickers, diagnóstico | 3 y 4 |
+| **5** | Frontend Regiones: panel, listado, detalle, pickers, diagnóstico | 3 y 4 | ✔ (0.5.0) |
 | **6** | Docs vivas (`ENV_VARIABLES`, `API_ENDPOINTS`, `AUDITORIA`, `DEPLOY_SQL_PENDIENTE`, `REGIONES_CEBE`), smoke test, versión 1.0.0 | 5 |
 
 Paralelizable: fase 3 y 4 corren en simultáneo una vez cerrada la 2. Fases 1 y 2 también, salvo el registro de app

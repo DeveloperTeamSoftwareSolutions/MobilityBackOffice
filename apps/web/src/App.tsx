@@ -6,6 +6,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { ComingSoon } from './components/common/ComingSoon';
 import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
+import { RegionesPage } from './pages/RegionesPage';
 
 /**
  * Router de la aplicación. Punto único donde se declaran los módulos.
@@ -37,11 +38,7 @@ export function App(): JSX.Element {
                   allow={['Administrador']}
                   fallback={<Navigate to="/" replace />}
                 >
-                  {/* Fase 5: <RegionesPage /> */}
-                  <ComingSoon
-                    titulo="Regiones comerciales"
-                    descripcion="Vinculación de regiones con centros de beneficio y sociedades."
-                  />
+                  <RegionesPage />
                 </RoleGuard>
               }
             />

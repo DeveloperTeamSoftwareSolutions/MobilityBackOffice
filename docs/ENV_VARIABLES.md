@@ -22,9 +22,9 @@ Fuente de verdad del backend: `apps/api/src/config/env.validation.ts` (Joi) y
 
 | Variable | Descripcion | Default | Donde se usa |
 |---|---|---|---|
-| `PORT` | Puerto del servidor | `3000` | `apps/api/src/main.ts` |
+| `PORT` | Puerto del servidor | `3010` | `apps/api/src/main.ts` |
 | `NODE_ENV` | Entorno (`development` \| `test` \| `production`) | `development` | `apps/api/src/main.ts` |
-| `CORS_ORIGIN` | Origen permitido para CORS | `http://localhost:5173` | `apps/api/src/main.ts` |
+| `CORS_ORIGIN` | Origen permitido para CORS | `http://localhost:5183` | `apps/api/src/main.ts` |
 | `APP_ID` | Identificador de la app en ITManager | `MobilityBackOffice` | `apps/api/src/config/configuration.ts` |
 | `PERM_PREFIX` | Prefijo de permisos/roles en ITManager | `MOBILITYBO_` | `apps/api/src/config/configuration.ts` |
 | `JWT_EXPIRES_IN` | Vigencia del token propio. El rol queda congelado hasta que expira | `1h` | `apps/api/src/auth/token.service.ts` |
@@ -37,7 +37,7 @@ Fuente de verdad del backend: `apps/api/src/config/env.validation.ts` (Joi) y
 | `VITE_API_URL` | Base URL de la API. **Debe quedar vacia** | vacio | `apps/web/src/api/httpClient.ts` (fase 3) |
 
 **Por que vacia**: el front usa rutas relativas (`/api`) contra el mismo origen. En desarrollo
-Vite proxyea `/api` al backend en `:3000`; en produccion el backend sirve el build. Setear esta
+Vite proxyea `/api` al backend en `:3010`; en produccion el backend sirve el build. Setear esta
 variable hornea una URL absoluta en el build y rompe el login desde cualquier otra maquina
 (`ERR_CONNECTION_REFUSED`).
 

@@ -12,8 +12,8 @@ Monorepo npm workspaces.
 | `@mobility-backoffice/web` | `apps/web` | React 18 + Vite 6 (SPA) |
 
 **Despliegue single-port**: en produccion el API sirve el build de Vite desde `apps/web/dist`
-y sigue atendiendo `/api`. Un solo proceso en `:3000`. En desarrollo el build no existe y se
-usa el dev server de Vite en `:5173`, que proxyea `/api` al backend.
+y sigue atendiendo `/api`. Un solo proceso en `:3010`. En desarrollo el build no existe y se
+usa el dev server de Vite en `:5183`, que proxyea `/api` al backend.
 
 ## Modulos
 
@@ -28,12 +28,12 @@ usa el dev server de Vite en `:5173`, que proxyea `/api` al backend.
 ```bash
 npm install
 cp apps/api/.env.example apps/api/.env    # completar DATABASE_URL y BACKOFFICE_JWT_SECRET
-npm run dev:api                            # :3000
-npm run dev:web                            # :5173
+npm run dev:api                            # :3010
+npm run dev:web                            # :5183
 npm test                                   # backend (jest) + frontend (vitest)
 ```
 
-Verificacion: `GET http://localhost:3000/api/health` devuelve nombre, version y estado.
+Verificacion: `GET http://localhost:3010/api/health` devuelve nombre, version y estado.
 
 En produccion se sirve todo desde un solo puerto: `npm run build` genera el build de Vite y el
 backend lo sirve. No hace falta el dev server de Vite.

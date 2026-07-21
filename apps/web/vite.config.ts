@@ -14,10 +14,12 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    // Puertos propios de BackOffice para no chocar con MobilityManager (api 3000,
+    // web 5173) cuando ambas apps corren en la misma maquina.
+    port: 5183,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3010',
         changeOrigin: true,
       },
     },

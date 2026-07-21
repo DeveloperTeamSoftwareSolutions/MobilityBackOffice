@@ -6,11 +6,11 @@ import * as Joi from 'joi';
  */
 export const envValidationSchema = Joi.object({
   // Servidor
-  PORT: Joi.number().default(3000),
+  PORT: Joi.number().default(3010),
   NODE_ENV: Joi.string()
     .valid('development', 'test', 'production')
     .default('development'),
-  CORS_ORIGIN: Joi.string().default('http://localhost:5173'),
+  CORS_ORIGIN: Joi.string().default('http://localhost:5183'),
 
   // Base de datos (compartida con MobilityManager — solo cliente Prisma)
   DATABASE_URL: Joi.string().required(),

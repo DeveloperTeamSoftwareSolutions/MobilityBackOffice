@@ -162,7 +162,7 @@ tocar PROD hay que verificar que ningún otro sistema (DuwyDashy, Middleware) fi
 
 Requeridas (Joi falla el arranque si faltan): `DATABASE_URL`, `ITMANAGER_AUTH_URL`, `JWT_SECRET`.
 
-Con default: `PORT` (3000), `NODE_ENV`, `CORS_ORIGIN`, `APP_ID` (`MobilityBackOffice`),
+Con default: `PORT` (3010), `NODE_ENV`, `CORS_ORIGIN`, `APP_ID` (`MobilityBackOffice`),
 `PERM_PREFIX` (`MOBILITYBO_`), `REGIONS_SYNC_API_KEY` (sin ella el sync queda deshabilitado con 403).
 
 Frontend: `VITE_API_URL` **debe quedar vacía** en dev y prod — el front usa rutas relativas contra el mismo origen.

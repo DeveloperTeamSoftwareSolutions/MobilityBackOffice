@@ -3,9 +3,9 @@
  * Se consume vía ConfigService: `config.get('itmanager.authUrl')`.
  */
 export default () => ({
-  port: parseInt(process.env.PORT ?? '3000', 10),
+  port: parseInt(process.env.PORT ?? '3010', 10),
   nodeEnv: process.env.NODE_ENV ?? 'development',
-  corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
+  corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5183',
 
   itmanager: {
     authUrl: process.env.ITMANAGER_AUTH_URL,

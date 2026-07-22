@@ -15,7 +15,7 @@ const ITM_OK: ItmanagerLoginResult = {
     isAdmin: false,
   },
   roleKeys: ['MOBILITYBO_ADMIN'],
-  permissions: ['REGIONS_WRITE'],
+  permissions: ['REGIONS_LINK'],
 };
 
 function build(overrides: {
@@ -82,7 +82,7 @@ describe('AuthService.login', () => {
         name: 'Juan Perez',
         guidUsers: 'guid-usuario',
       });
-      expect(res.permissions).toEqual(['REGIONS_WRITE']);
+      expect(res.permissions).toEqual(['REGIONS_LINK']);
     });
 
     it('audita el acceso con accion LOGIN y el guid del usuario', async () => {

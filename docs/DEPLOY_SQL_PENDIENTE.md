@@ -27,7 +27,7 @@ Documento **vivo**: marcar la casilla y anotar la fecha al aplicar cada script e
 
 | # | Script | Contenido | QATEST | PROD |
 |---|---|---|---|---|
-| 001 | `001_RegisterMobilityBackOfficeApp.sql` | Registro de la app + 3 roles en ITManager (`Applications`, `Roles`) | [x] **aplicado 2026-07-20** | [ ] |
+| 001 | `001_RegisterMobilityBackOfficeApp.sql` | Registro de la app + 3 roles + **5 permisos + mapeo rol-permiso** en ITManager (`Applications`, `Roles`, `Permissions`, `RolePermissions`) | [x] aplicado 2026-07-20; **permisos agregados 2026-07-22** | [ ] |
 | 002 | `002_ContinentProfitCenters.sql` | Tabla M:N region↔CEBE + 2 indices | [x] verificado 2026-07-20 (aplicado por MM) | [ ] |
 | 003 | `003_ContinentProfitCentersCompanyCode.sql` | `CompanyCode` + clave unica triple | [x] verificado 2026-07-20 (aplicado por MM) | [ ] |
 | 004 | `004_ViewProfitCentersMobility.sql` | Versiona `dbo.VIEW_ProfitCentersMobility` (se consumia sin estar en ningun repo) | [x] verificado 2026-07-20 (ya existia; **el script NO la modifico**) | [ ] |

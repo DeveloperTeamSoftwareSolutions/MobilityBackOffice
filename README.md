@@ -50,6 +50,7 @@ Ver `docs/DEPLOY_SQL_PENDIENTE.md` para el estado por entorno.
 
 - `docs/SPEC_BACKOFFICE_REGIONES.md` — spec (fundacion + Regiones)
 - `docs/AUTENTICACION.md` — login, token propio y guards; por que no se reusa el JWT de ManageIT
+- `docs/ROLES_Y_PERMISOS.md` — roles, permisos y mapeo para aplicar en ITManager
 - `docs/API_ENDPOINTS.md` — contrato de la API
 - `docs/JERARQUIA_Y_VISIBILIDAD.md` — que ve cada rol; Regiones no tiene eje jerarquico
 - `docs/AUDITORIA.md` — catalogo de acciones auditadas

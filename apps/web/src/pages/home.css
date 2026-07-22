@@ -1,0 +1,89 @@
+.bo-home__group {
+  margin-top: 28px;
+}
+
+.bo-home__grouptitle {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bo-text-muted);
+}
+
+.bo-home__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.bo-home__card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px;
+  background: var(--bo-surface);
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius);
+  box-shadow: var(--bo-shadow);
+  color: var(--bo-text);
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease,
+    transform 0.12s ease;
+}
+
+.bo-home__card:hover {
+  border-color: var(--bo-accent);
+  box-shadow: 0 4px 12px rgba(16, 24, 40, 0.1);
+  transform: translateY(-1px);
+  color: var(--bo-text);
+}
+
+.bo-home__cardicon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--bo-radius-sm);
+  color: var(--bo-accent);
+  background: rgba(13, 148, 136, 0.1);
+}
+
+.bo-home__cardbody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.bo-home__cardtitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.bo-home__carddesc {
+  font-size: 13px;
+  color: var(--bo-text-muted);
+  line-height: 1.45;
+}
+
+.bo-home__badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--bo-warning);
+  background: rgba(180, 83, 9, 0.12);
+}
+
+.bo-home__cardchev {
+  margin-left: auto;
+  align-self: center;
+  font-size: 20px;
+  color: var(--bo-text-muted);
+}

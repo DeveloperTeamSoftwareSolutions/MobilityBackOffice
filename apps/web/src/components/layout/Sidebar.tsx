@@ -1,12 +1,8 @@
 import { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
-import { RoleGuard } from '../../auth/RoleGuard';
-import {
-  IconDashboard,
-  IconRegions,
-  IconChatSquare,
-  IconFileText,
-} from './icons';
+import { useAuth } from '../../auth/useAuth';
+import { visibleSections, SECTION_GROUPS } from '../../config/sections';
+import { IconDashboard } from './icons';
 
 function Item({
   to,
@@ -28,11 +24,14 @@ function Item({
 }
 
 /**
- * Panel izquierdo. Los ítems restringidos van envueltos en RoleGuard: eso es
- * cosmético (no ofrecer lo que el backend va a rechazar), la barrera real está
- * en el `RolesGuard` de la API.
+ * Panel izquierdo. Las secciones salen de la config compartida (`config/sections`)
+ * filtradas por el rol, de modo que sidebar e inicio nunca se desincronizan. Solo se
+ * dibuja un grupo si tiene al menos una seccion visible.
  */
 export function Sidebar() {
+  const { role } = useAuth();
+  const sections = visibleSections(role);
+
   return (
     <aside className="bo-sidebar">
       <div className="bo-sidebar__brand">
@@ -41,28 +40,18 @@ export function Sidebar() {
       <nav className="bo-sidebar__nav">
         <Item to="/" end icon={<IconDashboard />} label="Inicio" />
 
-        <div className="bo-sidebar__section">Administración</div>
-        <RoleGuard allow={['Administrador']}>
-          <Item
-            to="/regiones-comerciales"
-            icon={<IconRegions />}
-            label="Regiones comerciales"
-          />
-        </RoleGuard>
-
-        <div className="bo-sidebar__section">Marketing</div>
-        <RoleGuard allow={['Marketing']}>
-          <Item
-            to="/templates-whatsapp"
-            icon={<IconChatSquare />}
-            label="Templates de WhatsApp"
-          />
-          <Item
-            to="/documentacion-rag"
-            icon={<IconFileText />}
-            label="Documentación del RAG"
-          />
-        </RoleGuard>
+        {SECTION_GROUPS.map((group) => {
+          const items = sections.filter((s) => s.group === group);
+          if (items.length === 0) return null;
+          return (
+            <div key={group}>
+              <div className="bo-sidebar__section">{group}</div>
+              {items.map((s) => (
+                <Item key={s.key} to={s.path} icon={s.icon} label={s.label} />
+              ))}
+            </div>
+          );
+        })}
       </nav>
     </aside>
   );

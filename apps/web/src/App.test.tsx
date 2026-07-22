@@ -69,14 +69,18 @@ describe('App', () => {
     await userEvent.type(screen.getByLabelText('Contraseña'), 'secreto');
     await userEvent.click(screen.getByRole('button', { name: 'Ingresar' }));
 
-    // Administrador ve Regiones comerciales...
+    // Administrador ve Regiones comerciales (aparece en el sidebar y en la tarjeta
+    // del inicio, por eso getAllByRole).
     expect(
-      await screen.findByRole('link', { name: /Regiones comerciales/ }),
-    ).toBeInTheDocument();
+      (await screen.findAllByRole('link', { name: /Regiones comerciales/ })).length,
+    ).toBeGreaterThan(0);
     // ...y no ve las secciones de Marketing.
     expect(
-      screen.queryByRole('link', { name: /Templates de WhatsApp/ }),
-    ).not.toBeInTheDocument();
+      screen.queryAllByRole('link', { name: /Templates de WhatsApp/ }),
+    ).toHaveLength(0);
+    expect(
+      screen.queryAllByRole('link', { name: /Documentación del RAG/ }),
+    ).toHaveLength(0);
     // Aparece en la TopBar y en el encabezado de Inicio.
     expect(screen.getAllByText(/Juan Perez/).length).toBeGreaterThan(0);
   });

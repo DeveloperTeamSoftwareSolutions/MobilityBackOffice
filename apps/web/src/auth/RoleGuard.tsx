@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import { useAuth } from './useAuth';
+import { roleAllows } from './roleAccess';
 import type { BackOfficeRole } from '../types';
 
 /**
@@ -22,10 +23,5 @@ export function RoleGuard({
   fallback?: ReactNode;
 }) {
   const { role } = useAuth();
-
-  // SuperAdmin ve todo el back-office, igual que en el RolesGuard del backend.
-  const permitido =
-    role !== null && (role === 'SuperAdmin' || allow.includes(role));
-
-  return <>{permitido ? children : fallback}</>;
+  return <>{roleAllows(role, allow) ? children : fallback}</>;
 }

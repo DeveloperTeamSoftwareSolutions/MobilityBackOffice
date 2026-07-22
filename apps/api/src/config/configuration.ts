@@ -25,4 +25,10 @@ export default () => ({
   regions: {
     syncApiKey: process.env.REGIONS_SYNC_API_KEY,
   },
+
+  // DuwyEngineRAG — cargador de documentacion embebido via reverse-proxy same-origin.
+  // Sin URL, el proxy /rag no se monta y la seccion no carga.
+  rag: {
+    url: process.env.RAG_URL,
+  },
 });

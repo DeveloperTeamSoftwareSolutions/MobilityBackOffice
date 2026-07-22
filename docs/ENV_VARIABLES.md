@@ -1,7 +1,7 @@
 # Variables de Entorno — Mobility BackOffice
 
 > Ultima actualizacion: 2026-07-20
-> Version: 1.0.0
+> Version: 1.1.0
 
 Fuente de verdad del backend: `apps/api/src/config/env.validation.ts` (Joi) y
 `apps/api/src/config/configuration.ts`. Si falta una variable **requerida**, el arranque falla.
@@ -29,6 +29,7 @@ Fuente de verdad del backend: `apps/api/src/config/env.validation.ts` (Joi) y
 | `PERM_PREFIX` | Prefijo de permisos/roles en ITManager | `MOBILITYBO_` | `apps/api/src/config/configuration.ts` |
 | `JWT_EXPIRES_IN` | Vigencia del token propio. El rol queda congelado hasta que expira | `1h` | `apps/api/src/auth/token.service.ts` |
 | `REGIONS_SYNC_API_KEY` | Key del sync maquina-a-maquina (`x-api-key`). **Vacia o ausente = endpoint deshabilitado (403)**, no 500 | vacio | `apps/api/src/regions/api-key.guard.ts` (fase 4) |
+| `RAG_URL` | Base URL de DuwyEngineRAG. Sin ella, el proxy `/rag` no se monta y la seccion "Documentacion del RAG" no carga | — | `apps/api/src/main.ts`, `apps/api/src/rag/rag.proxy.ts` |
 
 ## Frontend
 

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, ReactNode } from 'react';
 import type { BackOfficeRole, User } from '../types';
-import { login as apiLogin } from '../api/authApi';
+import { login as apiLogin, logout as apiLogout } from '../api/authApi';
 import { TOKEN_KEY } from '../api/httpClient';
 import { AuthContext, AuthContextValue } from './authContext';
 import { isJwtExpired, jwtExpiryMs } from './jwt';
@@ -49,6 +49,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Limpia la cookie httpOnly del RAG en el backend (best-effort: no bloquea el
+    // logout local si falla, p. ej. sin red).
+    void apiLogout().catch(() => {});
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(SESSION_KEY);
     setSession(null);

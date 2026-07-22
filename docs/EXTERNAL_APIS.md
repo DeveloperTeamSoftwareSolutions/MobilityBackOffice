@@ -1,7 +1,7 @@
 # APIs y Endpoints Externos — Mobility BackOffice
 
 > Ultima actualizacion: 2026-07-21
-> Version: 1.0.0
+> Version: 1.1.0
 
 ## Integraciones activas
 
@@ -43,9 +43,18 @@ vinculos de forma idempotente.
 - **Autenticacion**: header `x-api-key` contra `REGIONS_SYNC_API_KEY`
 - **Contrato**: ver `docs/API_ENDPOINTS.md`
 
+### DuwyEngineRAG — cargador de documentacion (embebido)
+
+- **Base URL**: `RAG_URL` (ej. `http://100.89.65.72:3800`)
+- **Como se consume**: **reverse-proxy same-origin** en `/rag`. El RAG manda
+  `X-Frame-Options: SAMEORIGIN`, asi que no se puede iframe directo desde otro origen; el
+  backend proxya `/rag/*` → RAG y reescribe sus rutas absolutas (`/css/`, `/js/`, `/api/`).
+- **Auth**: el proxy exige sesion de BackOffice (cookie httpOnly `bo_rag_token`, scopeada a
+  `/rag`, seteada en el login) y rol Marketing o SuperAdmin. El RAG no tiene auth propia.
+- **Tenant**: manual — el usuario escribe el CompanyCode en la topbar del RAG.
+- **Archivos**: `src/rag/rag.proxy.ts`, `src/rag/rag-rewrite.ts`. Spec: `docs/SPEC_RAG_EMBED.md`.
+
 ## Pendientes (fases futuras)
 
-- **Cargador de documentacion del RAG**: ya existe; BackOffice lo consumira. Se documentara la
-  integracion (base URL, auth, endpoints) cuando se conecte.
 - **WhatsApp Business (templates)**: el panel de marketing gestionara templates. Se documentara
   el servicio que los persiste/envia cuando se implemente.

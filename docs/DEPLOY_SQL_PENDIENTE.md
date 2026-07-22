@@ -1,7 +1,7 @@
 # Checklist de scripts SQL — Mobility BackOffice
 
 > Ultima actualizacion: 2026-07-20
-> Version: 1.0.0
+> Version: 1.1.0
 
 Documento **vivo**: marcar la casilla y anotar la fecha al aplicar cada script en cada entorno.
 

@@ -7,6 +7,7 @@ import { ComingSoon } from './components/common/ComingSoon';
 import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
 import { RegionesPage } from './pages/RegionesPage';
+import { RagPage } from './pages/RagPage';
 
 /**
  * Router de la aplicación. Punto único donde se declaran los módulos.
@@ -65,10 +66,7 @@ export function App(): JSX.Element {
                   allow={['Marketing']}
                   fallback={<Navigate to="/" replace />}
                 >
-                  <ComingSoon
-                    titulo="Documentación del RAG"
-                    descripcion="Carga de documentación para la base de conocimiento."
-                  />
+                  <RagPage />
                 </RoleGuard>
               }
             />

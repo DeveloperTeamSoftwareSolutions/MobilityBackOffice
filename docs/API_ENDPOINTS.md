@@ -1,7 +1,7 @@
 # API — Mobility BackOffice
 
 > Ultima actualizacion: 2026-07-20
-> Version: 1.0.0
+> Version: 1.1.0
 
 Toda respuesta incluye `success`. Los errores siguen el formato de Nest:
 `{ message, error, statusCode }`.
@@ -10,7 +10,8 @@ Toda respuesta incluye `success`. Los errores siguen el formato de Nest:
 
 | Metodo | Ruta | Guard | Descripcion |
 |---|---|---|---|
-| POST | `/api/auth/login` | — | `{ email, password }` → `{ success, token, user, role, permissions }`. 401 credenciales invalidas, 403 sin rol en la app, 400 email mal formado |
+| POST | `/api/auth/login` | — | `{ email, password }` → `{ success, token, user, role, permissions }`. Ademas setea la cookie httpOnly `bo_rag_token` (scopeada a `/rag`) para el iframe del RAG. 401 credenciales invalidas, 403 sin rol en la app, 400 email mal formado |
+| POST | `/api/auth/logout` | — | Limpia la cookie `bo_rag_token`. `{ success: true }` |
 | GET | `/api/auth/me` | Jwt | Claims del token propio, incluido `role` |
 
 ## Salud
@@ -61,6 +62,17 @@ guid. Esta anotado en el propio controller.
 - **Idempotente**: reenviar el mismo estado devuelve `added: 0, removed: 0`.
 - Sin `REGIONS_SYNC_API_KEY` configurada el endpoint responde **403** (deshabilitado); con key
   incorrecta, **401**.
+
+## Documentacion del RAG (proxy)
+
+Reverse-proxy same-origin hacia DuwyEngineRAG. No es una API REST propia: reenvia todo `/rag/*`
+al RAG externo.
+
+| Ruta | Guard | Descripcion |
+|---|---|---|
+| `/rag/*` | cookie `bo_rag_token` + rol Marketing/SuperAdmin | Proxya al RAG (`RAG_URL`). Reescribe assets a `/rag`. Sin cookie → 401; rol insuficiente → 403; sin `RAG_URL` → 404 (no montado) |
+
+Detalle en `docs/SPEC_RAG_EMBED.md` y `docs/EXTERNAL_APIS.md`.
 
 ## Auditoria
 

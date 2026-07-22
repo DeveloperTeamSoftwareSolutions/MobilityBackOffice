@@ -29,4 +29,8 @@ export const envValidationSchema = Joi.object({
   // Regiones comerciales — key del web service de sync (x-api-key). Si no está
   // seteada, el endpoint POST /api/regions/sync queda deshabilitado (403).
   REGIONS_SYNC_API_KEY: Joi.string().allow('').optional(),
+
+  // DuwyEngineRAG — base URL del cargador de documentacion a embeber. Sin ella, el
+  // proxy /rag no se monta y la seccion queda deshabilitada.
+  RAG_URL: Joi.string().uri().optional(),
 });

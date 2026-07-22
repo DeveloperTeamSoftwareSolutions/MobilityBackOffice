@@ -23,3 +23,8 @@ export async function login(
   });
   return data;
 }
+
+/** Limpia la cookie de sesion del iframe RAG en el backend. Best-effort. */
+export async function logout(): Promise<void> {
+  await httpClient.post('/api/auth/logout');
+}

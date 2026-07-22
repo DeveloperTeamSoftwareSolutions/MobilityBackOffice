@@ -1,7 +1,7 @@
 # Jerarquia y visibilidad — Mobility BackOffice
 
 > Ultima actualizacion: 2026-07-21
-> Version: 1.0.0
+> Version: 1.1.0
 
 Matriz de que ve cada rol, con que endpoint. Documento vivo: actualizar en cada iteracion que
 agregue o cambie una seccion.
@@ -24,7 +24,7 @@ rol dentro del token propio. Ver `docs/AUTENTICACION.md`.
 | Inicio | si | si | si | `JwtGuard` |
 | Regiones comerciales | si | si | **no** | `@Roles(Administrador)` + `RolesGuard` |
 | Templates de WhatsApp | si | no | si | pendiente (fase Marketing) |
-| Documentacion del RAG | si | no | si | pendiente (fase Marketing) |
+| Documentacion del RAG | si | no | si | proxy `/rag` con cookie de sesion + rol Marketing/SuperAdmin |
 
 El `RoleGuard` del frontend oculta lo que no corresponde, pero **no es la barrera**: la decision
 la toma el guard del backend. Ver la nota de seguridad en `docs/AUTENTICACION.md`.

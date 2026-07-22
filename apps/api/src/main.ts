@@ -7,6 +7,12 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { AppModule } from './app.module';
 import { APP_NAME, APP_VERSION } from './version';
+import { TokenService } from './auth/token.service';
+import {
+  createRagProxy,
+  createRagAuthGuard,
+  RAG_PREFIX,
+} from './rag/rag.proxy';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -16,6 +22,21 @@ async function bootstrap(): Promise<void> {
     origin: config.get<string>('corsOrigin'),
     credentials: true,
   });
+
+  // Reverse-proxy hacia DuwyEngineRAG (/rag/* same-origin para el iframe). Solo si
+  // RAG_URL esta configurada. El guard exige sesion de BackOffice (cookie) + rol
+  // Marketing/SuperAdmin antes de proxyar; el RAG no tiene auth propia. Se monta
+  // ANTES del fallback SPA para que /rag no sea capturado por el.
+  const ragUrl = config.get<string>('rag.url');
+  if (ragUrl) {
+    const tokens = app.get(TokenService);
+    app.use(
+      RAG_PREFIX,
+      createRagAuthGuard((t) => tokens.verify(t)),
+      createRagProxy(ragUrl),
+    );
+    Logger.log(`Reverse-proxy RAG montado en ${RAG_PREFIX} -> ${ragUrl}`, 'Bootstrap');
+  }
 
   // Servir el frontend (build de Vite) para deploy detrás de un solo puerto/ALB:
   // el API sirve apps/web/dist en `/` y sigue atendiendo /api.
@@ -30,6 +51,7 @@ async function bootstrap(): Promise<void> {
       if (
         req.method !== 'GET' ||
         req.path.startsWith('/api') ||
+        req.path.startsWith(RAG_PREFIX) ||
         req.path.includes('.')
       ) {
         return next();

@@ -1,0 +1,14 @@
+/* El iframe del RAG ocupa todo el alto disponible del area de contenido. */
+.bo-rag-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--bo-surface);
+}
+
+/* El contenedor anula el padding del <main> para que el iframe llegue a los bordes. */
+.bo-rag-wrap {
+  margin: -24px;
+  height: calc(100% + 48px);
+}

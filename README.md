@@ -20,8 +20,8 @@ usa el dev server de Vite en `:5183`, que proxyea `/api` al backend.
 | Modulo | Estado | Roles |
 |---|---|---|
 | Regiones comerciales | **completo** (v1.0.0) | SUPERADMIN, Administrador |
+| Documentacion del RAG (embebido) | **completo** (v1.1.0) | SUPERADMIN, Marketing |
 | Templates de WhatsApp (Marketing) | pendiente | SUPERADMIN, Marketing |
-| Carga de documentacion del RAG | pendiente | SUPERADMIN, Marketing |
 
 ## Puesta en marcha
 

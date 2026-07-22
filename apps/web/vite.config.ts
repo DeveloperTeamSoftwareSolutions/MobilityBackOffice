@@ -22,6 +22,13 @@ export default defineConfig({
         target: 'http://localhost:3010',
         changeOrigin: true,
       },
+      // El iframe del RAG pide /rag/*; hay que reenviarlo al backend (:3010) igual
+      // que /api. Sin esto, /rag cae en el fallback SPA de Vite y sirve el propio
+      // BackOffice -> el iframe se auto-embebe (BackOffice dentro de BackOffice).
+      '/rag': {
+        target: 'http://localhost:3010',
+        changeOrigin: true,
+      },
     },
   },
   test: {

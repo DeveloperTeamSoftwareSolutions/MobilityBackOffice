@@ -52,6 +52,7 @@ para el estado por entorno (v2.0.0 requiere el script `005` en PROD).
 
 ## Documentacion
 
+- `docs/MIGRACION_MIDDLEWARE_V2.md` — **v2.0.0**: migracion a MobilityMiddleWare (sin SQL directo), mapa de datos, migracion PROD y checklist de deploy
 - `docs/SPEC_BACKOFFICE_REGIONES.md` — spec (fundacion + Regiones)
 - `docs/AUTENTICACION.md` — login, token propio y guards; por que no se reusa el JWT de ManageIT
 - `docs/ROLES_Y_PERMISOS.md` — roles, permisos y mapeo para aplicar en ITManager
@@ -61,4 +62,5 @@ para el estado por entorno (v2.0.0 requiere el script `005` en PROD).
 - `docs/ENV_VARIABLES.md` — variables de entorno
 - `docs/EXTERNAL_APIS.md` — integraciones externas
 - `docs/DEPLOY_SQL_PENDIENTE.md` — checklist de scripts SQL por entorno
+- `docs/AUDITORIA_BD_QATEST.md` — traza de las acciones sobre la base ejecutadas en desarrollo
 - `docs/DEUDA_AUTH_ECOSISTEMA.md` — deuda de autorizacion detectada en otras apps (pendiente)

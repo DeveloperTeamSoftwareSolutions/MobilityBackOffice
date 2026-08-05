@@ -1,7 +1,7 @@
 # Checklist de scripts SQL — Mobility BackOffice
 
-> Ultima actualizacion: 2026-07-20
-> Version: 1.1.0
+> Ultima actualizacion: 2026-08-05
+> Version: 2.0.0
 
 Documento **vivo**: marcar la casilla y anotar la fecha al aplicar cada script en cada entorno.
 
@@ -30,11 +30,32 @@ Documento **vivo**: marcar la casilla y anotar la fecha al aplicar cada script e
 | 001 | `001_RegisterMobilityBackOfficeApp.sql` | Registro de la app + 3 roles + **5 permisos + mapeo rol-permiso** en ITManager (`Applications`, `Roles`, `Permissions`, `RolePermissions`) | [x] aplicado 2026-07-20; **permisos agregados 2026-07-22** | [ ] |
 | 002 | `002_ContinentProfitCenters.sql` | Tabla M:N region↔CEBE + 2 indices | [x] verificado 2026-07-20 (aplicado por MM) | [ ] |
 | 003 | `003_ContinentProfitCentersCompanyCode.sql` | `CompanyCode` + clave unica triple | [x] verificado 2026-07-20 (aplicado por MM) | [ ] |
-| 004 | `004_ViewProfitCentersMobility.sql` | Versiona `dbo.VIEW_ProfitCentersMobility` (se consumia sin estar en ningun repo) | [x] verificado 2026-07-20 (ya existia; **el script NO la modifico**) | [ ] |
+| 004 | `004_ViewProfitCentersMobility.sql` | Versiona `dbo.VIEW_ProfitCentersMobility` (se consumia sin estar en ningun repo) | [x] verificado 2026-07-20 (ya existia; **el script NO la modifico**) | [x] existe en PROD (dump 2026-08-05) |
+| 005 | `005_ViewV2CompaniesMobility.sql` | Crea `dbo.VIEW_V2_CompaniesMobility` (wrapper cross-DB sobre `[SAPServices].[dbo].[Companies]`). La consume el Middleware para el typeahead de sociedades del alta de CEBE | [x] ya existia en QATEST | [ ] **FALTA en PROD — aplicar** |
 
-Orden de ejecucion: **001 → 002 → 003 → 004**. El 003 requiere que el 002 ya exista.
+Orden de ejecucion: **001 → 002 → 003 → 004 → 005**. El 003 requiere que el 002 ya exista.
+El 005 requiere que la base `[SAPServices]` exista en la instancia (existe en ambos entornos).
 
 Los scripts 002 y 003 son los `004_` y `006_` del repo MobilityManager, renumerados.
+
+### Revision de estructura PROD para el deploy v2.0.0 (arquitectura via Middleware)
+
+Contexto: en v2.0.0 BackOffice dejo de tocar SQL — consume el MobilityMiddleWare. Como el
+Middleware ya es el que conecta a la base, **la unica migracion nueva es del lado de los
+objetos que el Middleware necesita**, no de BackOffice. Revisado contra los dumps de esquema
+PROD `Mobility-PROD-03-08.sql` y `SAPServices-PROD-03-08.sql` (2026-08-05) + QATEST en vivo:
+
+| Objeto | Mobility-PROD | SAPServices-PROD | Accion |
+|---|---|---|---|
+| `Continents` | existe | — | ninguna |
+| `ContinentProfitCenters` (+ indices, unique triple) | existe | — | ninguna |
+| `VIEW_ProfitCentersMobility` | existe | existe | ninguna |
+| `Companies` | existe | existe | ninguna |
+| **`VIEW_V2_CompaniesMobility`** | **NO existe** | — | **correr `005` en Mobility-PROD** |
+
+Nota de collation PROD: `ContinentProfitCenters` en PROD usa `SQL_Latin1_General_CP1_CI_AS`
+(vs. `Latin1_General_100_CI_*` en QATEST). No afecta a BackOffice —el Middleware es quien
+resuelve el SQL y las collations— pero queda documentado por si se toca ese objeto.
 
 ### Estado verificado en QATEST — 2026-07-20
 

@@ -1,7 +1,7 @@
 # APIs y Endpoints Externos — Mobility BackOffice
 
-> Ultima actualizacion: 2026-07-21
-> Version: 1.1.0
+> Ultima actualizacion: 2026-08-05
+> Version: 2.0.0
 
 ## Integraciones activas
 
@@ -16,21 +16,39 @@
 - **Nota**: BackOffice NO reusa el `session.token`. Con la identidad y los roleKeys del
   accessMatrix firma su **propio** JWT. Ver `docs/AUTENTICACION.md`.
 
-### SQL Server — base Mobility (compartida)
+### MobilityMiddleWare — acceso a datos (unico componente que toca SQL)
 
-No es una API HTTP, pero es la dependencia externa mas fuerte. Se accede via Prisma como
-**cliente** (`DATABASE_URL`). BackOffice **no posee** la base: la comparte con MobilityManager.
+BackOffice **NO se conecta a SQL Server**. Toda la data (regiones, CEBEs, sociedades y la
+auditoria central) se consume por HTTP contra el MobilityMiddleWare, que es el unico
+componente del ecosistema que conecta a la base. Regla del ecosistema, igual que
+MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
 
-- **Tablas/vistas propias del dominio Regiones**:
-  | Objeto | Uso | Escritura |
-  |---|---|---|
-  | `dbo.Continents` | Catalogo de regiones | **Solo lectura** (compartida con DuwyDashy, Middleware) |
-  | `dbo.ContinentProfitCenters` | Vinculos CEBE-region-sociedad | Lectura y escritura (soft delete) |
-  | `dbo.VIEW_ProfitCentersMobility` | Maestro de CEBEs (typeahead, diagnosticos) | Solo lectura |
-  | `dbo.AuditLogs` | Traza central | Escritura (append) |
-- **Join cross-database**: las queries de vinculos joinean a `[SAPServices].[dbo].[Companies]`
-  para traer el nombre de la sociedad. Requiere que la conexion tenga acceso a esa base y las
-  collations correctas (ver `CLAUDE.md`).
+- **Base URL**: `MIDDLEWARE_URL` (dev `http://localhost:6002/api`; prod = mismo Middleware
+  que MobilityManager). La URL **incluye** el prefijo `/api`.
+- **Autenticacion**: header `x-api-key` contra `MIDDLEWARE_API_KEY` (opcional: si el
+  Middleware no exige key, es no-op). Ademas se manda **siempre** `x-source-app:
+  MobilityBackOffice` para que la auditoria automatica del Middleware (`ApiLogs`) atribuya
+  cada llamada.
+- **Endpoints consumidos** (relativos a `MIDDLEWARE_URL`):
+  | Metodo | Endpoint | Descripcion | Objeto SQL detras | Archivo |
+  |---|---|---|---|---|
+  | GET | `/mobility/regions` | Listado de regiones + conteo de CEBEs | `dbo.Continents` | `src/regions/regions.client.ts` |
+  | GET | `/mobility/regions/:guid` | Region por Guid | `dbo.Continents` | idem |
+  | GET | `/mobility/regions/by-code/:code` | Region por Code | `dbo.Continents` | idem |
+  | GET | `/mobility/regions/:guid/cebes` | Vinculos de la region | `dbo.ContinentProfitCenters` | idem |
+  | POST | `/mobility/regions/:guid/cebes` | Vincular CEBE-region-sociedad (upsert) | `dbo.ContinentProfitCenters` | idem |
+  | DELETE | `/mobility/regions/:guid/cebes/:code?companyCode=` | Desvincular (soft delete) | `dbo.ContinentProfitCenters` | idem |
+  | GET | `/mobility/regions/resolve?codes=` | Pares (CEBE, sociedad) efectivos | `dbo.ContinentProfitCenters` | idem |
+  | GET | `/mobility/regions/links/codes` | CEBEs con link activo | `dbo.ContinentProfitCenters` | idem |
+  | GET | `/mobility/regions/links/multi-region` | CEBEs en varias regiones | `dbo.ContinentProfitCenters` | idem |
+  | GET | `/mobility/profit-centers` | Maestro de CEBEs (typeahead, diagnosticos) | `dbo.VIEW_ProfitCentersMobility` | idem |
+  | GET | `/v2/mobility/companies` | Maestro de sociedades (typeahead) | `dbo.VIEW_V2_CompaniesMobility` sobre `[SAPServices].[dbo].[Companies]` | idem |
+  | POST | `/audit-logs` | Traza central (append) | `dbo.AuditLogs` | `src/audit/audit.client.ts` |
+- **Cross-database y collations**: el join a `[SAPServices].[dbo].[Companies]` y el manejo de
+  collations ocurren **dentro del Middleware** (via `VIEW_V2_CompaniesMobility`). BackOffice ya
+  no depende de eso: es una preocupacion del Middleware, no de esta app.
+- **Nota de paths**: los path constants del cliente son relativos a `MIDDLEWARE_URL` (que ya
+  trae `/api`). Verificado contra el Middleware en vivo.
 
 ## Integraciones consumidas por terceros
 

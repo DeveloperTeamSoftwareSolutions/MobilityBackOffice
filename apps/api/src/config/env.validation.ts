@@ -12,8 +12,11 @@ export const envValidationSchema = Joi.object({
     .default('development'),
   CORS_ORIGIN: Joi.string().default('http://localhost:5183'),
 
-  // Base de datos (compartida con MobilityManager — solo cliente Prisma)
-  DATABASE_URL: Joi.string().required(),
+  // MobilityMiddleWare — único componente que conecta a SQL Server. BackOffice consume
+  // sus endpoints por HTTP (regiones, CEBEs, sociedades, auditoría). La URL ya incluye
+  // el prefijo `/api`. La key es opcional: si el middleware no la exige, es no-op.
+  MIDDLEWARE_URL: Joi.string().uri().default('http://localhost:6002/api'),
+  MIDDLEWARE_API_KEY: Joi.string().allow('').optional(),
 
   // ITManager — autoridad de credenciales y de roles asignados
   ITMANAGER_AUTH_URL: Joi.string().uri().required(),

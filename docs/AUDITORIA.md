@@ -1,10 +1,15 @@
 # Auditoria — Mobility BackOffice
 
-> Ultima actualizacion: 2026-07-21
-> Version: 1.1.0
+> Ultima actualizacion: 2026-08-05
+> Version: 2.0.0
 
 Toda accion relevante deja traza en `AuditLogs`, la tabla **central compartida** con ITManager
 y MobilityManager. BackOffice escribe sus filas con `AppId='MobilityBackOffice'`.
+
+> **Cambio v2.0.0 (transporte)**: la escritura ya **no** va por Prisma/SQL directo. `AuditService`
+> escribe por HTTP contra el MobilityMiddleWare (`POST /audit-logs`, `AuditClient`), dueño de la
+> tabla. Los timestamps los pone el Middleware (reloj del servidor de base), no BackOffice. La
+> semantica (`record` vs `safeRecord`, `AppId`, categorias) no cambia.
 
 ## El servicio
 

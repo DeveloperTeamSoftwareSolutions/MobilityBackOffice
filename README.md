@@ -8,7 +8,7 @@ Monorepo npm workspaces.
 
 | App | Path | Stack |
 |---|---|---|
-| `@mobility-backoffice/api` | `apps/api` | NestJS 11 + Prisma (cliente SQL Server) |
+| `@mobility-backoffice/api` | `apps/api` | NestJS 11 (gateway HTTP: ITManager + MobilityMiddleWare) |
 | `@mobility-backoffice/web` | `apps/web` | React 18 + Vite 6 (SPA) |
 
 **Despliegue single-port**: en produccion el API sirve el build de Vite desde `apps/web/dist`
@@ -38,13 +38,17 @@ Verificacion: `GET http://localhost:3010/api/health` devuelve nombre, version y 
 En produccion se sirve todo desde un solo puerto: `npm run build` genera el build de Vite y el
 backend lo sirve. No hace falta el dev server de Vite.
 
-## Base de datos
+## Datos — via MobilityMiddleWare (sin SQL directo)
 
-BackOffice **no posee la base**: comparte `Mobility_QATEST` / `Mobility-PROD` con MobilityManager.
-Prisma se usa **solo como cliente**. `prisma migrate` y `prisma db push` estan **prohibidos**.
-Los cambios de esquema son scripts idempotentes en `apps/api/prisma/sql/`, aplicados a mano.
+Desde v2.0.0 BackOffice **no se conecta a SQL Server**. Toda la data —regiones, CEBEs,
+sociedades y la auditoria central— se consume por HTTP contra el **MobilityMiddleWare**, que es
+el unico componente del ecosistema que toca la base (misma regla que MobilityManager). Ya no hay
+Prisma ni `DATABASE_URL`: se configura `MIDDLEWARE_URL` (dev `http://localhost:6002/api`; prod =
+el mismo Middleware que MobilityManager). Ver `docs/EXTERNAL_APIS.md`.
 
-Ver `docs/DEPLOY_SQL_PENDIENTE.md` para el estado por entorno.
+Los cambios de esquema que el Middleware necesita siguen siendo scripts idempotentes en
+`apps/api/prisma/sql/`, aplicados a mano a la base compartida. Ver `docs/DEPLOY_SQL_PENDIENTE.md`
+para el estado por entorno (v2.0.0 requiere el script `005` en PROD).
 
 ## Documentacion
 

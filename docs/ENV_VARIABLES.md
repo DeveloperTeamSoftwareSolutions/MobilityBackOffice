@@ -1,7 +1,7 @@
 # Variables de Entorno — Mobility BackOffice
 
-> Ultima actualizacion: 2026-07-20
-> Version: 1.1.0
+> Ultima actualizacion: 2026-08-05
+> Version: 2.0.0
 
 Fuente de verdad del backend: `apps/api/src/config/env.validation.ts` (Joi) y
 `apps/api/src/config/configuration.ts`. Si falta una variable **requerida**, el arranque falla.
@@ -10,9 +10,11 @@ Fuente de verdad del backend: `apps/api/src/config/env.validation.ts` (Joi) y
 
 | Variable | Descripcion | Ejemplo | Donde se usa |
 |---|---|---|---|
-| `DATABASE_URL` | Cadena SQL Server. Base **compartida** con MobilityManager; solo cliente Prisma | `sqlserver://host:1433;database=Mobility_QATEST;...` | `apps/api/src/prisma/prisma.service.ts` |
 | `ITMANAGER_AUTH_URL` | Base URL de la API de ITManager (ManageIT) | `http://100.66.245.49:61100/api` | `apps/api/src/auth/itmanager.client.ts` |
 | `BACKOFFICE_JWT_SECRET` | Secret HS256 **propio** para firmar el token de BackOffice. Minimo 16 caracteres. **No reutilizar el de ManageIT**: si se comparte, un token de otra app validaria aca | `***` | `apps/api/src/auth/token.service.ts` |
+
+> **Cambio v2.0.0**: BackOffice dejo de conectarse a SQL Server. `DATABASE_URL` y Prisma
+> **se eliminaron**: toda la data va por el MobilityMiddleWare (ver `MIDDLEWARE_URL`).
 
 > **Cambio respecto de la version 0.1.0**: `JWT_SECRET` (compartido con ManageIT) fue reemplazada
 > por `BACKOFFICE_JWT_SECRET` (propio). Motivo: BackOffice pasa a emitir su propio JWT con el rol
@@ -22,6 +24,8 @@ Fuente de verdad del backend: `apps/api/src/config/env.validation.ts` (Joi) y
 
 | Variable | Descripcion | Default | Donde se usa |
 |---|---|---|---|
+| `MIDDLEWARE_URL` | Base URL del MobilityMiddleWare (incluye `/api`). Fuente de TODA la data. En prod: el mismo Middleware que MobilityManager | `http://localhost:6002/api` | `apps/api/src/common/middleware-request.ts` |
+| `MIDDLEWARE_API_KEY` | Key para el header `x-api-key` del Middleware. Si el Middleware no la exige, es no-op (opcional) | vacio | `apps/api/src/common/middleware-request.ts` |
 | `PORT` | Puerto del servidor | `3010` | `apps/api/src/main.ts` |
 | `NODE_ENV` | Entorno (`development` \| `test` \| `production`) | `development` | `apps/api/src/main.ts` |
 | `CORS_ORIGIN` | Origen permitido para CORS | `http://localhost:5183` | `apps/api/src/main.ts` |
@@ -42,8 +46,18 @@ Vite proxyea `/api` al backend en `:3010`; en produccion el backend sirve el bui
 variable hornea una URL absoluta en el build y rompe el login desde cualquier otra maquina
 (`ERR_CONNECTION_REFUSED`).
 
+## Nota de deploy — `.env` / `.env.example`
+
+Al pasar de v1.2.0 a v2.0.0 hay que **actualizar el `.env`** de cada entorno:
+
+- **Quitar** `DATABASE_URL` (ya no se usa; su presencia es inofensiva pero es ruido).
+- **Agregar** `MIDDLEWARE_URL`. En dev el default (`http://localhost:6002/api`) ya sirve, asi
+  que no es obligatorio setearla; en prod apuntarla al Middleware de produccion.
+- `MIDDLEWARE_API_KEY` solo si el Middleware exige key.
+
 ## Diferencias con MobilityManager
 
 BackOffice **no hereda** las variables de MobilityManager para DuwyDashy, DuwyChat,
-MobilityMiddleWare, geolocalizacion ni Azure OpenAI. Se incorporaran cuando lleguen las fases
-de Marketing (templates WhatsApp) y RAG.
+geolocalizacion ni Azure OpenAI. Se incorporaran cuando lleguen las fases de Marketing
+(templates WhatsApp). El acceso a datos (`MIDDLEWARE_URL`) **si** es compartido: ambas apps
+consumen el mismo Middleware.

@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '../prisma/prisma.service';
+import { AuditClient } from './audit.client';
 
 /**
  * Entrada de auditoría central (`AuditLogs`, tabla compartida con ITManager y
  * MobilityManager). Las columnas son genéricas a propósito:
- * `entity`/`entityId`/`action`/`detail`/`category` sirven para cualquier dominio
- * sin agregar columnas específicas de una app. El `detail` lo compone cada dominio.
+ * `entity`/`entityId`/`action`/`detail`/`category` sirven para cualquier dominio sin
+ * agregar columnas específicas de una app. El `detail` lo compone cada dominio.
  */
 export interface AuditEntry {
   action: string;
@@ -24,15 +24,20 @@ function errorMessage(err: unknown): string {
 }
 
 /**
- * Escritura centralizada en `AuditLogs`. Único punto que conoce el mapeo a la tabla
- * (evita duplicar el `prisma.auditLogs.create` en cada dominio).
+ * Escritura centralizada en `AuditLogs`. Único punto que conoce el mapeo (evita duplicar
+ * la llamada en cada dominio). Lo consume el login (auth).
+ *
+ * Escribe **por el middleware**, no contra SQL Server: `AuditLogs` es una tabla central y
+ * compartida cuyo dueño es el MW. Además, así la escritura queda atribuida en sus
+ * `ApiLogs` —el header `x-source-app` viaja en el cliente— que era justamente lo que se
+ * perdía escribiendo directo a la base.
  */
 @Injectable()
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly client: AuditClient,
     private readonly config: ConfigService,
   ) {}
 
@@ -42,24 +47,20 @@ export class AuditService {
    * `safeRecord` (best-effort) para no romper la operación por un fallo del audit.
    */
   async record(entry: AuditEntry): Promise<void> {
-    const now = BigInt(Date.now());
     const appId =
-      entry.appId ??
-      this.config.get<string>('itmanager.appId') ??
-      'MobilityBackOffice';
+      entry.appId ?? this.config.get<string>('itmanager.appId') ?? 'MobilityBackOffice';
 
-    await this.prisma.auditLogs.create({
-      data: {
-        guidUsers: entry.guidUsers ?? null,
-        action: entry.action,
-        entity: entry.entity,
-        entityId: entry.entityId ?? null,
-        detail: entry.detail ?? null,
-        category: entry.category,
-        appId,
-        timeStamp: now,
-        serverTimestamp: now,
-      },
+    // Los timestamps ya NO se mandan: los pone el middleware con el reloj del servidor
+    // de base. Antes los ponía BackOffice con `Date.now()`, así que la hora de la
+    // auditoría era la del proceso que auditaba y no la de la base donde queda la fila.
+    await this.client.create({
+      guidUsers: entry.guidUsers ?? null,
+      action: entry.action,
+      entity: entry.entity,
+      entityId: entry.entityId ?? null,
+      detail: entry.detail ?? null,
+      category: entry.category,
+      appId,
     });
   }
 

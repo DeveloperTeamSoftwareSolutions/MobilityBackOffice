@@ -11,8 +11,7 @@ import { RolesGuard } from './roles.guard';
 
 /**
  * Autenticación: gateway hacia ITManager (credenciales + rol asignado) y emisión
- * del token propio de BackOffice. PrismaService y AuditService llegan de sus
- * módulos globales.
+ * del token propio de BackOffice. AuditService llega de su módulo global.
  */
 @Module({
   imports: [HttpModule, JwtModule.register({})],

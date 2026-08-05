@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import {
+  RegionsClient,
+  MwRegion,
+  MwRegionLink,
+  MwResolvedCebe,
+  MwMultiRegionRow,
+} from './regions.client';
 import {
   Region,
   RegionCebe,
@@ -13,120 +18,72 @@ import {
   LinkReconciliation,
 } from './regions.types';
 
-/** Collation canónica para comparar/mostrar códigos entre BDs (Mobility ↔ SAPServices). */
-const COL = Prisma.raw('COLLATE Latin1_General_100_CI_AI_SC');
-
 // Almacenamiento: la "región comercial" (negocio) son las filas de la tabla existente
 // `Continents` (CA/CB/AN/NA), en SOLO LECTURA (no se modifica; la comparten otros
-// reportes). Los CEBEs vinculados van en `ContinentProfitCenters` (tabla propia de MM).
-// Las agrupaciones (CAYCAR = CA+CB) se resuelven por configuración (region-groups.ts),
-// no en la base. Ver docs/SPEC_BACKOFFICE_REGIONES.md.
+// reportes). Los CEBEs vinculados van en `ContinentProfitCenters`. Las agrupaciones
+// (CAYCAR = CA+CB) se resuelven por configuración (region-groups.ts), no en la base.
+// Ver docs/SPEC_BACKOFFICE_REGIONES.md.
+//
+// ⚠️ ESTE REPOSITORIO YA NO TOCA SQL SERVER. Las tres fuentes van por el middleware,
+// que es el único componente que conecta a la base:
+//
+//   · maestro de CEBEs      `/mobility/profit-centers`
+//   · regiones + links      `/mobility/regions`
+//   · maestro de sociedades `/v2/mobility/companies`  (era el último cross-DB a
+//                                                       [SAPServices].[dbo].[Companies])
+//
+// Ver docs/EXTERNAL_APIS.md. Lo que queda acá es la lógica de negocio de BackOffice:
+// los diffs, el agrupado y la reconciliación del sync — que no son datos de nadie más.
 
-/** Filtro de no-eliminado, reutilizable en las queries. */
-const ACTIVE = Prisma.sql`(DeletedTimestamp IS NULL OR DeletedTimestamp = 0)`;
+// ---- Mappers del contrato del middleware (camelCase) ---------------------
+// Siguen existiendo aunque el middleware ya devuelva camelCase: los DTOs del módulo NO
+// son idénticos a los del middleware (`isGroup`, `guidRegions`, `cebeCount` no-nulo), y
+// tener el ajuste en un solo lugar es lo que permite que un cambio del contrato se note
+// acá y no repartido por el service.
 
-/** Campos permitidos para ordenar el listado (whitelist anti-inyección). */
-const SORTABLE: Record<string, string> = {
-  code: 'Code',
-  name: 'Name',
-  sortOrder: 'SortOrder',
-  serverTimestamp: 'ServerTimestamp',
-  cebeCount: 'CebeCount',
-};
-
-// ---- Row shapes (PascalCase de SQL) --------------------------------------
-interface RegionRow {
-  Id: number;
-  Guid: string;
-  TimeStamp: bigint | number;
-  ServerTimestamp: bigint | number;
-  DeletedTimestamp: bigint | number | null;
-  Code: string | null;
-  Name: string;
-  SortOrder: number;
-  CebeCount: number | bigint | null;
-}
-interface CebeRow {
-  Id: number;
-  Guid: string;
-  GuidContinents: string;
-  ProfitCenterCode: string;
-  ProfitCenterName: string | null;
-  CompanyCode: string;
-  CompanyName: string | null;
-  Source: string;
-  CreatedBy: string | null;
-  UpdatedBy: string | null;
-  Version: number;
-}
-interface CebeCatalogRow {
-  ProfitCenterCode: string;
-  ProfitCenterName: string | null;
-}
-interface ResolvedRow {
-  ProfitCenterCode: string;
-  ProfitCenterName: string | null;
-  CompanyCode: string;
-  CompanyName: string | null;
-}
-interface CompanyRow {
-  CompanyCode: string;
-  CompanyName: string | null;
-  Country: string | null;
-}
-interface MultiRow {
-  ProfitCenterCode: string;
-  ProfitCenterName: string | null;
-  RegionCode: string | null;
-  RegionName: string;
-}
-
-// ---- Mappers puros (testeables) ------------------------------------------
-export function mapRegion(row: RegionRow): Region {
+export function mapRegion(row: MwRegion): Region {
   return {
-    id: row.Id,
-    guid: row.Guid ? row.Guid.trim() : '',
-    timeStamp: Number(row.TimeStamp),
-    serverTimestamp: Number(row.ServerTimestamp),
-    deletedTimestamp: row.DeletedTimestamp ? Number(row.DeletedTimestamp) : null,
-    code: row.Code ?? '',
-    name: row.Name,
-    sortOrder: row.SortOrder,
+    id: row.id,
+    guid: row.guid ?? '',
+    timeStamp: Number(row.timeStamp),
+    serverTimestamp: Number(row.serverTimestamp),
+    deletedTimestamp: row.deletedTimestamp != null ? Number(row.deletedTimestamp) : null,
+    code: row.code ?? '',
+    // Una región de la base NUNCA es una agrupación: las agrupaciones (CAYCAR) las
+    // sintetiza el service desde configuración y no tienen fila.
     isGroup: false,
-    cebeCount: row.CebeCount != null ? Number(row.CebeCount) : 0,
+    name: row.name,
+    sortOrder: row.sortOrder,
+    // El middleware manda null cuando no se pidió el conteo (detalle por Guid). Acá el
+    // DTO es no-nulo, y quien pide el detalle lo reemplaza por la cantidad real de links.
+    cebeCount: row.cebeCount != null ? Number(row.cebeCount) : 0,
   };
 }
 
-export function mapRegionCebe(row: CebeRow): RegionCebe {
+export function mapRegionCebe(row: MwRegionLink): RegionCebe {
   return {
-    id: row.Id,
-    guid: row.Guid ? row.Guid.trim() : '',
-    guidRegions: row.GuidContinents ? row.GuidContinents.trim() : '',
-    profitCenterCode: row.ProfitCenterCode,
-    profitCenterName: row.ProfitCenterName ?? null,
-    companyCode: row.CompanyCode,
-    companyName: row.CompanyName ?? null,
-    source: row.Source,
-    createdBy: row.CreatedBy ?? null,
-    updatedBy: row.UpdatedBy ?? null,
-    version: row.Version,
+    id: row.id,
+    guid: row.guid ?? '',
+    // El middleware conserva el nombre de la columna (`GuidContinents`); el DTO del
+    // módulo habla de regiones. La traducción vive acá y no se filtra al service.
+    guidRegions: row.guidContinents ?? '',
+    profitCenterCode: row.profitCenterCode,
+    profitCenterName: row.profitCenterName ?? null,
+    companyCode: row.companyCode,
+    companyName: row.companyName ?? null,
+    source: row.source,
+    createdBy: row.createdBy ?? null,
+    updatedBy: row.updatedBy ?? null,
+    version: row.version,
   };
 }
 
-export function mapAvailableCebe(row: CebeCatalogRow): AvailableCebe {
-  return { code: row.ProfitCenterCode, name: row.ProfitCenterName ?? null };
-}
-
-export function mapAvailableCompany(row: CompanyRow): AvailableCompany {
-  return { code: row.CompanyCode, name: row.CompanyName ?? null, country: row.Country ?? null };
-}
-
-export function mapResolvedCebe(row: ResolvedRow): ResolvedCebe {
+export function mapResolvedCebe(row: MwResolvedCebe): ResolvedCebe {
   return {
-    profitCenterCode: row.ProfitCenterCode,
-    profitCenterName: row.ProfitCenterName ?? null,
-    companyCode: row.CompanyCode,
-    companyName: row.CompanyName ?? null,
+    profitCenterCode: row.profitCenterCode,
+    profitCenterName: row.profitCenterName ?? null,
+    companyCode: row.companyCode,
+    companyName: row.companyName ?? null,
   };
 }
 
@@ -142,20 +99,20 @@ export function parseLinkKey(key: string): { code: string; companyCode: string }
 }
 
 /** Agrupa las filas planas (cebe × región) en CEBEs con su lista de regiones. */
-export function groupMultiRegion(rows: MultiRow[]): MultiRegionCebe[] {
+export function groupMultiRegion(rows: MwMultiRegionRow[]): MultiRegionCebe[] {
   const byCode = new Map<string, MultiRegionCebe>();
   for (const r of rows) {
-    let entry = byCode.get(r.ProfitCenterCode);
+    let entry = byCode.get(r.profitCenterCode);
     if (!entry) {
       entry = {
-        code: r.ProfitCenterCode,
-        name: r.ProfitCenterName ?? null,
+        code: r.profitCenterCode,
+        name: r.profitCenterName ?? null,
         regionCount: 0,
         regions: [],
       };
-      byCode.set(r.ProfitCenterCode, entry);
+      byCode.set(r.profitCenterCode, entry);
     }
-    entry.regions.push({ code: r.RegionCode ?? '', name: r.RegionName });
+    entry.regions.push({ code: r.regionCode ?? '', name: r.regionName });
     entry.regionCount = entry.regions.length;
   }
   return [...byCode.values()];
@@ -172,15 +129,48 @@ export function reconcileLinks(current: string[], desired: string[]): LinkReconc
 }
 
 /**
- * Datos del módulo de Regiones comerciales por CEBE. Regiones = filas de `Continents`
- * (solo lectura); links en `ContinentProfitCenters` (tabla propia); maestro de CEBEs
- * vía `VIEW_ProfitCentersMobility`. Queries parametrizadas, soft-delete aware.
+ * Normaliza un código de CEBE para compararlo entre orígenes distintos (maestro que
+ * sirve el middleware ↔ links propios en `ContinentProfitCenters`).
+ *
+ * Replica en Node la semántica que antes daba gratis la collation de SQL Server
+ * (`Latin1_General_100_CI_AI_SC`) cuando el cruce se hacía con un `NOT EXISTS` dentro de
+ * la misma base: **CI** (case-insensitive) → `toUpperCase`; **AI** (accent-insensitive) →
+ * descomposición NFD + quitar diacríticos. El `trim` cubre el padding de CHAR/NCHAR.
+ * Los códigos reales son alfanuméricos de SAP, pero la normalización se hace completa
+ * para no depender de esa suposición.
+ */
+export function normalizeCebeCode(code: string): string {
+  return code
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '');
+}
+
+/**
+ * Diff puro: CEBEs del maestro que no tienen ningún link activo a una región. Reemplaza
+ * al `NOT EXISTS` que antes cruzaba la vista contra `ContinentProfitCenters` en una sola
+ * query — ya no es posible, porque el maestro vive del otro lado del middleware y la
+ * tabla de links es propia. Preserva el orden del catálogo.
+ */
+export function diffUnmapped(catalog: AvailableCebe[], linkedCodes: string[]): UnmappedCebe[] {
+  const linked = new Set(linkedCodes.map(normalizeCebeCode));
+  return catalog.filter((c) => !linked.has(normalizeCebeCode(c.code)));
+}
+
+/**
+ * Datos del módulo de Regiones comerciales por CEBE.
+ *
+ * TODO pasa por el middleware: regiones y links (`/mobility/regions`), maestro de CEBEs
+ * (`/mobility/profit-centers`) y maestro de sociedades (`/v2/mobility/companies`). Este
+ * repositorio ya no conoce SQL ni Prisma; lo que conserva es la lógica de negocio que no
+ * le pertenece a nadie más: los diffs, el agrupado y la reconciliación del sync.
  */
 @Injectable()
 export class RegionsRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly mw: RegionsClient) {}
 
-  // ---- Regiones (lectura de Continents) ---------------------------------
+  // ---- Regiones (Continents, solo lectura) ------------------------------
   async getAll({
     page = 1,
     limit = 50,
@@ -193,85 +183,62 @@ export class RegionsRepository {
     search?: string;
     sortBy?: string;
     sortDir?: string;
-  }): Promise<{ data: Region[]; pagination: { total: number; page: number; limit: number; totalPages: number } }> {
-    const offset = (page - 1) * limit;
-    const sortCol = SORTABLE[sortBy] ?? 'SortOrder';
-    const dir = sortDir === 'DESC' ? 'DESC' : 'ASC';
-    const term = search ? `%${search}%` : null;
-    const searchSql = term
-      ? Prisma.sql`AND (r.Code LIKE ${term} OR r.Name LIKE ${term})`
-      : Prisma.empty;
-
-    const countRows = await this.prisma.$queryRaw<{ total: number }[]>(Prisma.sql`
-      SELECT COUNT(*) AS total FROM dbo.Continents r WHERE ${ACTIVE} ${searchSql}`);
-    const total = Number(countRows[0]?.total ?? 0);
-
-    const rows = await this.prisma.$queryRaw<RegionRow[]>(Prisma.sql`
-      SELECT r.Id, r.Guid, r.TimeStamp, r.ServerTimestamp, r.DeletedTimestamp,
-             r.Code, r.Name, r.SortOrder,
-             (SELECT COUNT(*) FROM dbo.ContinentProfitCenters c
-               WHERE c.GuidContinents = r.Guid
-                 AND (c.DeletedTimestamp IS NULL OR c.DeletedTimestamp = 0)) AS CebeCount
-      FROM dbo.Continents r
-      WHERE ${ACTIVE} ${searchSql}
-      ORDER BY ${Prisma.raw(sortCol)} ${Prisma.raw(dir)}
-      OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`);
-
+  }): Promise<{
+    data: Region[];
+    pagination: { total: number; page: number; limit: number; totalPages: number };
+  }> {
+    const body = await this.mw.listRegions({ page, limit, search, sortBy, sortDir });
     return {
-      data: rows.map(mapRegion),
-      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      data: body.data.map(mapRegion),
+      // El middleware ya calcula la paginación; se conservan `page`/`limit` pedidos por
+      // si clampea el límite, para que el cliente no crea que pidió otra cosa.
+      pagination: body.pagination ?? {
+        total: body.data.length,
+        page,
+        limit,
+        totalPages: 1,
+      },
     };
   }
 
   async getByGuid(guid: string): Promise<RegionDetail | null> {
-    const rows = await this.prisma.$queryRaw<RegionRow[]>(Prisma.sql`
-      SELECT r.Id, r.Guid, r.TimeStamp, r.ServerTimestamp, r.DeletedTimestamp,
-             r.Code, r.Name, r.SortOrder, NULL AS CebeCount
-      FROM dbo.Continents r
-      WHERE r.Guid = ${guid} AND ${ACTIVE}`);
-    if (rows.length === 0) return null;
+    const region = await this.mw.getRegionByGuid(guid);
+    if (!region) return null;
     const cebes = await this.getCebes(guid);
-    return { ...mapRegion(rows[0]), cebeCount: cebes.length, cebes };
+    // `cebeCount` del detalle es la cantidad REAL de links que se acaban de traer, no el
+    // conteo del listado: son la misma cifra, pero acá ya está el dato y no hace falta
+    // confiar en dos fuentes.
+    return { ...mapRegion(region), cebeCount: cebes.length, cebes };
   }
 
   async getByCode(code: string): Promise<Region | null> {
-    const rows = await this.prisma.$queryRaw<RegionRow[]>(Prisma.sql`
-      SELECT r.Id, r.Guid, r.TimeStamp, r.ServerTimestamp, r.DeletedTimestamp,
-             r.Code, r.Name, r.SortOrder, NULL AS CebeCount
-      FROM dbo.Continents r
-      WHERE r.Code = ${code} AND ${ACTIVE}`);
-    return rows.length ? mapRegion(rows[0]) : null;
+    const region = await this.mw.getRegionByCode(code);
+    return region ? mapRegion(region) : null;
   }
 
-  // ---- Links CEBE ↔ región ↔ sociedad (tabla ContinentProfitCenters) -----
+  // ---- Links CEBE ↔ región ↔ sociedad -----------------------------------
   async getCebes(guidRegions: string): Promise<RegionCebe[]> {
-    const rows = await this.prisma.$queryRaw<CebeRow[]>(Prisma.sql`
-      SELECT rpc.Id, rpc.Guid, rpc.GuidContinents, rpc.ProfitCenterCode, rpc.ProfitCenterName,
-             rpc.CompanyCode, co.CompanyName, rpc.Source, rpc.CreatedBy, rpc.UpdatedBy, rpc.Version
-      FROM dbo.ContinentProfitCenters rpc
-      LEFT JOIN [SAPServices].[dbo].[Companies] co
-        ON co.CompanyCode ${COL} = rpc.CompanyCode ${COL}
-       AND (co.DeletedTimestamp IS NULL OR co.DeletedTimestamp = 0)
-      WHERE rpc.GuidContinents = ${guidRegions}
-        AND (rpc.DeletedTimestamp IS NULL OR rpc.DeletedTimestamp = 0)
-      ORDER BY rpc.ProfitCenterCode, rpc.CompanyCode`);
-    return rows.map(mapRegionCebe);
+    const links = await this.mw.getRegionLinks(guidRegions);
+    return links.map(mapRegionCebe);
   }
 
   /** Pares (CEBE, sociedad) activos de una región — base del reconcile del sync. */
-  async getActiveLinks(guidRegions: string): Promise<{ profitCenterCode: string; companyCode: string }[]> {
-    const rows = await this.prisma.$queryRaw<{ ProfitCenterCode: string; CompanyCode: string }[]>(Prisma.sql`
-      SELECT ProfitCenterCode, CompanyCode FROM dbo.ContinentProfitCenters
-      WHERE GuidContinents = ${guidRegions} AND ${ACTIVE}`);
-    return rows.map((r) => ({ profitCenterCode: r.ProfitCenterCode, companyCode: r.CompanyCode }));
+  async getActiveLinks(
+    guidRegions: string,
+  ): Promise<{ profitCenterCode: string; companyCode: string }[]> {
+    const links = await this.mw.getRegionLinks(guidRegions);
+    return links.map((l) => ({
+      profitCenterCode: l.profitCenterCode,
+      companyCode: l.companyCode,
+    }));
   }
 
   /**
-   * Vincula un CEBE a una región para una sociedad (upsert soft-delete aware, patrón
-   * device labels): si ya hay un link ACTIVO para el triple lo refresca (Version + 1);
-   * si no, inserta uno nuevo.
+   * Vincula un CEBE a una región para una sociedad. El UPSERT (refrescar si ya existe,
+   * insertar si no) lo resuelve el middleware en una sola llamada: hacerlo en dos desde
+   * acá abriría una ventana entre el "¿existe?" y el alta.
    */
-  async linkCebe(
+  linkCebe(
     guidRegions: string,
     code: string,
     companyCode: string,
@@ -279,114 +246,69 @@ export class RegionsRepository {
     source: string,
     actor: string,
   ): Promise<void> {
-    const nowTs = Date.now();
-    const updated = await this.prisma.$executeRaw`
-      UPDATE dbo.ContinentProfitCenters
-      SET ProfitCenterName = ${name}, Source = ${source}, UpdatedBy = ${actor},
-          Version = Version + 1, ServerTimestamp = ${nowTs}
-      WHERE GuidContinents = ${guidRegions} AND ProfitCenterCode = ${code} AND CompanyCode = ${companyCode}
-        AND (DeletedTimestamp IS NULL OR DeletedTimestamp = 0)`;
-    if (updated === 0) {
-      await this.prisma.$executeRaw`
-        INSERT INTO dbo.ContinentProfitCenters
-          (GuidContinents, ProfitCenterCode, CompanyCode, ProfitCenterName, Source, CreatedBy, UpdatedBy, Version, TimeStamp, ServerTimestamp)
-        VALUES
-          (${guidRegions}, ${code}, ${companyCode}, ${name}, ${source}, ${actor}, ${actor}, 1, ${nowTs}, ${nowTs})`;
-    }
+    return this.mw.linkCebe(guidRegions, {
+      profitCenterCode: code,
+      companyCode,
+      profitCenterName: name,
+      source,
+      actor,
+    });
   }
 
-  async unlinkCebe(guidRegions: string, code: string, companyCode: string): Promise<boolean> {
-    const nowTs = Date.now();
-    const affected = await this.prisma.$executeRaw`
-      UPDATE dbo.ContinentProfitCenters
-      SET DeletedTimestamp = ${nowTs}, ServerTimestamp = ${nowTs}
-      WHERE GuidContinents = ${guidRegions} AND ProfitCenterCode = ${code} AND CompanyCode = ${companyCode}
-        AND (DeletedTimestamp IS NULL OR DeletedTimestamp = 0)`;
-    return affected > 0;
+  unlinkCebe(guidRegions: string, code: string, companyCode: string): Promise<boolean> {
+    return this.mw.unlinkCebe(guidRegions, code, companyCode);
   }
 
-  // ---- Resolver + maestro + diagnósticos --------------------------------
+  // ---- Resolver + maestros + diagnósticos -------------------------------
   /**
    * Pares (CEBE, sociedad) efectivos de un conjunto de regiones (por Code). Para una
-   * agrupación como CAYCAR el service pasa sus miembros (['CA','CB']) y acá se hace la
-   * UNIÓN distinct. Cada CEBE queda limitado a las sociedades vinculadas en esas regiones
-   * (así un transversal como "Duwest Banano" no arrastra sociedades de otra región).
+   * agrupación como CAYCAR el service pasa sus miembros (['CA','CB']) y el middleware
+   * hace la unión distinct. Cada CEBE queda limitado a las sociedades vinculadas en esas
+   * regiones (así un transversal como "Duwest Banano" no arrastra sociedades de otra).
    */
   async resolveCebesByCodes(codes: string[]): Promise<ResolvedCebe[]> {
     if (codes.length === 0) return [];
-    const rows = await this.prisma.$queryRaw<ResolvedRow[]>(Prisma.sql`
-      SELECT DISTINCT rpc.ProfitCenterCode, rpc.ProfitCenterName, rpc.CompanyCode, co.CompanyName
-      FROM dbo.ContinentProfitCenters rpc
-      JOIN dbo.Continents c ON c.Guid = rpc.GuidContinents
-        AND (c.DeletedTimestamp IS NULL OR c.DeletedTimestamp = 0)
-      LEFT JOIN [SAPServices].[dbo].[Companies] co
-        ON co.CompanyCode ${COL} = rpc.CompanyCode ${COL}
-       AND (co.DeletedTimestamp IS NULL OR co.DeletedTimestamp = 0)
-      WHERE c.Code IN (${Prisma.join(codes)})
-        AND (rpc.DeletedTimestamp IS NULL OR rpc.DeletedTimestamp = 0)
-      ORDER BY rpc.ProfitCenterCode, rpc.CompanyCode`);
+    const rows = await this.mw.resolveByCodes(codes);
     return rows.map(mapResolvedCebe);
   }
 
-  /** Maestro de sociedades (para el typeahead del ABM). Vía [SAPServices].[dbo].[Companies]. */
-  async getAvailableCompanies(search: string, limit: number): Promise<AvailableCompany[]> {
-    const term = search ? `%${search}%` : null;
-    const searchSql = term
-      ? Prisma.sql`AND (CompanyCode LIKE ${term} OR CompanyName LIKE ${term})`
-      : Prisma.empty;
-    const rows = await this.prisma.$queryRaw<CompanyRow[]>(Prisma.sql`
-      SELECT TOP (${limit}) CompanyCode, CompanyName, Country
-      FROM [SAPServices].[dbo].[Companies]
-      WHERE (DeletedTimestamp IS NULL OR DeletedTimestamp = 0) ${searchSql}
-      ORDER BY CompanyCode`);
-    return rows.map(mapAvailableCompany);
+  /**
+   * Maestro de sociedades (typeahead del ABM). Vía middleware
+   * (`/v2/mobility/companies`), que envuelve `[SAPServices].[dbo].[Companies]` — era el
+   * último cross-DB que le quedaba a BackOffice.
+   */
+  getAvailableCompanies(search: string, limit: number): Promise<AvailableCompany[]> {
+    return this.mw.searchCompanies(search, limit);
   }
 
-  /** Maestro de CEBEs (para typeahead). Vía VIEW_ProfitCentersMobility (ShowInMobility=1). */
-  async getAvailableCebes(search: string, limit: number): Promise<AvailableCebe[]> {
-    const term = search ? `%${search}%` : null;
-    const searchSql = term
-      ? Prisma.sql`WHERE (ProfitCenterCode LIKE ${term} OR ProfitCenterName LIKE ${term})`
-      : Prisma.empty;
-    const rows = await this.prisma.$queryRaw<CebeCatalogRow[]>(Prisma.sql`
-      SELECT TOP (${limit}) ProfitCenterCode, ProfitCenterName
-      FROM dbo.VIEW_ProfitCentersMobility
-      ${searchSql}
-      ORDER BY ProfitCenterCode`);
-    return rows.map(mapAvailableCebe);
+  /**
+   * Maestro de CEBEs (typeahead). Vía middleware (`/mobility/profit-centers`), que lee
+   * `VIEW_ProfitCentersMobility` (ShowInMobility = 1) con el mismo search (LIKE `%term%`
+   * sobre código o nombre) y el mismo orden (`ProfitCenterCode ASC`).
+   */
+  getAvailableCebes(search: string, limit: number): Promise<AvailableCebe[]> {
+    return this.mw.searchProfitCenters(search, limit);
   }
 
-  /** CEBEs del maestro que no están vinculados a ninguna región (gap de carga). */
+  /**
+   * CEBEs del maestro que no están vinculados a ninguna región (gap de carga).
+   *
+   * El cruce no se puede resolver en una sola query: son dos endpoints distintos del
+   * middleware. Se traen las dos puntas en paralelo y el diff se hace en Node
+   * (`diffUnmapped`), normalizando los códigos para replicar la collation CI_AI que
+   * antes daba gratis el `NOT EXISTS` dentro de la misma base.
+   */
   async getUnmappedCebes(): Promise<UnmappedCebe[]> {
-    const rows = await this.prisma.$queryRaw<CebeCatalogRow[]>(Prisma.sql`
-      SELECT v.ProfitCenterCode, v.ProfitCenterName
-      FROM dbo.VIEW_ProfitCentersMobility v
-      WHERE NOT EXISTS (
-        SELECT 1 FROM dbo.ContinentProfitCenters rpc
-        WHERE rpc.ProfitCenterCode = v.ProfitCenterCode
-          AND (rpc.DeletedTimestamp IS NULL OR rpc.DeletedTimestamp = 0)
-      )
-      ORDER BY v.ProfitCenterCode`);
-    return rows.map(mapAvailableCebe);
+    const [catalog, linkedCodes] = await Promise.all([
+      this.mw.getAllProfitCenters(),
+      this.mw.getLinkedCebeCodes(),
+    ]);
+    return diffUnmapped(catalog, linkedCodes);
   }
 
   /** CEBEs vinculados a más de una región (posible solapamiento a revisar). */
   async getMultiRegionCebes(): Promise<MultiRegionCebe[]> {
-    const rows = await this.prisma.$queryRaw<MultiRow[]>(Prisma.sql`
-      WITH multi AS (
-        SELECT ProfitCenterCode
-        FROM dbo.ContinentProfitCenters
-        WHERE (DeletedTimestamp IS NULL OR DeletedTimestamp = 0)
-        GROUP BY ProfitCenterCode
-        HAVING COUNT(DISTINCT GuidContinents) > 1
-      )
-      SELECT rpc.ProfitCenterCode, rpc.ProfitCenterName, r.Code AS RegionCode, r.Name AS RegionName
-      FROM dbo.ContinentProfitCenters rpc
-      JOIN multi m ON m.ProfitCenterCode = rpc.ProfitCenterCode
-      JOIN dbo.Continents r ON r.Guid = rpc.GuidContinents
-        AND (r.DeletedTimestamp IS NULL OR r.DeletedTimestamp = 0)
-      WHERE (rpc.DeletedTimestamp IS NULL OR rpc.DeletedTimestamp = 0)
-      ORDER BY rpc.ProfitCenterCode, r.Code`);
+    const rows = await this.mw.getMultiRegionLinks();
     return groupMultiRegion(rows);
   }
 }

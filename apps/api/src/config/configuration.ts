@@ -13,6 +13,15 @@ export default () => ({
     permPrefix: process.env.PERM_PREFIX ?? 'MOBILITYBO_',
   },
 
+  // MobilityMiddleWare — único componente que conecta a SQL Server. BackOffice consume
+  // sus endpoints por HTTP (regiones, CEBEs, sociedades, auditoría) en vez de pegarle a
+  // la base. `url` ya incluye el prefijo `/api`. `apiKey` es opcional: el middleware no
+  // exige auth si su propia env está vacía (no-op). Ver docs/EXTERNAL_APIS.md.
+  middleware: {
+    url: process.env.MIDDLEWARE_URL ?? 'http://localhost:6002/api',
+    apiKey: process.env.MIDDLEWARE_API_KEY,
+  },
+
   // Token PROPIO de BackOffice. No es el de ManageIT y no comparte su secret:
   // el JWT de ManageIT no incluye los roleKeys, así que la autorización en runtime
   // se degradaría a `isAdmin`, que es global y cruza aplicaciones.

@@ -273,3 +273,83 @@ son los candidatos naturales a test unitario; ya existen tests de referencia en 
 9. Cada vínculo/desvínculo deja registro en `AuditLogs` con el `GuidUsers` del actor y `AppId='MobilityBackOffice'`.
 10. `POST /api/regions/sync` sin `REGIONS_SYNC_API_KEY` configurada responde 403.
 11. `GET /api/health` devuelve la versión, y coincide con la mostrada en la TopBar.
+
+---
+
+## ⚠️ Defecto abierto — el diagnóstico «CEBEs en varias regiones» avisa de más
+
+> Anotado 2026-08-24 · detectado desde **DuwyDashy** al medir el mapeo real
+> (auditoría `docs/AUDITORIA_BD_RDS.md` #46/#48 de ese repo).
+
+### El síntoma
+
+El panel `RegionDiagnostics` muestra **«CEBEs en varias regiones — vinculados a más de una región
+(revisar si es correcto)»** y hoy lista dos:
+
+| CEBE | Regiones |
+|---|---|
+| `1080` Qualicon | CA, CB |
+| `1081` Seguridad | CA, CB |
+
+**Los dos están bien.** Son servicios compartidos que se facturan entre países: cada uno está
+vinculado a **9 sociedades**, unas de Centroamérica y otras del Caribe.
+
+### Por qué es un falso positivo
+
+La atribución de región **no se resuelve por CEBE**: se resuelve por el par
+**(`CompanyCode`, `ProfitCenterCode`)**. Así lo consume `VIEW_Dataset_Ventas` en DuwyDashy:
+
+```sql
+ROW_NUMBER() OVER (PARTITION BY m.CompanyCode, m.ProfitCenterCode
+                   ORDER BY m.ServerTimestamp DESC, m.Id DESC)
+```
+
+Entonces un CEBE en dos regiones **a través de sociedades distintas** es correcto y no necesita
+revisión: cada par tiene una sola región y cada venta va a la suya.
+
+El caso que **sí** hay que revisar es el otro: el **mismo par** `(sociedad, CEBE)` vinculado a dos
+regiones. Ahí el `ROW_NUMBER` desempata **por `ServerTimestamp`**, y la venta de ese CEBE en esa
+sociedad aparece **entera en una región y cero en la otra** — el orden de carga decidiendo una
+atribución de negocio, sin error ni aviso.
+
+**Medido el 2026-08-24 contra el mapeo real: 38 filas, 38 pares distintos, cero duplicados.** O sea
+que hoy **no existe ningún caso que merezca revisión**, y el panel marca dos que no lo son.
+
+### Por qué importa arreglarlo
+
+No es cosmético. Alguien que le haga caso al aviso y "limpie" `1080` o `1081` quitándoles una
+región **rompe algo que funciona**: la venta de Qualicon en las sociedades del Caribe pasaría a
+Centroamérica, o desaparecería del tablero. **Un panel que marca lo sano invita a romperlo.**
+
+### El arreglo
+
+Agrupar por **(sociedad, CEBE)** y marcar solo cuando ese par tenga más de una región.
+
+`apps/api/src/regions/regions.repository.ts:102` — `groupMultiRegion()` agrupa hoy por
+`r.profitCenterCode` solo:
+
+```ts
+const byCode = new Map<string, MultiRegionCebe>();
+for (const r of rows) {
+  let entry = byCode.get(r.profitCenterCode);   // <-- falta companyCode en la clave
+```
+
+⚠️ **No es un cambio local.** `MwMultiRegionRow` (`regions.client.ts:76`) no trae `companyCode`:
+
+```ts
+export interface MwMultiRegionRow {
+  profitCenterCode: string;
+  profitCenterName: string | null;
+  regionCode: string | null;
+  regionName: string;
+}
+```
+
+Así que el endpoint del middleware **`/links/multi-region`** tiene que devolver también la sociedad
+antes de que BackOffice pueda agrupar bien. Son dos repos: **middleware primero**, después este.
+
+### Mientras tanto
+
+Vale la pena que el texto del panel deje de sonar a alarma. Hoy dice *"revisar si es correcto"*
+sobre casos que están correctos. Algo como *"un CEBE puede estar en varias regiones legítimamente
+si es a través de sociedades distintas"* evita que alguien lo "arregle".

@@ -10,6 +10,8 @@ const KIND_LABEL: Readonly<Record<string, string>> = {
   edited: 'Edición',
   sent: 'Envío',
   status: 'Cambio de estado',
+  milestone: 'Decisión',
+  message: 'Mensaje',
   resolution: 'Resolución',
   credit: 'Crédito',
   payment: 'Pago',

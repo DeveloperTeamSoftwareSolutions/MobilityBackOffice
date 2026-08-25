@@ -17,10 +17,16 @@ export async function getTimeline(
   type: DocumentType,
   documentNumber: string,
   includeViews = false,
+  includeMessages = false,
 ): Promise<DocumentTimeline> {
   const res = await httpClient.get<ApiData<DocumentTimeline>>(
     `/api/support/documents/${type}/${encodeURIComponent(documentNumber)}/timeline`,
-    { params: { includeViews: includeViews ? 1 : undefined } },
+    {
+      params: {
+        includeViews: includeViews ? 1 : undefined,
+        includeMessages: includeMessages ? 1 : undefined,
+      },
+    },
   );
   return res.data.data;
 }

@@ -34,18 +34,27 @@ export function SupportPanel() {
   const [type, setType] = useState<DocumentType>('order');
   const [documentNumber, setDocumentNumber] = useState('');
   const [includeViews, setIncludeViews] = useState(false);
+  // Los mensajes del hilo llevan los motivos de rechazo y las notas del motor de
+  // credito, que es donde suele estar la explicacion que busca soporte. Encendidos
+  // por default; las consultas no, porque son ruido salvo que se las pida.
+  const [includeMessages, setIncludeMessages] = useState(true);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function load(nextIncludeViews = includeViews) {
+  async function load(
+    nextIncludeViews = includeViews,
+    nextIncludeMessages = includeMessages,
+  ) {
     const numero = documentNumber.trim();
     if (!numero) return;
 
     setLoading(true);
     setError(null);
     try {
-      setTimeline(await getTimeline(type, numero, nextIncludeViews));
+      setTimeline(
+        await getTimeline(type, numero, nextIncludeViews, nextIncludeMessages),
+      );
     } catch (err) {
       setTimeline(null);
       setError(errorMessage(err));
@@ -59,10 +68,15 @@ export function SupportPanel() {
     void load();
   }
 
-  /** El toggle recarga: las consultas las filtra el middleware, no la UI. */
+  /** Los toggles recargan: el filtrado lo hace el middleware, no la UI. */
   function onToggleViews(next: boolean) {
     setIncludeViews(next);
-    if (timeline) void load(next);
+    if (timeline) void load(next, includeMessages);
+  }
+
+  function onToggleMessages(next: boolean) {
+    setIncludeMessages(next);
+    if (timeline) void load(includeViews, next);
   }
 
   return (
@@ -110,14 +124,24 @@ export function SupportPanel() {
           </button>
         </form>
 
-        <label className="bo-sp__toggle">
-          <input
-            type="checkbox"
-            checked={includeViews}
-            onChange={(e) => onToggleViews(e.target.checked)}
-          />
-          <span>Incluir consultas (quién miró el documento)</span>
-        </label>
+        <div className="bo-sp__toggles">
+          <label className="bo-sp__toggle">
+            <input
+              type="checkbox"
+              checked={includeMessages}
+              onChange={(e) => onToggleMessages(e.target.checked)}
+            />
+            <span>Incluir mensajes del hilo (motivos de rechazo, notas de crédito)</span>
+          </label>
+          <label className="bo-sp__toggle">
+            <input
+              type="checkbox"
+              checked={includeViews}
+              onChange={(e) => onToggleViews(e.target.checked)}
+            />
+            <span>Incluir consultas (quién miró el documento)</span>
+          </label>
+        </div>
 
         {error && <p className="bo-sp__error">{error}</p>}
 

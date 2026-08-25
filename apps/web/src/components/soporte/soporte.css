@@ -228,8 +228,14 @@
   background: var(--bo-primary);
 }
 .bo-sp__event--status .bo-sp__event-marker,
-.bo-sp__event--resolution .bo-sp__event-marker {
+.bo-sp__event--resolution .bo-sp__event-marker,
+.bo-sp__event--milestone .bo-sp__event-marker {
   background: var(--bo-accent);
+}
+/* Los mensajes del hilo son contexto, no hitos del flujo: marcador hueco. */
+.bo-sp__event--message .bo-sp__event-marker {
+  background: var(--bo-surface);
+  border: 2px solid var(--bo-border);
 }
 .bo-sp__event--credit .bo-sp__event-marker,
 .bo-sp__event--payment .bo-sp__event-marker {
@@ -285,4 +291,10 @@
   font-size: 11px;
   color: var(--bo-text-muted);
   opacity: 0.75;
+}
+
+.bo-sp__toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }

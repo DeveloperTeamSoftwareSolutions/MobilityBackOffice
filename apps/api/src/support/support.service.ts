@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { SupportClient } from './support.client';
 import {
+  DocumentsQuery,
   DocumentTimeline,
+  DocumentType,
+  PagedDocuments,
+  StatusCount,
   TimelineDocument,
   TimelineQuery,
 } from './support.types';
@@ -38,5 +42,15 @@ export class SupportService {
   async getDocument(query: TimelineQuery): Promise<TimelineDocument> {
     const timeline = await this.client.getTimeline(query);
     return timeline.document;
+  }
+
+  /** Listado paginado de documentos (sin scope de vendedor). */
+  listDocuments(query: DocumentsQuery): Promise<PagedDocuments> {
+    return this.client.listDocuments(query);
+  }
+
+  /** Estados presentes en los datos, para el filtro de la consola. */
+  listStatuses(type: DocumentType): Promise<StatusCount[]> {
+    return this.client.listStatuses(type);
   }
 }

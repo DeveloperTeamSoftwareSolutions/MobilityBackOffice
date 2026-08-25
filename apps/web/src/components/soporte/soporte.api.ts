@@ -1,5 +1,14 @@
 import { httpClient } from '../../api/httpClient';
-import { DocumentTimeline, DocumentType } from './soporte.types';
+import {
+  DocumentTimeline,
+  DocumentType,
+  Paged,
+  Pagination,
+  SortDir,
+  SortField,
+  StatusCount,
+  SupportDocument,
+} from './soporte.types';
 
 interface ApiData<T> {
   success: boolean;
@@ -27,6 +36,48 @@ export async function getTimeline(
         includeMessages: includeMessages ? 1 : undefined,
       },
     },
+  );
+  return res.data.data;
+}
+
+interface ApiPaged<T> {
+  success: boolean;
+  data: T[];
+  pagination: Pagination;
+}
+
+/** Listado paginado de documentos (sin scope de vendedor). */
+export async function listDocuments(params: {
+  type: DocumentType;
+  page: number;
+  limit: number;
+  search: string;
+  status: string;
+  sortBy: SortField;
+  sortDir: SortDir;
+}): Promise<Paged<SupportDocument>> {
+  const res = await httpClient.get<ApiPaged<SupportDocument>>(
+    '/api/support/documents',
+    {
+      params: {
+        type: params.type,
+        page: params.page,
+        limit: params.limit,
+        search: params.search || undefined,
+        status: params.status || undefined,
+        sortBy: params.sortBy,
+        sortDir: params.sortDir,
+      },
+    },
+  );
+  return { data: res.data.data, pagination: res.data.pagination };
+}
+
+/** Estados existentes en los datos, para poblar el filtro. */
+export async function listStatuses(type: DocumentType): Promise<StatusCount[]> {
+  const res = await httpClient.get<ApiData<StatusCount[]>>(
+    '/api/support/statuses',
+    { params: { type } },
   );
   return res.data.data;
 }

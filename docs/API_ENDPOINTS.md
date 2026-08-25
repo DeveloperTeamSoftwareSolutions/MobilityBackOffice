@@ -83,14 +83,25 @@ scope de vendedor que limita al resto del ecosistema.
 > **Fase 1: solo lectura.** El override de estados y banderas llega en las fases 2 y 3 y
 > requiere endpoints nuevos en el Middleware. Ver `docs/SPEC_CONSOLA_SOPORTE.md`.
 
-> **No hay busqueda por texto libre.** El Middleware no expone ningun listado de documentos
-> que no este scopeado por vendedor o cliente, asi que la consola trabaja por **numero exacto**
-> de documento (el dato con el que llega el ticket de soporte).
-
 | Metodo | Ruta | Descripcion |
 |---|---|---|
-| GET | `/api/support/documents/:type/:number` | Cabecera del documento. `type` = `order` | `quote`. 400 si el tipo es invalido o el numero viene vacio; 404 si no existe |
+| GET | `/api/support/documents` | Listado paginado. Query: `type` (`order` \| `quote`), `search`, `status`, `page`, `limit` (max 200), `sortBy`, `sortDir` |
+| GET | `/api/support/statuses` | Estados presentes en los datos con su conteo, para el filtro. Query: `type` |
+| GET | `/api/support/documents/:type/:number` | Cabecera del documento. 400 si el tipo es invalido o el numero viene vacio; 404 si no existe |
 | GET | `/api/support/documents/:type/:number/timeline` | Bitacora unificada. Query: `includeViews`, `includeMessages` (`1`/`true`) |
+
+### Orden de rutas
+
+`documents` y `statuses` (literales) se declaran **antes** que `documents/:type/:number`.
+Hoy no compiten (distinta cantidad de segmentos), pero es la convencion del repo.
+
+### Por que el listado no sale de los endpoints existentes
+
+Todos los listados de documentos del Middleware estan scopeados por vendedor o cliente
+(`resolveEmail` + `sellerScope`) y a soporte le devuelven vacio o 404 — soporte no es el
+vendedor de ningun documento. Por eso el Middleware suma un router propio
+(`/api/mobility/support`, v1.240.0) que expone la misma data **sin** ese scope, protegido
+con `requireApiKey`.
 
 La bitacora es un passthrough a `GET /mobility/document-timeline` del Middleware: alta,
 ediciones, envio, decisiones por item, contraofertas, decision de cabecera, corridas del motor

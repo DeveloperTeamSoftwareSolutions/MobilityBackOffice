@@ -59,3 +59,65 @@ export interface TimelineQuery {
   includeViews?: boolean;
   includeMessages?: boolean;
 }
+
+/** Fila del listado de documentos de la consola. */
+export interface SupportDocument {
+  id: number;
+  guid: string;
+  documentNumber: string | null;
+  statusCode: string | null;
+  customerCode: string | null;
+  customerName: string | null;
+  sellerEmail: string | null;
+  sellerName: string | null;
+  total: number | null;
+  currency: string | null;
+  companyCode: string | null;
+  documentDate: string | null;
+  sentAt: string | null;
+  cancelledAt: string | null;
+  serverTimestamp: number | null;
+}
+
+export interface Pagination {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface PagedDocuments {
+  data: SupportDocument[];
+  pagination: Pagination;
+}
+
+/** Estado existente en los datos, con su conteo. Alimenta el filtro de la UI. */
+export interface StatusCount {
+  statusCode: string;
+  total: number;
+}
+
+/** Parametros del listado. `limit` lo clampea el controller. */
+export interface DocumentsQuery {
+  type: DocumentType;
+  page: number;
+  limit: number;
+  search: string;
+  status: string;
+  sortBy: string;
+  sortDir: 'ASC' | 'DESC';
+}
+
+/**
+ * Campos ordenables. Espejo de la whitelist del middleware
+ * (`support.repository.SORTABLE`): si se manda otro, el middleware cae al default.
+ */
+export const SORTABLE_FIELDS: readonly string[] = [
+  'documentNumber',
+  'statusCode',
+  'customerName',
+  'sellerEmail',
+  'total',
+  'documentDate',
+  'serverTimestamp',
+];

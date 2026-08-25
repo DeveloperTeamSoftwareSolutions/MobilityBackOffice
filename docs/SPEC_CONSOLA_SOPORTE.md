@@ -1,8 +1,9 @@
 # Spec (SDD) — Consola de Soporte
 
 > Fecha: 2026-08-25
-> Estado: fase 1 en implementacion; fases 2 y 3 pendientes de aprobacion
+> Estado: fase 1 completa y verificada; listado de la fase 2 completo; override pendiente
 > Version objetivo: 2.1.0 (fase 1) · 2.2.0 (fase 2) · 2.3.0 (fase 3)
+> Middleware: v1.240.0 (router de soporte)
 > Branch: `feature/consola-soporte`
 
 ---
@@ -32,13 +33,14 @@ en una fase posterior si el soporte las necesita.
 | # | Decision | Razon |
 |---|---|---|
 | D1 | El bypass va en un **router nuevo y separado** del Middleware, no modificando `PATCH /orders/:guid/status` | El endpoint existente lo usan vendedores y gerentes desde MobilityManager. Tocarlo cambiaria el flujo de negocio para todos |
-| D2 | **No se modifica la tabla `TRANSITIONS`** de `orderStatusTransition.js` | Relajarla afloja las reglas para TODO el ecosistema, no solo para soporte. El bypass debe ser un camino explicito, no una regla mas permisiva |
+| D2 | **No se modifican las tablas de transiciones** (`documentStatus.js` — ver §4.bis) | Relajarlas afloja las reglas para TODO el ecosistema, no solo para soporte. El bypass debe ser un camino explicito, no una regla mas permisiva |
 | D3 | BackOffice **no escribe a SQL**: todo pasa por el Middleware | Regla dura del proyecto (`CLAUDE.md`). Ademas, escribir directo reproduce el problema que este modulo viene a eliminar |
-| D4 | Transiciones **de cualquier estado a cualquier estado**, incluidos los terminales (`Invoiced`, `Cancelled`, `AuthorizationRejected`) | Decision del solicitante (2026-08-25). Mitigacion: confirmacion doble + motivo obligatorio. Ver riesgo R4 |
+| D4 | Transiciones **de cualquier estado a cualquier estado**, incluidos los terminales (ordenes: `Invoiced`, `Rejected`, `Annulled`) | Decision del solicitante (2026-08-25). Mitigacion: confirmacion doble + motivo obligatorio. Ver riesgo R4 |
 | D5 | El rol de soporte es **exclusivo** (`MOBILITYBO_SUPPORT`), y **SuperAdmin tambien entra** | Decision del solicitante (2026-08-25). Mantiene la regla transversal de que SuperAdmin ve todo |
 | D6 | Prioridad del rol: **SuperAdmin > Soporte > Administrador > Marketing** | Soporte es un rol tecnico deliberado del DevelopersTeam; si a alguien se lo asignan, debe ganarle a los roles funcionales. Ver riesgo R2 |
 | D7 | Se ofrecen **dos operaciones distintas**: reparacion limpia (corregir los hechos + recalcular) y override duro (estampar el estado) | El estado es un valor DERIVADO, no almacenado. Ver §4 |
 | D8 | El router de soporte del Middleware exige **`requireApiKey`** | Es el unico camino del ecosistema que salta el scope de vendedor y la maquina de estados. Sin key seria alterable por cualquiera |
+| D9 | El **listado paginado** entra en el alcance de la fase 2 | Sin el, la consola solo sirve si ya se conoce el numero exacto. El ticket pide "al seleccionar o hacer clic en una orden", que implica un listado. Es solo lectura, asi que no agrega riesgo |
 
 ## 4. El hecho tecnico que gobierna el diseno
 
@@ -68,6 +70,39 @@ arreglado.
 Se descarto una tercera via —"pinnear" el documento para que el recompute lo respete— por ser
 un cambio de fondo en el motor de estados con impacto en todo el ecosistema. Si el uso
 demuestra que hace falta, se evalua aparte.
+
+
+## 4.bis Correccion — hay DOS maquinas de estados, y la spec citaba la equivocada
+
+> Detectado 2026-08-25 al verificar contra datos reales. Las versiones 0.1 de este
+> documento citaban `src/utils/orderStatusTransition.js`. **Ese es el vocabulario
+> LEGACY.** El vigente vive en `src/utils/documentStatus.js`.
+
+| | Legacy (`orderStatusTransition.js`) | Vigente (`documentStatus.js`) |
+|---|---|---|
+| Anulada | `Cancelled` | **`Annulled`** |
+| Rechazada | `AuthorizationRejected` | **`Rejected`** |
+| Otros | `AwaitingAuthorization`, `Authorized` | no existen |
+
+Los datos de QATEST usan el vocabulario **vigente**: los estados reales de ordenes son
+`Draft`, `ReadyForApprove`, `Processed`, `SentToSAP`, `PendingDispatch`, `Dispatched`,
+`Invoiced`, `Rejected`, `Annulled`. Las cotizaciones suman `AutomaticallyAuthorized`,
+`ConvertedToOrder` y `Expired`.
+
+`businessOrders.updateStatus` valida contra `ORDER_STATUSES` y lanza `LEGACY_STATUS_CODE`
+si le pasan un codigo viejo. El comentario del propio codigo advierte que por el camino
+legacy `BusinessQuotes` termino con `Won` y `Approved` adentro.
+
+**Impacto en la fase 2**: el override DEBE validar `toCode` contra
+`documentStatus.ORDER_STATUSES` / `QUOTE_STATUSES`, nunca contra el mapa legacy. Validar
+con el legacy rechazaria `Annulled` y `Rejected` —los estados que soporte ve en la
+pantalla— y aceptaria codigos que ninguna app entiende.
+
+Terminales vigentes: ordenes `Invoiced`, `Rejected`, `Annulled`; cotizaciones
+`ConvertedToOrder`, `Rejected`, `Expired`, `Annulled`. La conclusion de §4 no cambia:
+**tampoco en el modelo vigente existe una transicion de vuelta a `Draft`**.
+
+---
 
 ## 5. Objetos de datos involucrados
 
@@ -136,7 +171,28 @@ con `roles: ['Soporte']`, ruta en `App.tsx` con `RoleGuard`, icono SVG nuevo en
 
 ---
 
-## 7. Fase 2 — Override de estados (pendiente de aprobacion)
+## 7. Fase 2 — Listado + override de estados
+
+### 7.0 Listado paginado — COMPLETO (v1.240.0 del Middleware / v2.1.0 de BackOffice)
+
+Router nuevo en el Middleware, montado con `requireApiKey`:
+
+```
+GET /api/mobility/support/documents?type=&search=&status=&page=&limit=&sortBy=&sortDir=
+GET /api/mobility/support/statuses?type=
+```
+
+Archivos: `src/api/routes/support.js`, `src/db/repositories/support.repository.js`,
++2 lineas en `src/app.js`. Paginacion server-side, whitelist de `sortBy`, parametros
+por `.input()`, filtro de soft-delete (NULL y 0). Solo lectura.
+
+En BackOffice: `GET /api/support/documents` y `GET /api/support/statuses`, y la UI pasa
+a ser **listado -> detalle** (clic en una fila abre su linea de tiempo).
+
+`/statuses` deriva los estados de los datos y no de una lista fija: si el flujo agrega
+un estado, el filtro lo muestra sin tocar codigo.
+
+### 7.1 Override de estados — PENDIENTE DE APROBACION
 
 ### 7.1 Cambios en MobilityMiddleWare
 

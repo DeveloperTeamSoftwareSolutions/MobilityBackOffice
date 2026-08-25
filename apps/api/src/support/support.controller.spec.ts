@@ -127,3 +127,85 @@ describe('SupportController', () => {
     });
   });
 });
+
+describe('SupportController — listado', () => {
+  const paged = {
+    data: [],
+    pagination: { total: 0, page: 1, limit: 20, totalPages: 0 },
+  };
+  let service: jest.Mocked<Pick<SupportService, 'listDocuments' | 'listStatuses'>>;
+  let controller: SupportController;
+
+  beforeEach(() => {
+    service = {
+      listDocuments: jest.fn().mockResolvedValue(paged),
+      listStatuses: jest.fn().mockResolvedValue([]),
+    };
+    controller = new SupportController(service as unknown as SupportService);
+  });
+
+  const lastQuery = () => service.listDocuments.mock.calls[0][0];
+
+  it('usa order, pagina 1 y orden por fecha descendente como default', async () => {
+    await controller.list();
+    expect(lastQuery()).toMatchObject({
+      type: 'order',
+      page: 1,
+      limit: 20,
+      search: '',
+      status: '',
+      sortBy: 'documentDate',
+      sortDir: 'DESC',
+    });
+  });
+
+  it('clampea el limit al maximo de 200', async () => {
+    await controller.list('order', '1', '5000');
+    expect(lastQuery().limit).toBe(200);
+  });
+
+  it('un limit invalido o menor a 1 cae al default', async () => {
+    await controller.list('order', '1', '0');
+    await controller.list('order', '1', 'abc');
+    expect(service.listDocuments.mock.calls[0][0].limit).toBe(20);
+    expect(service.listDocuments.mock.calls[1][0].limit).toBe(20);
+  });
+
+  it('una pagina menor a 1 cae a 1', async () => {
+    await controller.list('order', '-3');
+    expect(lastQuery().page).toBe(1);
+  });
+
+  it('rechaza un sortBy fuera de la whitelist y cae al default', async () => {
+    await controller.list('order', '1', '20', '', '', 'DROP TABLE');
+    expect(lastQuery().sortBy).toBe('documentDate');
+  });
+
+  it('acepta un sortBy de la whitelist', async () => {
+    await controller.list('order', '1', '20', '', '', 'customerName', 'ASC');
+    expect(lastQuery()).toMatchObject({ sortBy: 'customerName', sortDir: 'ASC' });
+  });
+
+  it('cualquier sortDir que no sea ASC resuelve DESC', async () => {
+    await controller.list('order', '1', '20', '', '', 'total', 'lateral');
+    expect(lastQuery().sortDir).toBe('DESC');
+  });
+
+  it('recorta espacios de search y status', async () => {
+    await controller.list('order', '1', '20', '  AGROSAK ', '  Draft ');
+    expect(lastQuery()).toMatchObject({ search: 'AGROSAK', status: 'Draft' });
+  });
+
+  it('rechaza un tipo invalido con 400', async () => {
+    await expect(controller.list('factura')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(service.listDocuments).not.toHaveBeenCalled();
+  });
+
+  it('los estados responden con success y el tipo normalizado', async () => {
+    const res = await controller.statuses('QUOTE');
+    expect(service.listStatuses).toHaveBeenCalledWith('quote');
+    expect(res).toEqual({ success: true, data: [] });
+  });
+});

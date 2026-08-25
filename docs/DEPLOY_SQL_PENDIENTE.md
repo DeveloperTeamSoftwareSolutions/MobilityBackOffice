@@ -1,7 +1,7 @@
 # Checklist de scripts SQL — Mobility BackOffice
 
-> Ultima actualizacion: 2026-08-05
-> Version: 2.0.0
+> Ultima actualizacion: 2026-08-25
+> Version: 2.1.0
 
 Documento **vivo**: marcar la casilla y anotar la fecha al aplicar cada script en cada entorno.
 
@@ -32,8 +32,9 @@ Documento **vivo**: marcar la casilla y anotar la fecha al aplicar cada script e
 | 003 | `003_ContinentProfitCentersCompanyCode.sql` | `CompanyCode` + clave unica triple | [x] verificado 2026-07-20 (aplicado por MM) | [ ] |
 | 004 | `004_ViewProfitCentersMobility.sql` | Versiona `dbo.VIEW_ProfitCentersMobility` (se consumia sin estar en ningun repo) | [x] verificado 2026-07-20 (ya existia; **el script NO la modifico**) | [x] existe en PROD (dump 2026-08-05) |
 | 005 | `005_ViewV2CompaniesMobility.sql` | Crea `dbo.VIEW_V2_CompaniesMobility` (wrapper cross-DB sobre `[SAPServices].[dbo].[Companies]`). La consume el Middleware para el typeahead de sociedades del alta de CEBE | [x] ya existia en QATEST | [ ] **FALTA en PROD — aplicar** |
+| 006 | `006_AddSupportRole.sql` | Rol `MOBILITYBO_SUPPORT` + permisos `SUPPORT_VIEW` / `SUPPORT_OVERRIDE` + mapeo (tambien a SUPERADMIN). Habilita la consola de soporte (v2.1.0) | [ ] **pendiente** | [ ] **pendiente** |
 
-Orden de ejecucion: **001 → 002 → 003 → 004 → 005**. El 003 requiere que el 002 ya exista.
+Orden de ejecucion: **001 → 002 → 003 → 004 → 005 → 006**. El 003 requiere que el 002 ya exista.
 El 005 requiere que la base `[SAPServices]` exista en la instancia (existe en ambos entornos).
 
 Los scripts 002 y 003 son los `004_` y `006_` del repo MobilityManager, renumerados.

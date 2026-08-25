@@ -1,7 +1,7 @@
 # APIs y Endpoints Externos — Mobility BackOffice
 
-> Ultima actualizacion: 2026-08-05
-> Version: 2.0.0
+> Ultima actualizacion: 2026-08-25
+> Version: 2.1.0
 
 ## Integraciones activas
 
@@ -44,6 +44,7 @@ MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
   | GET | `/mobility/profit-centers` | Maestro de CEBEs (typeahead, diagnosticos) | `dbo.VIEW_ProfitCentersMobility` | idem |
   | GET | `/v2/mobility/companies` | Maestro de sociedades (typeahead) | `dbo.VIEW_V2_CompaniesMobility` sobre `[SAPServices].[dbo].[Companies]` | idem |
   | POST | `/audit-logs` | Traza central (append) | `dbo.AuditLogs` | `src/audit/audit.client.ts` |
+  | GET | `/mobility/document-timeline` | Bitacora unificada de una orden/cotizacion (consola de soporte) | `BusinessOrders`/`BusinessQuotes` + `Auditories`, pagos, credito y resoluciones | `src/support/support.client.ts` |
 - **Cross-database y collations**: el join a `[SAPServices].[dbo].[Companies]` y el manejo de
   collations ocurren **dentro del Middleware** (via `VIEW_V2_CompaniesMobility`). BackOffice ya
   no depende de eso: es una preocupacion del Middleware, no de esta app.

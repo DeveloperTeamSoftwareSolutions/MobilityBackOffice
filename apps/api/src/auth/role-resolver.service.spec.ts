@@ -106,3 +106,39 @@ describe('RoleResolver', () => {
     });
   });
 });
+
+describe('RoleResolver — rol de Soporte (consola de soporte)', () => {
+  const resolver = new RoleResolver();
+
+  it('mapea MOBILITYBO_SUPPORT a Soporte', () => {
+    expect(resolver.resolve({ roleKeys: ['MOBILITYBO_SUPPORT'] })).toBe(
+      BackOfficeRole.Soporte,
+    );
+  });
+
+  it('SuperAdmin gana sobre Soporte', () => {
+    expect(
+      resolver.resolve({
+        roleKeys: ['MOBILITYBO_SUPPORT', 'MOBILITYBO_SUPERADMIN'],
+      }),
+    ).toBe(BackOfficeRole.SuperAdmin);
+  });
+
+  it('Soporte gana sobre Administrador y Marketing (decision D6)', () => {
+    expect(
+      resolver.resolve({
+        roleKeys: [
+          'MOBILITYBO_MARKETING',
+          'MOBILITYBO_ADMIN',
+          'MOBILITYBO_SUPPORT',
+        ],
+      }),
+    ).toBe(BackOfficeRole.Soporte);
+  });
+
+  it('isAdmin de ITManager gana sobre Soporte', () => {
+    expect(
+      resolver.resolve({ isAdmin: true, roleKeys: ['MOBILITYBO_SUPPORT'] }),
+    ).toBe(BackOfficeRole.SuperAdmin);
+  });
+});

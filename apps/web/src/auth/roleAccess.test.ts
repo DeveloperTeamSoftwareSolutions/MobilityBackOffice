@@ -23,3 +23,24 @@ describe('roleAllows', () => {
     expect(roleAllows(null, [])).toBe(false);
   });
 });
+
+describe('roleAllows — rol Soporte', () => {
+  it('Soporte accede a la consola de soporte', () => {
+    expect(roleAllows('Soporte', ['Soporte'])).toBe(true);
+  });
+
+  it('SuperAdmin tambien entra a la consola de soporte (decision D5)', () => {
+    expect(roleAllows('SuperAdmin', ['Soporte'])).toBe(true);
+  });
+
+  it('Soporte no accede a Regiones ni a Marketing', () => {
+    expect(roleAllows('Soporte', ['Administrador'])).toBe(false);
+    expect(roleAllows('Soporte', ['Marketing'])).toBe(false);
+  });
+
+  it('ningun otro rol entra a la consola de soporte', () => {
+    expect(roleAllows('Administrador', ['Soporte'])).toBe(false);
+    expect(roleAllows('Marketing', ['Soporte'])).toBe(false);
+    expect(roleAllows(null, ['Soporte'])).toBe(false);
+  });
+});

@@ -5,6 +5,7 @@ import { envValidationSchema } from './config/env.validation';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { RegionsModule } from './regions/regions.module';
+import { SupportModule } from './support/support.module';
 import { HealthModule } from './health/health.module';
 
 @Module({
@@ -17,6 +18,7 @@ import { HealthModule } from './health/health.module';
     AuditModule,
     AuthModule,
     RegionsModule,
+    SupportModule,
     HealthModule,
   ],
 })

@@ -1,5 +1,9 @@
 /** Espejo de `BackOfficeRole` del backend (apps/api/src/auth/backoffice-role.enum.ts). */
-export type BackOfficeRole = 'SuperAdmin' | 'Administrador' | 'Marketing';
+export type BackOfficeRole =
+  | 'SuperAdmin'
+  | 'Soporte'
+  | 'Administrador'
+  | 'Marketing';
 
 export interface User {
   email: string;

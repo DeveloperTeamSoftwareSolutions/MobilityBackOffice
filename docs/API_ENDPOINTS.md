@@ -1,7 +1,7 @@
 # API — Mobility BackOffice
 
-> Ultima actualizacion: 2026-07-20
-> Version: 1.1.0
+> Ultima actualizacion: 2026-08-25
+> Version: 2.1.0
 
 Toda respuesta incluye `success`. Los errores siguen el formato de Nest:
 `{ message, error, statusCode }`.
@@ -73,6 +73,29 @@ al RAG externo.
 | `/rag/*` | cookie `bo_rag_token` + rol Marketing/SuperAdmin | Proxya al RAG (`RAG_URL`). Reescribe assets a `/rag`. Sin cookie → 401; rol insuficiente → 403; sin `RAG_URL` → 404 (no montado) |
 
 Detalle en `docs/SPEC_RAG_EMBED.md` y `docs/EXTERNAL_APIS.md`.
+
+## Consola de soporte
+
+**Todo el modulo exige rol `Soporte`** (`SuperAdmin` pasa siempre por el `RolesGuard`).
+Es el rol exclusivo del DevelopersTeam: da trazabilidad de cualquier documento **sin** el
+scope de vendedor que limita al resto del ecosistema.
+
+> **Fase 1: solo lectura.** El override de estados y banderas llega en las fases 2 y 3 y
+> requiere endpoints nuevos en el Middleware. Ver `docs/SPEC_CONSOLA_SOPORTE.md`.
+
+> **No hay busqueda por texto libre.** El Middleware no expone ningun listado de documentos
+> que no este scopeado por vendedor o cliente, asi que la consola trabaja por **numero exacto**
+> de documento (el dato con el que llega el ticket de soporte).
+
+| Metodo | Ruta | Descripcion |
+|---|---|---|
+| GET | `/api/support/documents/:type/:number` | Cabecera del documento. `type` = `order` | `quote`. 400 si el tipo es invalido o el numero viene vacio; 404 si no existe |
+| GET | `/api/support/documents/:type/:number/timeline` | Bitacora unificada. Query: `includeViews`, `includeMessages` (`1`/`true`) |
+
+La bitacora es un passthrough a `GET /mobility/document-timeline` del Middleware: alta,
+ediciones, envio, decisiones por item, contraofertas, decision de cabecera, corridas del motor
+de credito, pagos y su validacion, liberacion o denegacion de credito, cierre del turno del
+gerente, envio a SAP y anulacion con motivo. `includeViews=1` suma quien MIRO el documento.
 
 ## Auditoria
 

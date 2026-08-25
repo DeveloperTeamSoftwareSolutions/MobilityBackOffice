@@ -6,6 +6,8 @@
 export enum BackOfficeRole {
   /** Acceso total al back-office. */
   SuperAdmin = 'SuperAdmin',
+  /** Consola de soporte: auditar y corregir ordenes/cotizaciones (DevelopersTeam). */
+  Soporte = 'Soporte',
   /** Regiones comerciales y configuracion. */
   Administrador = 'Administrador',
   /** Templates de WhatsApp y carga de documentacion del RAG. */

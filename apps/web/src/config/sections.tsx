@@ -3,11 +3,12 @@ import {
   IconRegions,
   IconChatSquare,
   IconFileText,
+  IconSupport,
 } from '../components/layout/icons';
 import type { BackOfficeRole } from '../types';
 import { roleAllows } from '../auth/roleAccess';
 
-export type SectionGroup = 'Administración' | 'Marketing';
+export type SectionGroup = 'Administración' | 'Marketing' | 'Soporte';
 
 export interface NavSection {
   key: string;
@@ -61,10 +62,21 @@ export const NAV_SECTIONS: NavSection[] = [
     status: 'ready',
     icon: <IconFileText />,
   },
+  {
+    key: 'soporte',
+    label: 'Consola de soporte',
+    description:
+      'Auditá la trazabilidad completa de una orden o cotización del flujo Mobility.',
+    path: '/soporte',
+    group: 'Soporte',
+    roles: ['Soporte'],
+    status: 'ready',
+    icon: <IconSupport />,
+  },
 ];
 
 /** Orden de los grupos en el sidebar y el inicio. */
-export const SECTION_GROUPS: SectionGroup[] = ['Administración', 'Marketing'];
+export const SECTION_GROUPS: SectionGroup[] = ['Administración', 'Marketing', 'Soporte'];
 
 /** Secciones visibles para un rol. */
 export function visibleSections(role: BackOfficeRole | null): NavSection[] {

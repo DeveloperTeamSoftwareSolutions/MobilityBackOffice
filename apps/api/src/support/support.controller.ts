@@ -118,13 +118,6 @@ export class SupportController {
     return { success: true, ...result };
   }
 
-  // GET /api/support/vocabulary — estados VALIDOS del tipo, para el override
-  @Get('vocabulary')
-  async vocabulary(@Query('type') type?: string) {
-    const data = await this.support.getVocabulary(this.parseType(type ?? 'order'));
-    return { success: true, data };
-  }
-
   // GET /api/support/documents/:type/:number — cabecera del documento
   @Get('documents/:type/:number')
   async getDocument(
@@ -152,46 +145,6 @@ export class SupportController {
       includeViews: flag(includeViews),
       includeMessages: flag(includeMessages),
     });
-    return { success: true, data };
-  }
-
-  // PATCH /api/support/documents/:type/:guid/status — OVERRIDE de estado
-  //
-  // Única escritura del módulo. Fuerza el estado saltando la máquina de estados y
-  // el scope de vendedor. El motivo es obligatorio y queda tanto en la línea de
-  // tiempo del documento como en `AuditLogs`.
-  @Patch('documents/:type/:guid/status')
-  async overrideStatus(
-    @Param('type') type: string,
-    @Param('guid') guid: string,
-    @Body()
-    body: { toCode?: string; reasonCode?: string; reasonNotes?: string },
-    @Req() req: AuthedRequest,
-  ) {
-    const toCode = (body?.toCode ?? '').trim();
-    const reasonNotes = (body?.reasonNotes ?? '').trim();
-
-    if (!toCode) {
-      throw new BadRequestException('toCode es obligatorio');
-    }
-    // El motivo se exige acá además del middleware: es la regla de negocio de esta
-    // consola (nada se fuerza sin justificación) y así el error llega sin viajar.
-    if (!reasonNotes) {
-      throw new BadRequestException('El motivo es obligatorio');
-    }
-
-    const who = actor(req);
-    const data = await this.support.overrideStatus(
-      {
-        type: this.parseType(type),
-        guid: this.parseGuid(guid),
-        toCode,
-        reasonCode: (body?.reasonCode ?? '').trim() || null,
-        reasonNotes,
-        actorEmail: who.email ?? null,
-      },
-      who,
-    );
     return { success: true, data };
   }
 

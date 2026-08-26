@@ -85,50 +85,6 @@ export class SupportService {
     return this.client.listStatuses(type);
   }
 
-  /** Estados VALIDOS del tipo, para elegir destino en el override. */
-  getVocabulary(type: DocumentType): Promise<StatusOption[]> {
-    return this.client.getVocabulary(type);
-  }
-
-  /**
-   * Fuerza el estado de un documento y deja traza en `AuditLogs`.
-   *
-   * La auditoria va con `safeRecord` (best-effort) a proposito: cuando llega acá el
-   * middleware YA commiteó el cambio, así que un fallo del log central no debe
-   * devolver un error al usuario por una operación que sí ocurrió. El hecho, además,
-   * queda registrado por partida doble del lado del middleware (`OrdersStatus` +
-   * `Auditories`), que es lo que alimenta la línea de tiempo.
-   */
-  async overrideStatus(
-    req: OverrideRequest,
-    actor: Actor,
-  ): Promise<OverrideResult> {
-    const result = await this.client.overrideStatus(req);
-
-    // Reescribir el mismo estado no cambió nada: no ensucia la traza.
-    if (result.noop) return result;
-
-    await this.audit.safeRecord({
-      action: 'SUPPORT_STATUS_OVERRIDE',
-      entity: req.type === 'quote' ? 'BusinessQuotes' : 'BusinessOrders',
-      entityId: result.documentNumber,
-      category: 'support',
-      guidUsers: actor.guid ?? null,
-      detail: [
-        actor.email ?? 'desconocido',
-        `documento=${result.documentNumber}`,
-        `de=${result.fromCode ?? 'sin estado'}`,
-        `a=${result.toCode}`,
-        `motivo=${req.reasonNotes}`,
-        req.reasonCode ? `codigo=${req.reasonCode}` : null,
-      ]
-        .filter(Boolean)
-        .join(' | '),
-    });
-
-    return result;
-  }
-
   /**
    * Estado que el recalculo daria hoy. No se audita: es una LECTURA, no cambia nada.
    */

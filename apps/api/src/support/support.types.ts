@@ -260,6 +260,8 @@ export interface InconsistentReport {
 /** Accion con intencion: escribe hechos y deja que el estado se calcule. */
 export interface SupportAction {
   action: string;
+  /** Estado destino, solo para volver atras. */
+  target: string | null;
   label: string;
   available: boolean;
   reason: string | null;

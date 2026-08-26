@@ -7,9 +7,7 @@ import {
   SortDir,
   SortField,
   StatusCount,
-  StatusOption,
   SupportDocument,
-  OverrideResult,
   DocumentItems,
   ItemStatusResult,
   RecomputeResult,
@@ -91,29 +89,7 @@ export async function listStatuses(type: DocumentType): Promise<StatusCount[]> {
   return res.data.data;
 }
 
-/** Estados VÁLIDOS del tipo (para elegir destino), distinto de `listStatuses`. */
-export async function getVocabulary(type: DocumentType): Promise<StatusOption[]> {
-  const res = await httpClient.get<ApiData<StatusOption[]>>(
-    '/api/support/vocabulary',
-    { params: { type } },
-  );
-  return res.data.data;
-}
 
-/** Fuerza el estado de un documento. Única escritura de la consola. */
-export async function overrideStatus(
-  type: DocumentType,
-  guid: string,
-  toCode: string,
-  reasonNotes: string,
-  reasonCode?: string,
-): Promise<OverrideResult> {
-  const res = await httpClient.patch<ApiData<OverrideResult>>(
-    `/api/support/documents/${type}/${encodeURIComponent(guid)}/status`,
-    { toCode, reasonNotes, reasonCode },
-  );
-  return res.data.data;
-}
 
 /** Líneas del documento con su estado y el turno del gerente. */
 export async function listItems(
@@ -205,10 +181,12 @@ export async function runAction(
   guid: string,
   action: string,
   reasonNotes: string,
+  /** Estado destino de una vuelta atrás. Las demás acciones no lo llevan. */
+  target?: string | null,
 ): Promise<ActionResult> {
   const res = await httpClient.post<ApiData<ActionResult>>(
     `/api/support/documents/${type}/${encodeURIComponent(guid)}/actions/${encodeURIComponent(action)}`,
-    { reasonNotes },
+    { reasonNotes, target },
   );
   return res.data.data;
 }

@@ -60,7 +60,7 @@ export function DocumentActionsPanel({
     setEjecutando(true);
     setError(null);
     try {
-      const r = await runAction(type, guid, elegida.action, motivo.trim());
+      const r = await runAction(type, guid, elegida.action, motivo.trim(), elegida.target);
       setElegida(null);
       setMotivo('');
       await cargar();
@@ -95,7 +95,7 @@ export function DocumentActionsPanel({
       <div className="bo-sp__actions">
         {data.actions.map((a) => (
           <div
-            key={a.action}
+            key={a.action + (a.target ?? "")}
             className={`bo-sp__action ${a.available ? '' : 'bo-sp__action--off'}`}
           >
             <span className="bo-sp__action-label">{a.label}</span>

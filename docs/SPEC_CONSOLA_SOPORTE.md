@@ -3,7 +3,7 @@
 > Fecha: 2026-08-25
 > Estado: COMPLETA — fases 1, 2 y 3 (rol, linea de tiempo, listado, override de cabecera y estado de lineas)
 > Version objetivo: 2.1.0 (fase 1) · 2.2.0 (fase 2) · 2.3.0 (fase 3)
-> Middleware: v1.245.0 (soporte: acciones con intencion, override avanzado, lineas, proyeccion y diagnostico)
+> Middleware: v1.245.1 (soporte: acciones con intencion, override avanzado, lineas, proyeccion y diagnostico)
 > Branch: `feature/consola-soporte`
 
 ---
@@ -448,6 +448,71 @@ desfasadas —30 de las cotizaciones por vencimiento (`ValidUntil` pasado) que n
 Ojo al leerlo: la proyeccion no re-evalua el credito (§4.ter), asi que en los pares
 `ReadyForApprove <-> Processed` puede haber falsos positivos. Conviene validar una
 muestra recomputando antes de sacar conclusiones.
+
+---
+
+## 8.ter Hallazgos del banco de pruebas — para revisar con el equipo del flujo
+
+> Encontrados el 2026-08-26 corriendo 24 escenarios sobre documentos desechables
+> (creados y borrados en la misma corrida). **No son bugs de la consola de soporte**:
+> estan en la logica de proyeccion del Middleware y afectan por igual a la app del
+> vendedor y a la cola del gerente. Se documentan sin tocarlos, porque cambiarlos
+> altera el flujo de negocio para todos.
+
+### H1 — La regla de retencion anula el paso 7 de la escalera, en sus dos casos
+
+`projectAuthSegment` paso 7 dice que un documento esperando al VENDEDOR sigue en
+`Processed`. Su comentario es explicito: *"La cabecera OBSERVADA pesa igual que una
+contraoferta de linea: el gerente ya hablo, falta el vendedor — el documento sigue
+'Processed', no muere ni avanza"*.
+
+Pero la regla de retencion (agregada el 2026-08-20 en `decideStatusChange`) baja a
+`ReadyForApprove` cualquier `Processed` que tenga una bandera en 0. Y justamente los dos
+casos del paso 7 dejan una bandera en 0:
+
+| Caso | Bandera en 0 | Paso 7 dice | Resultado real |
+|---|---|---|---|
+| Linea contraofertada sin responder | `processedPrices` | `Processed` | `ReadyForApprove` |
+| Cabecera con pago `observed` | `processedPaymentMethod` | `Processed` | `ReadyForApprove` |
+
+Medido con los escenarios 7 (banco 1) y P4 (banco 2). El paso 7 nunca se alcanza en la
+practica: o el comentario quedo viejo, o la regla de retencion tiene un efecto no
+buscado. **Consecuencia visible**: un documento que espera al vendedor aparece en el
+estado del gerente.
+
+### H2 — Las cotizaciones ignoran el pedido de otra forma de pago
+
+`computeProcessedFlags` corta antes para cotizaciones:
+
+```js
+if (docType === 'quote') {
+    return { processedPrices, processedCredit: 1, processedPaymentMethod: 1 };
+}
+```
+
+`processedPaymentMethod` queda en **1 fijo**, sin mirar si el pedido de otra forma de
+pago fue decidido. Pero `projectAuthSegment` **si** evalua `headerPending` para
+cotizaciones. Las dos piezas se contradicen, y la regla de ascenso (las tres banderas en
+1 suben a `Processed`) hace ganar a las banderas.
+
+Resultado medido, con la MISMA configuracion en los dos tipos:
+
+| Documento | Pago pedido, sin decidir, sin lineas escaladas | Estado proyectado |
+|---|---|---|
+| Orden (P1) | si | `ReadyForApprove` — correcto, el gerente lo tiene que decidir |
+| Cotizacion (P7) | si | **`Processed`** — el gerente nunca lo ve |
+
+**Consecuencia**: una cotizacion con un pedido de plazos sin resolver avanza como si
+estuviera aprobado. Es la asimetria mas concreta que encontro el banco.
+
+### Lo que SI quedo verificado de la consola
+
+**24 corridas de acciones, 0 documentos inconsistentes.** La garantia central del
+rediseno —una accion nunca deja un estado inalcanzable— se sostiene en cotizaciones,
+con "otra forma de pago", en el tramo de SAP, en anuladas y en convertidas a orden.
+
+Tambien quedo verificado que el override libre **si** puede romper la consistencia (se
+forzo a proposito), que el diagnostico lo detecta, y que "Recalcular" lo corrige.
 ## 9. Riesgos
 
 | # | Riesgo | Mitigacion |

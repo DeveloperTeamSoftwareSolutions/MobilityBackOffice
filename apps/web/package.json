@@ -1,6 +1,6 @@
 {
   "name": "@mobility-backoffice/web",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "description": "Mobility BackOffice frontend — React shell (login + layout de administracion)",
   "private": true,
   "type": "module",

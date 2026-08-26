@@ -13,6 +13,7 @@ import {
   DocumentItems,
   ItemStatusResult,
   RecomputeResult,
+  ProjectedStatus,
 } from './soporte.types';
 
 interface ApiData<T> {
@@ -152,6 +153,17 @@ export async function recompute(
   const res = await httpClient.post<ApiData<RecomputeResult>>(
     `/api/support/documents/${type}/${encodeURIComponent(guid)}/recompute`,
     {},
+  );
+  return res.data.data;
+}
+
+/** Qué estado daría el recálculo hoy. No cambia nada. */
+export async function getProjectedStatus(
+  type: DocumentType,
+  guid: string,
+): Promise<ProjectedStatus> {
+  const res = await httpClient.get<ApiData<ProjectedStatus>>(
+    `/api/support/documents/${type}/${encodeURIComponent(guid)}/projected-status`,
   );
   return res.data.data;
 }

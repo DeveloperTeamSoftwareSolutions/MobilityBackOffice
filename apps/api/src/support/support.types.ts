@@ -232,3 +232,12 @@ export interface RecomputeResult {
   statusBefore: string | null;
   statusAfter: string | null;
 }
+
+/** Que estado daria el recalculo hoy. Es una ESTIMACION: no re-evalua el credito. */
+export interface ProjectedStatus {
+  ok: true;
+  current: string | null;
+  projected: string;
+  matches: boolean;
+  estimated: boolean;
+}

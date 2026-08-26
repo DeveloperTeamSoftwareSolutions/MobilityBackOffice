@@ -18,6 +18,7 @@ import {
   OverrideRequest,
   OverrideResult,
   PagedDocuments,
+  ProjectedStatus,
   RecomputeResult,
   StatusCount,
   StatusOption,
@@ -65,6 +66,10 @@ const ITEM_PATH = (type: DocumentType, guid: string, itemGuid: string) =>
 const RECOMPUTE_PATH = (type: DocumentType, guid: string) =>
   `/mobility/support/documents/${type}/${encodeURIComponent(guid)}/recompute`;
 
+/** Que estado daria el recalculo hoy, sin escribir. */
+const PROJECTED_PATH = (type: DocumentType, guid: string) =>
+  `/mobility/support/documents/${type}/${encodeURIComponent(guid)}/projected-status`;
+
 /** Respuesta del middleware para la bitacora. */
 interface MwTimelineResponse {
   success: boolean;
@@ -106,6 +111,11 @@ interface MwItemStatusResponse {
 interface MwRecomputeResponse {
   success: boolean;
   data: RecomputeResult;
+}
+
+interface MwProjectedResponse {
+  success: boolean;
+  data: ProjectedStatus;
 }
 
 /** Mensaje de error que devuelve el middleware, si lo trae. */
@@ -357,6 +367,30 @@ export class SupportClient {
     } catch (err) {
       if (httpStatus(err) === 404) throw new NotFoundException('Documento no encontrado');
       throw new ServiceUnavailableException('No se pudo recalcular el documento');
+    }
+  }
+
+  /**
+   * Estado que el recálculo daría hoy. Solo lectura: no escribe ni corre el motor
+   * de crédito, así que es una estimación (ver el comentario del middleware).
+   */
+  async getProjectedStatus(
+    type: DocumentType,
+    guid: string,
+  ): Promise<ProjectedStatus> {
+    try {
+      const res = await firstValueFrom(
+        this.http.get<MwProjectedResponse>(
+          `${this.base()}${PROJECTED_PATH(type, guid)}`,
+          { headers: this.headers(), timeout: 20000 },
+        ),
+      );
+      return res.data.data;
+    } catch (err) {
+      if (httpStatus(err) === 404) throw new NotFoundException('Documento no encontrado');
+      throw new ServiceUnavailableException(
+        'No se pudo calcular el estado del documento',
+      );
     }
   }
 }

@@ -180,6 +180,22 @@ export class SupportController {
     return { success: true, data };
   }
 
+  // GET /api/support/documents/:type/:guid/projected-status
+  //
+  // Que estado daria el recalculo hoy. Solo lectura: el modal de forzar estado lo usa
+  // para avisar si el estado elegido se va a sostener o lo van a revertir.
+  @Get('documents/:type/:guid/projected-status')
+  async projectedStatus(
+    @Param('type') type: string,
+    @Param('guid') guid: string,
+  ) {
+    const data = await this.support.getProjectedStatus(
+      this.parseType(type),
+      this.parseGuid(guid),
+    );
+    return { success: true, data };
+  }
+
   // GET /api/support/documents/:type/:guid/items — lineas + turno del gerente
   @Get('documents/:type/:guid/items')
   async items(@Param('type') type: string, @Param('guid') guid: string) {

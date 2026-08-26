@@ -11,6 +11,7 @@ import {
   OverrideRequest,
   OverrideResult,
   PagedDocuments,
+  ProjectedStatus,
   RecomputeResult,
   StatusCount,
   StatusOption,
@@ -113,6 +114,16 @@ export class SupportService {
     });
 
     return result;
+  }
+
+  /**
+   * Estado que el recalculo daria hoy. No se audita: es una LECTURA, no cambia nada.
+   */
+  getProjectedStatus(
+    type: DocumentType,
+    guid: string,
+  ): Promise<ProjectedStatus> {
+    return this.client.getProjectedStatus(type, guid);
   }
 
   /** Lineas del documento con su estado y el turno del gerente. */

@@ -1,7 +1,12 @@
 import { FormEvent, useEffect, useState } from 'react';
 import axios from 'axios';
-import { getVocabulary, overrideStatus } from './soporte.api';
-import { DocumentType, StatusOption, SupportDocument } from './soporte.types';
+import { getProjectedStatus, getVocabulary, overrideStatus } from './soporte.api';
+import {
+  DocumentType,
+  ProjectedStatus,
+  StatusOption,
+  SupportDocument,
+} from './soporte.types';
 
 interface Props {
   document: SupportDocument;
@@ -40,6 +45,7 @@ export function StatusOverrideModal({
   onApplied,
 }: Props) {
   const [options, setOptions] = useState<StatusOption[]>([]);
+  const [projected, setProjected] = useState<ProjectedStatus | null>(null);
   const [toCode, setToCode] = useState('');
   const [reasonNotes, setReasonNotes] = useState('');
   const [confirming, setConfirming] = useState(false);
@@ -59,6 +65,22 @@ export function StatusOverrideModal({
       cancelled = true;
     };
   }, [type]);
+
+  // Qué estado daría el recálculo hoy. Si falla, el modal sigue funcionando sin el
+  // aviso: es información de ayuda, no un requisito para forzar.
+  useEffect(() => {
+    let cancelled = false;
+    getProjectedStatus(type, document.guid)
+      .then((p) => {
+        if (!cancelled) setProjected(p);
+      })
+      .catch(() => {
+        if (!cancelled) setProjected(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [type, document.guid]);
 
   const destino = options.find((o) => o.code === toCode);
   const origen = options.find((o) => o.code === document.statusCode);
@@ -103,6 +125,34 @@ export function StatusOverrideModal({
           {document.documentNumber} · estado actual{' '}
           <strong>{document.statusCode ?? 'sin estado'}</strong>
         </p>
+
+        {/*
+          Avisa ANTES de confirmar si el estado elegido se va a sostener. Evita el
+          razonamiento manual de "¿los datos respaldan esto?", que era justo lo que
+          confundía del aviso anterior.
+        */}
+        {projected && (
+          <p
+            className={
+              toCode && toCode !== projected.projected
+                ? 'bo-sp__modal-danger'
+                : 'bo-sp__modal-warning'
+            }
+          >
+            Con los datos de hoy, el sistema calcula{' '}
+            <strong>{projected.projected}</strong>.
+            {toCode && toCode !== projected.projected && (
+              <>
+                {' '}
+                Si forzás <strong>{toCode}</strong>, la próxima acción sobre el
+                documento lo va a devolver a {projected.projected}.
+              </>
+            )}
+            {toCode && toCode === projected.projected && (
+              <> El estado que elegiste coincide: va a quedar firme.</>
+            )}
+          </p>
+        )}
 
         <form onSubmit={onSubmit} className="bo-sp__modal-form">
           <label className="bo-sp__field">

@@ -97,6 +97,7 @@ scope de vendedor que limita al resto del ecosistema.
 | GET | `/api/support/documents/:type/:guid/items` | Lineas del documento + `managerTurn` (si el gerente cerro su turno) |
 | PATCH | `/api/support/documents/:type/:guid/items/:itemGuid` | **Estado de una linea.** Body `{ authorizationStatus?, sellerResponse?, authorizationRequired?, reasonNotes }`. Solo estados: precio, cantidad, descuento y producto NO se leen. `countered` es rechazado |
 | POST | `/api/support/documents/:type/:guid/recompute` | Recalcula el estado del documento a partir de los hechos |
+| GET | `/api/support/documents/:type/:guid/projected-status` | Que estado daria el recalculo HOY, **sin escribir**. `{ current, projected, matches, estimated }`. Es una estimacion: no re-evalua el credito |
 
 ### Orden de rutas
 

@@ -65,9 +65,13 @@ function turno(over: Partial<ManagerTurn> = {}): ManagerTurn {
   };
 }
 
-function datos(items: SupportItem[], managerTurn: ManagerTurn): DocumentItems {
+function datos(
+  items: SupportItem[],
+  managerTurn: ManagerTurn,
+  statusCode = 'ReadyForApprove',
+): DocumentItems {
   return {
-    document: { guid: 'g', documentNumber: 'ORD-1', statusCode: 'ReadyForApprove' },
+    document: { guid: 'g', documentNumber: 'ORD-1', statusCode },
     paymentTerms: {
       requested: null,
       status: null,
@@ -80,8 +84,12 @@ function datos(items: SupportItem[], managerTurn: ManagerTurn): DocumentItems {
   };
 }
 
-function montar(items: SupportItem[], managerTurn: ManagerTurn) {
-  listItems.mockResolvedValue(datos(items, managerTurn));
+function montar(
+  items: SupportItem[],
+  managerTurn: ManagerTurn,
+  statusCode = 'ReadyForApprove',
+) {
+  listItems.mockResolvedValue(datos(items, managerTurn, statusCode));
   return render(
     <DocumentItemsPanel type="order" guid="g" onDocumentStatusChange={() => {}} />,
   );
@@ -128,6 +136,26 @@ describe('DocumentItemsPanel — qué decisiones se ofrecen', () => {
   it('una línea que no requiere autorización no tiene decisiones', async () => {
     montar([item({ authorizationRequired: false })], turno({ relevant: false, escalatedLines: 0 }));
     expect(await screen.findByText('No requiere autorización.')).toBeInTheDocument();
+  });
+
+  it('contraofertada SIN precio: no se puede responder, y lo dice', async () => {
+    // El flujo exige `proposedPrice` para responder (`not_countered`). Pasa con
+    // líneas viejas anteriores a esa columna. Lo encontró el banco de pruebas.
+    montar([item({ authorizationStatus: 'countered', proposedPrice: null })], turno({ closed: true }));
+    expect(
+      await screen.findByText(/La contraoferta no tiene precio/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Responder por el vendedor')).toBeNull();
+  });
+
+  it('documento fuera de los estados negociables: tampoco se puede responder', async () => {
+    montar(
+      [item({ authorizationStatus: 'countered', proposedPrice: 88 })],
+      turno({ closed: true }),
+      'Invoiced',
+    );
+    expect(await screen.findByText(/ya no admite respuestas sobre sus líneas/)).toBeInTheDocument();
+    expect(screen.queryByText('Responder por el vendedor')).toBeNull();
   });
 
   it('muestra la contraoferta vigente junto al precio', async () => {

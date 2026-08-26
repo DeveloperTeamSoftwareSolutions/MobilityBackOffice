@@ -214,6 +214,21 @@ export function DocumentItemsPanel({
   const turno = data.managerTurn;
 
   /**
+   * Estados en los que el flujo todavía admite responder una contraoferta; fuera de
+   * ellos devuelve `not_negotiable`. Espejo de `NEGOTIABLE_ORDER_STATUSES` y
+   * `NEGOTIABLE_QUOTE_STATUSES` del middleware — la cotización suma `Sent`.
+   *
+   * Un `statusCode` vacío NO bloquea: es un espejo viejo y el middleware tampoco corta
+   * ahí, porque no habría con qué juzgar.
+   */
+  const NEGOCIABLES =
+    type === 'quote'
+      ? ['ReadyForApprove', 'Sent', 'Processed']
+      : ['ReadyForApprove', 'Processed'];
+  const negociable =
+    !data.document.statusCode || NEGOCIABLES.includes(data.document.statusCode);
+
+  /**
    * ¿Qué se puede hacer con esta línea, y si no se puede nada, por qué?
    *
    * Se calcula con las mismas condiciones que aplica el middleware. Ofrecer un botón
@@ -235,7 +250,23 @@ export function DocumentItemsPanel({
         motivo: 'El vendedor ya respondió y la ronda es una sola.',
       };
     }
+    if (item.authorizationStatus === 'countered' && item.proposedPrice == null) {
+      // El flujo exige que la contraoferta tenga precio para poder responderla; sin
+      // él no hay nada que aceptar. Pasa con líneas viejas anteriores a `ProposedPrice`.
+      return {
+        decidir: false,
+        responder: false,
+        motivo: 'La contraoferta no tiene precio: el vendedor no puede responderla.',
+      };
+    }
     if (item.authorizationStatus === 'countered' && turno.closed) {
+      if (!negociable) {
+        return {
+          decidir: false,
+          responder: false,
+          motivo: `El documento está en ${data?.document.statusCode ?? 'un estado'} y ya no admite respuestas sobre sus líneas.`,
+        };
+      }
       return { decidir: false, responder: true, motivo: null };
     }
     if (turno.closed) {
@@ -256,6 +287,7 @@ export function DocumentItemsPanel({
         guid={guid}
         paymentTerms={data.paymentTerms}
         managerTurn={turno}
+        documentStatus={data.document.statusCode}
         onAplicado={async (estadoNuevo, texto) => {
           await cargar();
           onDocumentStatusChange(estadoNuevo);

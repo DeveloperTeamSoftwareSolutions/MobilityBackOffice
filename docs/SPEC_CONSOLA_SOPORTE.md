@@ -653,6 +653,43 @@ Lo unico que toca codigo **compartido** con MobilityIA y MobilityManager es `asS
 (1.248.0) y el desempate de la linea de tiempo (1.245.0). El resto vive en el router de
 soporte, que ningun otro consumidor llama.
 
+### Verificado contra QATEST (2026-08-26)
+
+**14 escenarios sobre ordenes desechables (`ZZDEC-`), 0 fallos**, borradas al terminar.
+Lo que quedo probado, no razonado:
+
+| Escenario | Resultado |
+|---|---|
+| Contraoferta con precio | La linea queda `countered`, con precio, moneda, autor **soporte**, fecha y motivo. Documento consistente |
+| Contraoferta sin precio | Corta con `PROPOSED_PRICE_REQUIRED` y **no escribe nada** |
+| Rechazo sin motivo | Corta con 400 |
+| Aprobar con el turno abierto | Aprueba **sin banda** (confirma que `asSupport` la saltea) y el documento sigue en `ReadyForApprove`: aprobar una linea no cierra el turno |
+| Decidir con el turno cerrado | Corta con `ALREADY_RESOLVED` |
+| Respuesta del vendedor a una contraoferta | Queda `accepted`, autor soporte, documento consistente |
+| Plazo de pago contraofertado | Queda `observed` con la contrapropuesta y el autor |
+| Plazo sin valor / sin pedido / turno abierto | Cortan con `VALUE_REQUIRED`, `NO_REQUEST`, `TURN_NOT_CLOSED` |
+| Respuesta al plazo con el turno cerrado | Queda `approved` (el flujo usa ese codigo, no `accepted`) |
+| Producto inexistente | Corta con `PRODUCT_NOT_IN_ORDER` |
+| PATCH viejo de estado de linea | **404** — la ruta ya no existe |
+
+### H3 — El vendedor puede cambiar su respuesta cuantas veces quiera
+
+> Encontrado por el banco, 2026-08-26. **Preexistente**, no lo introduce esta consola.
+
+La "ronda unica" vive en `decideItem`: el gerente no vuelve a contraofertar despues de
+que el vendedor contesto (`already_answered_by_seller`). Pero `respondItem` **no tiene la
+guarda simetrica**: mientras el documento siga en un estado negociable y la linea siga
+`countered` con precio, una segunda respuesta se acepta y pisa a la primera —
+verificado: `accepted` paso a `rejected` y el documento a `Rejected`.
+
+Afecta igual a MobilityIA, que es quien normalmente llama ese endpoint. **No se toca**:
+agregar la guarda cambia el flujo para todos.
+
+La consola **no ofrece** responder cuando `sellerResponse` ya tiene valor, asi que es mas
+estricta que el middleware. **Queda por decidir con el equipo** si eso esta bien: si un
+vendedor contesta por error y pide que se lo corrijan, hoy soporte no puede — tendria que
+reabrir el turno del gerente para que vuelva a contraofertar.
+
 ## 9. Riesgos
 
 | # | Riesgo | Mitigacion |

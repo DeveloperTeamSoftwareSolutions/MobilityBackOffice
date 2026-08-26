@@ -30,6 +30,8 @@ interface Props {
   guid: string;
   paymentTerms: PaymentTerms;
   managerTurn: ManagerTurn;
+  /** Estado del documento: el flujo corta por el al responder (`not_negotiable`). */
+  documentStatus: string | null;
   /** Recarga los datos y avisa el estado nuevo del documento. */
   onAplicado: (estadoNuevo: string | null, aviso: string) => Promise<void> | void;
 }
@@ -49,6 +51,7 @@ export function PaymentTermsPanel({
   guid,
   paymentTerms,
   managerTurn,
+  documentStatus,
   onAplicado,
 }: Props) {
   const [modo, setModo] = useState<'gerente' | 'vendedor' | null>(null);
@@ -65,9 +68,17 @@ export function PaymentTermsPanel({
   // El gerente decide mientras su turno siga abierto. Cerrado el turno, el
   // middleware responde `already_resolved`: ofrecerlo sería prometer algo que falla.
   const puedeDecidir = !managerTurn.closed;
-  // El vendedor solo responde una contraoferta VIGENTE, y recién cuando el gerente
-  // cerró su turno (antes ni siquiera la ve).
-  const puedeResponder = paymentTerms.status === 'observed' && managerTurn.closed;
+  // El vendedor solo responde una contraoferta VIGENTE, recién cuando el gerente cerró
+  // su turno (antes ni siquiera la ve) y mientras el documento siga siendo negociable.
+  // Espejo de las tres guardas del middleware: `not_observed`, `turn_not_closed` y
+  // `not_negotiable`. Un `statusCode` vacío no bloquea, igual que allá.
+  const NEGOCIABLES =
+    type === 'quote'
+      ? ['ReadyForApprove', 'Sent', 'Processed']
+      : ['ReadyForApprove', 'Processed'];
+  const negociable = !documentStatus || NEGOCIABLES.includes(documentStatus);
+  const puedeResponder =
+    paymentTerms.status === 'observed' && managerTurn.closed && negociable;
 
   function cerrar() {
     setModo(null);

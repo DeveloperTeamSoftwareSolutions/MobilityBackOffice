@@ -103,6 +103,21 @@ export class SupportController {
     return { success: true, data };
   }
 
+  // GET /api/support/diagnostics/inconsistent — documentos con el estado desfasado
+  //
+  // Ruta literal: va antes que las de `documents/:type/...` por convencion del repo.
+  @Get('diagnostics/inconsistent')
+  async inconsistent(
+    @Query('type') type?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const result = await this.support.listInconsistent(
+      this.parseType(type ?? 'order'),
+      Math.min(2000, Math.max(1, parseInt(limit ?? '', 10) || 500)),
+    );
+    return { success: true, ...result };
+  }
+
   // GET /api/support/vocabulary — estados VALIDOS del tipo, para el override
   @Get('vocabulary')
   async vocabulary(@Query('type') type?: string) {

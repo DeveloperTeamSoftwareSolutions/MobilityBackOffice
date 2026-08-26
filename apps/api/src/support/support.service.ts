@@ -6,6 +6,7 @@ import {
   DocumentsQuery,
   DocumentTimeline,
   DocumentType,
+  InconsistentReport,
   ItemStatusRequest,
   ItemStatusResult,
   OverrideRequest,
@@ -65,6 +66,16 @@ export class SupportService {
   /** Listado paginado de documentos (sin scope de vendedor). */
   listDocuments(query: DocumentsQuery): Promise<PagedDocuments> {
     return this.client.listDocuments(query);
+  }
+
+  /**
+   * Documentos con el estado desfasado. Es una LECTURA: no se audita ni cambia nada.
+   */
+  listInconsistent(
+    type: DocumentType,
+    limit: number,
+  ): Promise<InconsistentReport> {
+    return this.client.listInconsistent(type, limit);
   }
 
   /** Estados presentes en los datos, para el filtro de la consola. */

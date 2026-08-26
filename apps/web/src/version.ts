@@ -3,4 +3,4 @@
  * Mantener sincronizada con package.json y con apps/api/src/version.ts.
  */
 export const APP_NAME = 'Mobility BackOffice';
-export const APP_VERSION = '2.5.0';
+export const APP_VERSION = '2.6.0';

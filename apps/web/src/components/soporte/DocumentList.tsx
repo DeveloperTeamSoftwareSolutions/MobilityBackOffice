@@ -115,6 +115,19 @@ export function DocumentList({
                   >
                     {doc.statusCode ?? '—'}
                   </span>
+                  {/*
+                    El estado guardado no coincide con el calculado. Sin esta marca el
+                    desfasaje es invisible: el vendedor ve un estado que no le
+                    corresponde y nadie se entera.
+                  */}
+                  {doc.statusConsistent === false && (
+                    <span
+                      className="bo-sp__cell-sub bo-sp__inconsistent"
+                      title="El estado guardado no coincide con el que el sistema calcularía"
+                    >
+                      debería ser {doc.projectedStatus}
+                    </span>
+                  )}
                 </td>
                 <td>
                   {doc.customerName ?? '—'}

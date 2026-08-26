@@ -77,6 +77,10 @@ export interface SupportDocument {
   sentAt: string | null;
   cancelledAt: string | null;
   serverTimestamp: number | null;
+  /** Estado que la proyeccion daria hoy. null si no se pudo calcular. */
+  projectedStatus?: string | null;
+  /** false = el estado guardado no coincide con el calculado. */
+  statusConsistent?: boolean | null;
 }
 
 export interface Pagination {
@@ -240,4 +244,15 @@ export interface ProjectedStatus {
   projected: string;
   matches: boolean;
   estimated: boolean;
+}
+
+/**
+ * Diagnostico de documentos con el estado desfasado. `truncated` avisa que el
+ * scan llego al tope: sin eso, una lista corta se leeria como "no hay mas".
+ */
+export interface InconsistentReport {
+  data: SupportDocument[];
+  scanned: number;
+  total: number;
+  truncated: boolean;
 }

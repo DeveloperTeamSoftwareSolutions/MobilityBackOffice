@@ -53,6 +53,10 @@ export interface SupportDocument {
   sentAt: string | null;
   cancelledAt: string | null;
   serverTimestamp: number | null;
+  /** Estado que la proyección daría hoy. */
+  projectedStatus?: string | null;
+  /** false = el estado guardado no coincide con el calculado. */
+  statusConsistent?: boolean | null;
 }
 
 export interface Pagination {
@@ -166,4 +170,12 @@ export interface ProjectedStatus {
   projected: string;
   matches: boolean;
   estimated: boolean;
+}
+
+/** Diagnóstico de documentos con el estado desfasado. */
+export interface InconsistentReport {
+  data: SupportDocument[];
+  scanned: number;
+  total: number;
+  truncated: boolean;
 }

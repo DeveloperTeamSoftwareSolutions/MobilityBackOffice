@@ -3,7 +3,7 @@
 > Fecha: 2026-08-25
 > Estado: COMPLETA — fases 1, 2 y 3 (rol, linea de tiempo, listado, override de cabecera y estado de lineas)
 > Version objetivo: 2.1.0 (fase 1) · 2.2.0 (fase 2) · 2.3.0 (fase 3)
-> Middleware: v1.243.0 (router de soporte, override, estado de lineas y proyeccion)
+> Middleware: v1.244.0 (router de soporte, override, lineas, proyeccion y diagnostico)
 > Branch: `feature/consola-soporte`
 
 ---

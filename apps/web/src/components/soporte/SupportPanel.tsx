@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import { getTimeline, listDocuments, listStatuses } from './soporte.api';
+import {
+  getTimeline,
+  listDocuments,
+  listInconsistent,
+  listStatuses,
+} from './soporte.api';
 import {
   DocumentTimeline as Timeline,
   DocumentType,
@@ -66,6 +71,10 @@ export function SupportPanel() {
   const [documents, setDocuments] = useState<SupportDocument[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [statuses, setStatuses] = useState<StatusCount[]>([]);
+  // Modo diagnóstico: en vez del listado normal, solo los documentos cuyo estado
+  // guardado no coincide con el calculado.
+  const [soloInconsistentes, setSoloInconsistentes] = useState(false);
+  const [scan, setScan] = useState<{ scanned: number; total: number; truncated: boolean } | null>(null);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
 
@@ -111,6 +120,31 @@ export function SupportPanel() {
     let cancelled = false;
     setListLoading(true);
     setListError(null);
+
+    if (soloInconsistentes) {
+      listInconsistent(type)
+        .then((r) => {
+          if (cancelled) return;
+          setDocuments(r.data);
+          setPagination(null);
+          setScan({ scanned: r.scanned, total: r.total, truncated: r.truncated });
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setDocuments([]);
+          setPagination(null);
+          setScan(null);
+          setListError(errorMessage(err, 'listado'));
+        })
+        .finally(() => {
+          if (!cancelled) setListLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setScan(null);
     listDocuments({
       type,
       page,
@@ -137,7 +171,7 @@ export function SupportPanel() {
     return () => {
       cancelled = true;
     };
-  }, [type, page, limit, debouncedSearch, status, sortBy, sortDir]);
+  }, [type, page, limit, debouncedSearch, status, sortBy, sortDir, soloInconsistentes]);
 
   const loadTimeline = useCallback(
     async (
@@ -357,6 +391,33 @@ export function SupportPanel() {
             />
           </label>
         </div>
+
+        <div className="bo-sp__toggles">
+          <label className="bo-sp__toggle">
+            <input
+              type="checkbox"
+              checked={soloInconsistentes}
+              onChange={(e) => {
+                setSoloInconsistentes(e.target.checked);
+                setPage(1);
+              }}
+            />
+            <span>
+              Solo documentos con el estado desfasado (no coincide con el calculado)
+            </span>
+          </label>
+        </div>
+
+        {scan && (
+          <p className="bo-sp__modal-warning">
+            {documents.length} de {scan.scanned} documentos revisados tienen el estado
+            desfasado.
+            {scan.truncated
+              ? ` Se revisaron los ${scan.scanned} mas recientes de ${scan.total}: hay mas sin revisar.`
+              : ` Se revisaron todos (${scan.total}).`}{' '}
+            Entrá a cada uno y usá <strong>Recalcular estado</strong> para corregirlo.
+          </p>
+        )}
 
         {listError && <p className="bo-sp__error">{listError}</p>}
 

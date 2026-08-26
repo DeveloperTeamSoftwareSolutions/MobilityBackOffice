@@ -569,3 +569,9 @@
   background: var(--bo-accent);
   color: #fff;
 }
+
+/* Marca de estado desfasado en el listado */
+.bo-sp__inconsistent {
+  color: var(--bo-warning);
+  font-weight: 600;
+}

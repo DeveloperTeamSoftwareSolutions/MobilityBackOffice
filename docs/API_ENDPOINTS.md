@@ -88,8 +88,9 @@ scope de vendedor que limita al resto del ecosistema.
 
 | Metodo | Ruta | Descripcion |
 |---|---|---|
-| GET | `/api/support/documents` | Listado paginado. Query: `type` (`order` \| `quote`), `search`, `status`, `page`, `limit` (max 200), `sortBy`, `sortDir` |
+| GET | `/api/support/documents` | Listado paginado. Cada fila trae `projectedStatus` y `statusConsistent`. Query: `type` (`order` \| `quote`), `search`, `status`, `page`, `limit` (max 200), `sortBy`, `sortDir` |
 | GET | `/api/support/statuses` | Estados presentes en los datos con su conteo, para el filtro. Query: `type` |
+| GET | `/api/support/diagnostics/inconsistent` | Documentos cuyo estado guardado **no coincide** con el calculado. Query: `type`, `limit` (max 2000). Devuelve `scanned`, `total` y `truncated` |
 | GET | `/api/support/documents/:type/:number` | Cabecera del documento. 400 si el tipo es invalido o el numero viene vacio; 404 si no existe |
 | GET | `/api/support/documents/:type/:number/timeline` | Bitacora unificada. Query: `includeViews`, `includeMessages` (`1`/`true`) |
 | GET | `/api/support/vocabulary` | Estados VALIDOS del tipo (para elegir destino del override), con su marca de terminal |

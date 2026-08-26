@@ -14,6 +14,7 @@ import {
   ItemStatusResult,
   RecomputeResult,
   ProjectedStatus,
+  InconsistentReport,
 } from './soporte.types';
 
 interface ApiData<T> {
@@ -166,4 +167,21 @@ export async function getProjectedStatus(
     `/api/support/documents/${type}/${encodeURIComponent(guid)}/projected-status`,
   );
   return res.data.data;
+}
+
+/** Documentos cuyo estado guardado no coincide con el calculado. */
+export async function listInconsistent(
+  type: DocumentType,
+  limit = 500,
+): Promise<InconsistentReport> {
+  const res = await httpClient.get<InconsistentReport & { success: boolean }>(
+    '/api/support/diagnostics/inconsistent',
+    { params: { type, limit } },
+  );
+  return {
+    data: res.data.data,
+    scanned: res.data.scanned,
+    total: res.data.total,
+    truncated: res.data.truncated,
+  };
 }

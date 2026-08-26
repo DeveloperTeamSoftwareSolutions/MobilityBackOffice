@@ -13,6 +13,7 @@ import {
   DocumentsQuery,
   DocumentTimeline,
   DocumentType,
+  InconsistentReport,
   ItemStatusRequest,
   ItemStatusResult,
   OverrideRequest,
@@ -46,6 +47,9 @@ const TIMELINE_PATH = '/mobility/document-timeline';
  */
 const DOCUMENTS_PATH = '/mobility/support/documents';
 const STATUSES_PATH = '/mobility/support/statuses';
+
+/** Documentos cuyo estado guardado no coincide con el calculado. */
+const INCONSISTENT_PATH = '/mobility/support/diagnostics/inconsistent-status';
 
 /** Vocabulario VIGENTE de estados del tipo (no los que existen en los datos). */
 const VOCABULARY_PATH = '/mobility/support/vocabulary';
@@ -116,6 +120,10 @@ interface MwRecomputeResponse {
 interface MwProjectedResponse {
   success: boolean;
   data: ProjectedStatus;
+}
+
+interface MwInconsistentResponse extends InconsistentReport {
+  success: boolean;
 }
 
 /** Mensaje de error que devuelve el middleware, si lo trae. */
@@ -390,6 +398,31 @@ export class SupportClient {
       if (httpStatus(err) === 404) throw new NotFoundException('Documento no encontrado');
       throw new ServiceUnavailableException(
         'No se pudo calcular el estado del documento',
+      );
+    }
+  }
+
+  /** Documentos con el estado desfasado respecto de sus datos. */
+  async listInconsistent(
+    type: DocumentType,
+    limit: number,
+  ): Promise<InconsistentReport> {
+    try {
+      const res = await firstValueFrom(
+        this.http.get<MwInconsistentResponse>(
+          `${this.base()}${INCONSISTENT_PATH}`,
+          { params: { type, limit }, headers: this.headers(), timeout: 60000 },
+        ),
+      );
+      return {
+        data: res.data.data,
+        scanned: res.data.scanned,
+        total: res.data.total,
+        truncated: res.data.truncated,
+      };
+    } catch {
+      throw new ServiceUnavailableException(
+        'El diagnóstico de estados no está disponible',
       );
     }
   }

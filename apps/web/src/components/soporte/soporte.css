@@ -575,3 +575,54 @@
   color: var(--bo-warning);
   font-weight: 600;
 }
+
+/* Acciones con intención */
+.bo-sp__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.bo-sp__action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+}
+.bo-sp__action-body {
+  min-width: 0;
+}
+.bo-sp__action-label {
+  margin: 0 0 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bo-text);
+}
+.bo-sp__action-effect {
+  margin: 0;
+  font-size: 12px;
+  color: var(--bo-text-muted);
+}
+.bo-sp__action-reason {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--bo-warning);
+}
+
+/* Sección avanzada plegable */
+.bo-sp__advanced-toggle {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--bo-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--bo-font);
+  cursor: pointer;
+}
+.bo-sp__advanced-toggle:hover {
+  color: var(--bo-text);
+}

@@ -15,6 +15,8 @@ import {
   RecomputeResult,
   ProjectedStatus,
   InconsistentReport,
+  DocumentActions,
+  ActionResult,
 } from './soporte.types';
 
 interface ApiData<T> {
@@ -184,4 +186,29 @@ export async function listInconsistent(
     total: res.data.total,
     truncated: res.data.truncated,
   };
+}
+
+/** Acciones con intención disponibles para el documento. */
+export async function listActions(
+  type: DocumentType,
+  guid: string,
+): Promise<DocumentActions> {
+  const res = await httpClient.get<ApiData<DocumentActions>>(
+    `/api/support/documents/${type}/${encodeURIComponent(guid)}/actions`,
+  );
+  return res.data.data;
+}
+
+/** Ejecuta una acción con intención. Escribe hechos; el estado lo calcula el sistema. */
+export async function runAction(
+  type: DocumentType,
+  guid: string,
+  action: string,
+  reasonNotes: string,
+): Promise<ActionResult> {
+  const res = await httpClient.post<ApiData<ActionResult>>(
+    `/api/support/documents/${type}/${encodeURIComponent(guid)}/actions/${encodeURIComponent(action)}`,
+    { reasonNotes },
+  );
+  return res.data.data;
 }

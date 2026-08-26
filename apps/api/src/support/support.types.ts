@@ -256,3 +256,36 @@ export interface InconsistentReport {
   total: number;
   truncated: boolean;
 }
+
+/** Accion con intencion: escribe hechos y deja que el estado se calcule. */
+export interface SupportAction {
+  action: string;
+  label: string;
+  available: boolean;
+  reason: string | null;
+  effect: string;
+  expects?: string | null;
+  warning?: boolean;
+}
+
+export interface DocumentActions {
+  documentNumber: string | null;
+  statusCode: string | null;
+  actions: SupportAction[];
+}
+
+/**
+ * Resultado de una accion. `achieved` es false cuando el estado final no es el
+ * esperado: hay compuertas fuera del alcance de soporte (el motor de credito, por
+ * ejemplo) que pueden retener el documento. Se informa en vez de ocultarse.
+ */
+export interface ActionResult {
+  ok: true;
+  action: string;
+  documentNumber: string | null;
+  statusBefore: string | null;
+  statusAfter: string | null;
+  expected: string | null;
+  achieved: boolean;
+  itemsTouched: number;
+}

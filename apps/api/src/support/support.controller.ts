@@ -211,6 +211,42 @@ export class SupportController {
     return { success: true, data };
   }
 
+  // GET /api/support/documents/:type/:guid/actions — acciones con intencion
+  @Get('documents/:type/:guid/actions')
+  async actions(@Param('type') type: string, @Param('guid') guid: string) {
+    const data = await this.support.listActions(
+      this.parseType(type),
+      this.parseGuid(guid),
+    );
+    return { success: true, data };
+  }
+
+  // POST /api/support/documents/:type/:guid/actions/:action
+  //
+  // Escribe HECHOS y recalcula. Nunca escribe el estado a mano, asi que no puede
+  // producir un estado inalcanzable — a diferencia del override de cabecera.
+  @Post('documents/:type/:guid/actions/:action')
+  async runAction(
+    @Param('type') type: string,
+    @Param('guid') guid: string,
+    @Param('action') action: string,
+    @Body() body: { reasonNotes?: string },
+    @Req() req: AuthedRequest,
+  ) {
+    const reasonNotes = (body?.reasonNotes ?? '').trim();
+    if (!reasonNotes) {
+      throw new BadRequestException('El motivo es obligatorio');
+    }
+    const data = await this.support.runAction(
+      this.parseType(type),
+      this.parseGuid(guid),
+      (action ?? '').trim(),
+      reasonNotes,
+      actor(req),
+    );
+    return { success: true, data };
+  }
+
   // GET /api/support/documents/:type/:guid/items — lineas + turno del gerente
   @Get('documents/:type/:guid/items')
   async items(@Param('type') type: string, @Param('guid') guid: string) {

@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { SupportClient } from './support.client';
 import { AuditService } from '../audit/audit.service';
 import {
+  ActionResult,
+  DocumentActions,
   DocumentItems,
   DocumentsQuery,
   DocumentTimeline,
@@ -135,6 +137,53 @@ export class SupportService {
     guid: string,
   ): Promise<ProjectedStatus> {
     return this.client.getProjectedStatus(type, guid);
+  }
+
+  /** Acciones con intencion disponibles. Es una LECTURA. */
+  listActions(type: DocumentType, guid: string): Promise<DocumentActions> {
+    return this.client.listActions(type, guid);
+  }
+
+  /**
+   * Ejecuta una accion con intencion y deja traza.
+   *
+   * Se audita el RESULTADO real, incluido si NO se logro la intencion: saber que se
+   * intento devolver al gerente y el documento quedo igual es justamente el dato que
+   * hace falta cuando alguien pregunta despues.
+   */
+  async runAction(
+    type: DocumentType,
+    guid: string,
+    action: string,
+    reasonNotes: string,
+    actor: Actor,
+  ): Promise<ActionResult> {
+    const result = await this.client.runAction(
+      type,
+      guid,
+      action,
+      reasonNotes,
+      actor.email ?? null,
+    );
+
+    await this.audit.safeRecord({
+      action: 'SUPPORT_ACTION',
+      entity: type === 'quote' ? 'BusinessQuotes' : 'BusinessOrders',
+      entityId: result.documentNumber,
+      category: 'support',
+      guidUsers: actor.guid ?? null,
+      detail: [
+        actor.email ?? 'desconocido',
+        `documento=${result.documentNumber}`,
+        `accion=${result.action}`,
+        `estado=${result.statusBefore ?? 'sin estado'}->${result.statusAfter ?? 'sin estado'}`,
+        `esperado=${result.expected ?? '-'}`,
+        `logrado=${result.achieved}`,
+        `motivo=${reasonNotes}`,
+      ].join(' | '),
+    });
+
+    return result;
   }
 
   /** Lineas del documento con su estado y el turno del gerente. */

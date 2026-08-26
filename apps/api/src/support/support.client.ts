@@ -9,6 +9,8 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { middlewareBase, middlewareHeaders } from '../common/middleware-request';
 import {
+  ActionResult,
+  DocumentActions,
   DocumentItems,
   DocumentsQuery,
   DocumentTimeline,
@@ -50,6 +52,10 @@ const STATUSES_PATH = '/mobility/support/statuses';
 
 /** Documentos cuyo estado guardado no coincide con el calculado. */
 const INCONSISTENT_PATH = '/mobility/support/diagnostics/inconsistent-status';
+
+/** Acciones con intencion: escriben hechos, nunca el estado. */
+const ACTIONS_PATH = (type: DocumentType, guid: string) =>
+  `/mobility/support/documents/${type}/${encodeURIComponent(guid)}/actions`;
 
 /** Vocabulario VIGENTE de estados del tipo (no los que existen en los datos). */
 const VOCABULARY_PATH = '/mobility/support/vocabulary';
@@ -124,6 +130,16 @@ interface MwProjectedResponse {
 
 interface MwInconsistentResponse extends InconsistentReport {
   success: boolean;
+}
+
+interface MwActionsResponse {
+  success: boolean;
+  data: DocumentActions;
+}
+
+interface MwActionResultResponse {
+  success: boolean;
+  data: ActionResult;
 }
 
 /** Mensaje de error que devuelve el middleware, si lo trae. */
@@ -424,6 +440,54 @@ export class SupportClient {
       throw new ServiceUnavailableException(
         'El diagnóstico de estados no está disponible',
       );
+    }
+  }
+
+  /** Acciones con intención disponibles para el documento, y por qué no las otras. */
+  async listActions(
+    type: DocumentType,
+    guid: string,
+  ): Promise<DocumentActions> {
+    try {
+      const res = await firstValueFrom(
+        this.http.get<MwActionsResponse>(
+          `${this.base()}${ACTIONS_PATH(type, guid)}`,
+          { headers: this.headers(), timeout: 20000 },
+        ),
+      );
+      return res.data.data;
+    } catch (err) {
+      if (httpStatus(err) === 404) throw new NotFoundException('Documento no encontrado');
+      throw new ServiceUnavailableException('Las acciones no están disponibles');
+    }
+  }
+
+  /** Ejecuta una acción. Escribe hechos; el estado lo calcula el sistema. */
+  async runAction(
+    type: DocumentType,
+    guid: string,
+    action: string,
+    reasonNotes: string,
+    actorEmail: string | null,
+  ): Promise<ActionResult> {
+    try {
+      const res = await firstValueFrom(
+        this.http.post<MwActionResultResponse>(
+          `${this.base()}${ACTIONS_PATH(type, guid)}/${encodeURIComponent(action)}`,
+          { reasonNotes, actorEmail },
+          { headers: this.headers(), timeout: 30000 },
+        ),
+      );
+      return res.data.data;
+    } catch (err) {
+      const status = httpStatus(err);
+      if (status === 404) throw new NotFoundException('Documento no encontrado');
+      if (status === 400) {
+        throw new BadRequestException(
+          errorBody(err)?.error ?? 'La acción fue rechazada',
+        );
+      }
+      throw new ServiceUnavailableException('No se pudo ejecutar la acción');
     }
   }
 }

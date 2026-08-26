@@ -3,7 +3,7 @@
 > Fecha: 2026-08-25
 > Estado: COMPLETA — fases 1, 2 y 3 (rol, linea de tiempo, listado, override de cabecera y estado de lineas)
 > Version objetivo: 2.1.0 (fase 1) · 2.2.0 (fase 2) · 2.3.0 (fase 3)
-> Middleware: v1.244.0 (router de soporte, override, lineas, proyeccion y diagnostico)
+> Middleware: v1.245.0 (soporte: acciones con intencion, override avanzado, lineas, proyeccion y diagnostico)
 > Branch: `feature/consola-soporte`
 
 ---
@@ -41,6 +41,9 @@ en una fase posterior si el soporte las necesita.
 | D7 | Se ofrecen **dos operaciones distintas**: reparacion limpia (corregir los hechos + recalcular) y override duro (estampar el estado) | El estado es un valor DERIVADO, no almacenado. Ver §4 |
 | D8 | El router de soporte del Middleware exige **`requireApiKey`** | Es el unico camino del ecosistema que salta el scope de vendedor y la maquina de estados. Sin key seria alterable por cualquiera |
 | D9 | El **listado paginado** entra en el alcance de la fase 2 | Sin el, la consola solo sirve si ya se conoce el numero exacto. El ticket pide "al seleccionar o hacer clic en una orden", que implica un listado. Es solo lectura, asi que no agrega riesgo |
+| D14 | La consola ofrece **acciones con intencion** (escriben hechos) como camino principal, en vez de dejar elegir el estado | Forzar un valor derivado deja documentos en estados que nadie ve. Ver §8.bis |
+| D15 | El **override libre se conserva**, pero plegado en "Avanzado" y con advertencia | El ticket lo pedia explicitamente. Se cumple sin ponerlo como primera opcion |
+| D16 | La consola **marca los documentos desfasados** y ofrece un filtro para juntarlos | Un estado desfasado es invisible: nadie se entera hasta que alguien lo mira de casualidad |
 
 ## 4. El hecho tecnico que gobierna el diseno
 
@@ -356,6 +359,95 @@ Espejo de los tres, con `@Roles(Soporte)`, motivo obligatorio y traza `SUPPORT_F
 - `recompute` de ORD-00005413: `ReadyForApprove` a `Draft`.
 - ORD-00005411, con sus 2 lineas ya decididas y el turno abierto, sigue en
   `ReadyForApprove`: confirma en vivo la trampa que motiva D13.
+
+---
+
+## 8.bis Acciones con intencion — el rediseno del camino de correccion
+
+> Agregado 2026-08-26, a partir de un problema reportado por la solicitante.
+
+### El problema que lo motivo
+
+Forzar el estado de `ORD-00005406` a `ReadyForApprove` dejaba el documento en un
+callejon sin salida: el vendedor lo veia como "pendiente de aprobacion" pero no podia
+hacer nada, y el gerente **no lo tenia en su cola**. El filtro de esa cola es:
+
+```sql
+AND bo.StatusCode = 'ReadyForApprove'
+AND NOT EXISTS (fila de resolucion activa)
+```
+
+Con el turno ya cerrado, la segunda condicion falla y el documento no aparece. Nadie
+puede disparar el recalculo salvo soporte, con "Recalcular estado".
+
+Peor: el comentario de ese filtro en el Middleware dice que `ReadyForApprove` implica
+sus condiciones **por construccion**, porque *"la proyeccion solo lo devuelve cuando hay
+algo que el gerente tiene que decidir"*, y documenta un bug pasado —tres ordenes en
+`Draft` que igual aparecian en la cola— causado justamente por escribir el estado por
+un camino independiente. **El override reintroduce esa clase de error.**
+
+### La causa de fondo
+
+El override escribe un valor **derivado**. Los valores derivados no deberian ser
+escribibles: o el proximo recalculo los revierte, o —peor— nadie puede recalcularlos y
+quedan mintiendo.
+
+### El rediseno (D14)
+
+La consola deja de preguntar *"¿a que estado querés llevarlo?"* y pasa a preguntar
+*"¿que querés que pase?"*. Cada accion escribe **hechos** y deja que el estado se
+calcule.
+
+| Accion | Que escribe | Estado esperado |
+|---|---|---|
+| `return_to_manager` | Lineas escaladas a pendiente + reabre el turno | `ReadyForApprove`, y aparece en la cola |
+| `unblock_forward` | Aprueba las lineas pendientes + cierra el turno | `Processed` |
+| `annul` | `CancelledAt` + motivo | `Annulled` |
+| `recompute` | Nada | El que corresponda |
+
+⚠️ **No alcanza con filtrar las transiciones "validas"** de la maquina de estados.
+`Draft -> ReadyForApprove` es una transicion legal, pero en un documento sin lineas
+escaladas produce igual el callejon sin salida. **Transicion valida** ("el flujo permite
+ir de A a B") y **estado alcanzable** ("los datos de ESTE documento pueden producir B")
+son cosas distintas, y el problema nace de la segunda.
+
+### Dos limites que aparecieron al probar, y que estan asumidos
+
+**1. Disponibilidad ≠ "pasa por el gerente".** En `ORD-00005406` (0 lineas escaladas,
+solo un pedido de otra forma de pago ya decidido), reabrir el turno proyectaba
+`ReadyForApprove` pero `decideStatusChange` lo **asciende** a `Processed` porque las tres
+banderas estan en 1. La accion no hacia nada. Por eso `return_to_manager` exige lineas
+escaladas, y si no las hay se muestra deshabilitada con el motivo.
+
+**2. La intencion puede no lograrse, y se dice.** En `ORD-00005411`, `unblock_forward`
+aprobo las lineas y cerro el turno, y el documento quedo igual en `ReadyForApprove`
+porque **el motor de credito lo retiene**. La accion hizo lo correcto: hay compuertas
+fuera del alcance de soporte. El resultado devuelve `expected` y `achieved`, y la UI lo
+informa en vez de dar por hecho que se cumplio.
+
+**La garantia que SI se sostiene**: una accion nunca produce un estado inalcanzable.
+Puede no llegar al estado que su etiqueta sugiere, y en ese caso lo dice.
+
+### El override libre no se elimina (D15)
+
+El ticket pedia explicitamente *"modificar directamente su estado (status) desde la
+interfaz visual"*. Se conserva, pero **plegado en una seccion "Avanzado"** al final del
+detalle, con la advertencia de que puede dejar el documento en un estado que nadie ve.
+Cumple el requisito sin poner la trampa como primera opcion.
+
+### Diagnostico de desfasajes (D16)
+
+Como un estado desfasado es invisible, la consola lo hace visible: cada fila del listado
+marca "deberia ser X" cuando el estado guardado no coincide con el calculado, y hay un
+filtro que junta a todos.
+
+**Medido en QATEST el 2026-08-26**: 36 de 197 ordenes y 57 de 155 cotizaciones estaban
+desfasadas —30 de las cotizaciones por vencimiento (`ValidUntil` pasado) que nadie toco—.
+**El desfasaje ya existia antes de esta consola**; el diagnostico solo lo hizo visible.
+
+Ojo al leerlo: la proyeccion no re-evalua el credito (§4.ter), asi que en los pares
+`ReadyForApprove <-> Processed` puede haber falsos positivos. Conviene validar una
+muestra recomputando antes de sacar conclusiones.
 ## 9. Riesgos
 
 | # | Riesgo | Mitigacion |

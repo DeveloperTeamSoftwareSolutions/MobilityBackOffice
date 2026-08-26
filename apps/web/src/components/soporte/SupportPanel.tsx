@@ -20,6 +20,7 @@ import { DocumentList } from './DocumentList';
 import { DocumentTimeline } from './DocumentTimeline';
 import { StatusOverrideModal } from './StatusOverrideModal';
 import { DocumentItemsPanel } from './DocumentItemsPanel';
+import { DocumentActionsPanel } from './DocumentActionsPanel';
 import './soporte.css';
 
 /** Traduce el fallo HTTP al mensaje que ve soporte. */
@@ -88,6 +89,9 @@ export function SupportPanel() {
   // default; las consultas no, porque son ruido salvo que se las pida.
   const [includeMessages, setIncludeMessages] = useState(true);
   const [overriding, setOverriding] = useState(false);
+  // El override libre queda plegado: puede dejar el documento en un estado que
+  // nadie ve, asi que no compite visualmente con las acciones seguras.
+  const [avanzadoAbierto, setAvanzadoAbierto] = useState(false);
 
   /** Debounce de la búsqueda: 300ms y vuelta a la página 1. */
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -257,13 +261,6 @@ export function SupportPanel() {
             <button type="button" className="bo-sp__back" onClick={onBack}>
               ← Volver al listado
             </button>
-            <button
-              type="button"
-              className="bo-sp__button"
-              onClick={() => setOverriding(true)}
-            >
-              Forzar estado
-            </button>
           </div>
 
           {overriding && (
@@ -312,6 +309,11 @@ export function SupportPanel() {
           {timeline && !detailError && !detailLoading && (
             <>
               <DocumentHeader document={timeline.document} />
+              <DocumentActionsPanel
+                type={type}
+                guid={selected.guid}
+                onDocumentStatusChange={onDocumentStatusChange}
+              />
               <DocumentItemsPanel
                 type={type}
                 guid={selected.guid}
@@ -321,6 +323,43 @@ export function SupportPanel() {
                 events={timeline.events}
                 includeViews={includeViews}
               />
+
+              {/*
+                El override libre queda al final y plegado. Cumple lo que pedia el
+                ticket, pero no es el camino recomendado: es el unico que puede
+                dejar el documento en un estado que la proyeccion nunca produciria
+                y que, por lo tanto, nadie ve (ni el gerente en su cola).
+              */}
+              <section className="bo-sp__card">
+                <button
+                  type="button"
+                  className="bo-sp__advanced-toggle"
+                  onClick={() => setAvanzadoAbierto((v) => !v)}
+                  aria-expanded={avanzadoAbierto}
+                >
+                  {avanzadoAbierto ? '▾' : '▸'} Avanzado — forzar el estado a mano
+                </button>
+                {avanzadoAbierto && (
+                  <>
+                    <p className="bo-sp__modal-danger">
+                      Escribe el estado directamente, sin tocar los datos. Puede dejar
+                      el documento en un estado que el sistema nunca calcularia: el
+                      vendedor lo ve mal, el gerente no lo tiene en su cola y solo
+                      soporte puede sacarlo de ahi. Usá las acciones de arriba salvo
+                      que sepas exactamente por qué necesitás esto.
+                    </p>
+                    <div>
+                      <button
+                        type="button"
+                        className="bo-sp__pager-button"
+                        onClick={() => setOverriding(true)}
+                      >
+                        Forzar estado
+                      </button>
+                    </div>
+                  </>
+                )}
+              </section>
             </>
           )}
         </div>

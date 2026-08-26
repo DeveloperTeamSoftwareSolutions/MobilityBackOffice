@@ -14,6 +14,25 @@ export function formatDateTime(iso: string | null): string {
   });
 }
 
+/**
+ * Igual que `formatDateTime` pero **con segundos**. Se usa en la línea de tiempo:
+ * sin ellos, dos hitos del mismo minuto se ven con la misma hora y el orden parece
+ * arbitrario. Con segundos, el recorrido es inspeccionable.
+ */
+export function formatDateTimeWithSeconds(iso: string | null): string {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
 interface Props {
   document: TimelineDocument;
 }

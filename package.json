@@ -1,6 +1,6 @@
 {
   "name": "mobility-backoffice",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "private": true,
   "description": "Mobility BackOffice — back-office de administracion y marketing (Login via ITManager)",
   "workspaces": [

@@ -1,7 +1,7 @@
 # API — Mobility BackOffice
 
 > Ultima actualizacion: 2026-08-25
-> Version: 2.3.1
+> Version: 2.3.2
 
 Toda respuesta incluye `success`. Los errores siguen el formato de Nest:
 `{ message, error, statusCode }`.
@@ -110,6 +110,10 @@ Todos los listados de documentos del Middleware estan scopeados por vendedor o c
 vendedor de ningun documento. Por eso el Middleware suma un router propio
 (`/api/mobility/support`, v1.240.0) que expone la misma data **sin** ese scope, protegido
 con `requireApiKey`.
+
+**Orden de los hitos**: cronologico, con un desempate dentro del mismo segundo — el
+alta va primero. Las marcas de las distintas tablas difieren por milisegundos segun el
+orden de escritura, no por cronologia real (ver v1.242.2 del Middleware).
 
 La bitacora es un passthrough a `GET /mobility/document-timeline` del Middleware: alta,
 ediciones, envio, decisiones por item, contraofertas, decision de cabecera, corridas del motor

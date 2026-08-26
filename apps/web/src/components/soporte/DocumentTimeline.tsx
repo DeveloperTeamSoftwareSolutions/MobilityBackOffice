@@ -1,5 +1,5 @@
 import { TimelineEvent } from './soporte.types';
-import { formatDateTime } from './DocumentHeader';
+import { formatDateTimeWithSeconds } from './DocumentHeader';
 
 /**
  * Kinds que la UI colorea. Cualquier otro (incluidos los que el middleware sume
@@ -63,7 +63,7 @@ export function DocumentTimeline({ events, includeViews }: Props) {
                 {KIND_LABEL[event.kind] ?? event.kind}
               </span>
               <time className="bo-sp__event-time" dateTime={event.at}>
-                {formatDateTime(event.at)}
+                {formatDateTimeWithSeconds(event.at)}
               </time>
             </div>
 

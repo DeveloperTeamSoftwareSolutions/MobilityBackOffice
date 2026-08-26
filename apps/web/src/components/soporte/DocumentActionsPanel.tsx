@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { listActions, runAction } from './soporte.api';
 import { DocumentActions, DocumentType, SupportAction } from './soporte.types';
+import { InfoTip } from './InfoTip';
 
 function errorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
@@ -82,30 +83,36 @@ export function DocumentActionsPanel({
   return (
     <section className="bo-sp__card">
       <header className="bo-sp__card-head">
-        <h3 className="bo-sp__doc-number">¿Qué querés que pase con el documento?</h3>
+        <h3 className="bo-sp__doc-number">
+          ¿Qué querés hacer?
+          <InfoTip texto="Cada acción corrige los datos del documento y deja que el sistema recalcule el estado. Por eso el resultado siempre queda firme: el documento no puede terminar en un estado que nadie vea." />
+        </h3>
       </header>
-
-      <p className="bo-sp__subtitle">
-        Cada acción corrige los datos y deja que el sistema recalcule el estado. Es la
-        forma segura: el documento no puede quedar en un estado que nadie vea.
-      </p>
 
       {aviso && <p className="bo-sp__modal-warning">{aviso}</p>}
       {error && <p className="bo-sp__error">{error}</p>}
 
       <div className="bo-sp__actions">
         {data.actions.map((a) => (
-          <div key={a.action} className="bo-sp__action">
-            <div className="bo-sp__action-body">
-              <p className="bo-sp__action-label">{a.label}</p>
-              <p className="bo-sp__action-effect">{a.effect}</p>
-              {!a.available && a.reason && (
-                <p className="bo-sp__action-reason">{a.reason}</p>
-              )}
-            </div>
+          <div
+            key={a.action}
+            className={`bo-sp__action ${a.available ? '' : 'bo-sp__action--off'}`}
+          >
+            <span className="bo-sp__action-label">{a.label}</span>
+            {/*
+              El efecto y el motivo de indisponibilidad van al globo, no a la
+              pantalla: eran tres bloques de texto por accion compitiendo entre si.
+            */}
+            <InfoTip
+              texto={
+                a.available
+                  ? a.effect
+                  : `No disponible: ${a.reason ?? 'no aplica a este documento.'}`
+              }
+            />
             <button
               type="button"
-              className={`bo-sp__button ${a.warning ? 'bo-sp__button--danger' : ''}`}
+              className={`bo-sp__button bo-sp__button--sm ${a.warning ? 'bo-sp__button--danger' : ''}`}
               disabled={!a.available || ejecutando}
               onClick={() => {
                 setElegida(a);

@@ -576,40 +576,7 @@
   font-weight: 600;
 }
 
-/* Acciones con intención */
-.bo-sp__actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.bo-sp__action {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 16px;
-  border: 1px solid var(--bo-border);
-  border-radius: var(--bo-radius-sm);
-}
-.bo-sp__action-body {
-  min-width: 0;
-}
-.bo-sp__action-label {
-  margin: 0 0 2px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--bo-text);
-}
-.bo-sp__action-effect {
-  margin: 0;
-  font-size: 12px;
-  color: var(--bo-text-muted);
-}
-.bo-sp__action-reason {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--bo-warning);
-}
+/* Acciones con intención — una línea por acción, el detalle en el globo */
 
 /* Sección avanzada plegable */
 .bo-sp__advanced-toggle {
@@ -625,4 +592,89 @@
 }
 .bo-sp__advanced-toggle:hover {
   color: var(--bo-text);
+}
+
+/* Acciones: una fila compacta por acción */
+.bo-sp__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bo-sp__action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+}
+.bo-sp__action--off {
+  opacity: 0.55;
+}
+.bo-sp__action-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bo-text);
+}
+.bo-sp__button--sm {
+  height: 30px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+/* Ícono de información con globo en CSS (sin librería) */
+.bo-sp__info {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--bo-text-muted);
+  cursor: help;
+  vertical-align: middle;
+}
+.bo-sp__info:hover,
+.bo-sp__info:focus-visible {
+  color: var(--bo-accent);
+}
+.bo-sp__info::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 50;
+  width: max-content;
+  max-width: 300px;
+  padding: 8px 10px;
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-sidebar-bg);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+.bo-sp__info--derecha::after {
+  left: auto;
+  right: 0;
+}
+.bo-sp__info:hover::after,
+.bo-sp__info:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* El título de sección lleva su ícono de info al lado */
+.bo-sp__doc-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }

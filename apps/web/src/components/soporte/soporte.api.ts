@@ -9,7 +9,11 @@ import {
   StatusCount,
   SupportDocument,
   DocumentItems,
-  ItemStatusResult,
+  DecisionResult,
+  ItemDecision,
+  ItemResponse,
+  PaymentDecision,
+  PaymentResponse,
   RecomputeResult,
   ProjectedStatus,
   InconsistentReport,
@@ -89,9 +93,7 @@ export async function listStatuses(type: DocumentType): Promise<StatusCount[]> {
   return res.data.data;
 }
 
-
-
-/** Líneas del documento con su estado y el turno del gerente. */
+/** Líneas del documento, el plazo de pago y el turno del gerente. */
 export async function listItems(
   type: DocumentType,
   guid: string,
@@ -102,24 +104,80 @@ export async function listItems(
   return res.data.data;
 }
 
+/** Ruta base de una línea. La línea se identifica por código de producto. */
+function itemPath(type: DocumentType, guid: string, productCode: string): string {
+  return `/api/support/documents/${type}/${encodeURIComponent(guid)}/items/${encodeURIComponent(productCode)}`;
+}
+
+function paymentPath(type: DocumentType, guid: string): string {
+  return `/api/support/documents/${type}/${encodeURIComponent(guid)}/payment-terms`;
+}
+
 /**
- * Cambia el estado de una línea. Solo se mandan los campos de estado presentes:
- * lo que no se envía no se toca. Precio y cantidad no forman parte del contrato.
+ * Decisión del gerente sobre una línea, ejecutada por soporte a su pedido.
+ *
+ * `proposedPrice` es el precio UNITARIO de la contraoferta, no una edición de la
+ * línea: la cantidad y el descuento no se tocan nunca desde acá.
  */
-export async function setItemStatus(
+export async function decideItem(
   type: DocumentType,
   guid: string,
-  itemGuid: string,
-  cambios: {
-    authorizationStatus?: string | null;
-    sellerResponse?: string | null;
-    authorizationRequired?: boolean;
-  },
+  productCode: string,
+  status: ItemDecision,
   reasonNotes: string,
-): Promise<ItemStatusResult> {
-  const res = await httpClient.patch<ApiData<ItemStatusResult>>(
-    `/api/support/documents/${type}/${encodeURIComponent(guid)}/items/${encodeURIComponent(itemGuid)}`,
-    { ...cambios, reasonNotes },
+  proposedPrice?: number | null,
+): Promise<DecisionResult> {
+  const res = await httpClient.post<ApiData<DecisionResult>>(
+    `${itemPath(type, guid, productCode)}/decide`,
+    { status, proposedPrice: proposedPrice ?? null, reasonNotes },
+  );
+  return res.data.data;
+}
+
+/** Respuesta del vendedor a una contraoferta de línea. La ronda es una sola. */
+export async function respondItem(
+  type: DocumentType,
+  guid: string,
+  productCode: string,
+  action: ItemResponse,
+  reasonNotes: string,
+): Promise<DecisionResult> {
+  const res = await httpClient.post<ApiData<DecisionResult>>(
+    `${itemPath(type, guid, productCode)}/respond`,
+    { action, reasonNotes },
+  );
+  return res.data.data;
+}
+
+/**
+ * Decisión del gerente sobre el plazo de pago pedido en la cabecera.
+ *
+ * `observed` ES la contraoferta y `value` el plazo que se contrapropone.
+ */
+export async function decidePaymentTerms(
+  type: DocumentType,
+  guid: string,
+  status: PaymentDecision,
+  reasonNotes: string,
+  value?: string | null,
+): Promise<DecisionResult> {
+  const res = await httpClient.post<ApiData<DecisionResult>>(
+    `${paymentPath(type, guid)}/decide`,
+    { status, value: value ?? null, reasonNotes },
+  );
+  return res.data.data;
+}
+
+/** Respuesta del vendedor a la contraoferta de plazo de pago. */
+export async function respondPaymentTerms(
+  type: DocumentType,
+  guid: string,
+  action: PaymentResponse,
+  reasonNotes: string,
+): Promise<DecisionResult> {
+  const res = await httpClient.post<ApiData<DecisionResult>>(
+    `${paymentPath(type, guid)}/respond`,
+    { action, reasonNotes },
   );
   return res.data.data;
 }

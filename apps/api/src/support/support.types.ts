@@ -126,41 +126,24 @@ export const SORTABLE_FIELDS: readonly string[] = [
   'serverTimestamp',
 ];
 
-/** Estado valido del vocabulario vigente, con su marca de terminal. */
-export interface StatusOption {
-  code: string;
-  terminal: boolean;
-}
-
-/** Pedido de override de estado. `reasonNotes` es obligatorio. */
-export interface OverrideRequest {
-  type: DocumentType;
-  guid: string;
-  toCode: string;
-  reasonCode: string | null;
-  reasonNotes: string;
-  actorEmail: string | null;
-}
-
-/** Resultado del override. `noop` = ya estaba en ese estado. */
-export interface OverrideResult {
-  ok: true;
-  noop: boolean;
-  documentNumber: string | null;
-  fromCode: string | null;
-  toCode: string;
-  isTerminal?: boolean;
-}
-
 /**
- * Estados de linea que soporte puede escribir. `countered` queda AFUERA: una
- * contraoferta viaja con un precio propuesto, y soporte no toca precios.
+ * Vocabulario de las decisiones. Sale del middleware (`GET /item-statuses`) y se
+ * declara acá como tipo para que el compilador atrape un valor mal escrito.
+ *
+ * `countered` ahora SÍ está: la contraoferta viaja con su precio propuesto, así que
+ * ya no deja la línea "contraofertada sin precio" que hizo excluirla antes.
  */
-export const ALLOWED_AUTH_STATUS = [null, 'approved', 'rejected'] as const;
-export const ALLOWED_SELLER_RESPONSE = [null, 'accepted', 'rejected'] as const;
+export const ITEM_DECISIONS = ['approved', 'rejected', 'countered'] as const;
+export const ITEM_RESPONSES = ['accept', 'reject'] as const;
 
-export type AuthorizationStatus = (typeof ALLOWED_AUTH_STATUS)[number];
-export type SellerResponse = (typeof ALLOWED_SELLER_RESPONSE)[number];
+/** En el plazo de pago, `observed` ES la contraoferta y viaja con `value`. */
+export const PAYMENT_DECISIONS = ['approved', 'rejected', 'observed'] as const;
+export const PAYMENT_RESPONSES = ['accept', 'reject'] as const;
+
+export type ItemDecision = (typeof ITEM_DECISIONS)[number];
+export type ItemResponse = (typeof ITEM_RESPONSES)[number];
+export type PaymentDecision = (typeof PAYMENT_DECISIONS)[number];
+export type PaymentResponse = (typeof PAYMENT_RESPONSES)[number];
 
 /** Linea de un documento. Precio y cantidad viajan SOLO para mostrarlos. */
 export interface SupportItem {
@@ -203,31 +186,82 @@ export interface ManagerTurn {
   resolvedByEmail: string | null;
 }
 
+/**
+ * Plazo de pago pedido en la cabecera. `requested` en null = el vendedor no pidió
+ * nada y no hay panel que mostrar.
+ */
+export interface PaymentTerms {
+  requested: string | null;
+  /** `null` = sin decidir. `observed` es la contraoferta del gerente. */
+  status: string | null;
+  /** Lo concedido; con `observed`, el plazo que el gerente contrapropone. */
+  approved: string | null;
+  decidedByEmail: string | null;
+  decidedAt: string | null;
+}
+
 export interface DocumentItems {
   document: { guid: string; documentNumber: string | null; statusCode: string | null };
+  paymentTerms: PaymentTerms;
   managerTurn: ManagerTurn;
   items: SupportItem[];
 }
 
-/** Cambio de estado de UNA linea. Solo estados. */
-export interface ItemStatusRequest {
+/** Decisión del gerente sobre una línea, ejecutada por soporte a su pedido. */
+export interface ItemDecisionRequest {
   type: DocumentType;
   guid: string;
-  itemGuid: string;
-  authorizationStatus?: AuthorizationStatus;
-  sellerResponse?: SellerResponse;
-  authorizationRequired?: boolean;
+  /** El flujo identifica la línea por código de producto, no por Guid. */
+  productCode: string;
+  status: ItemDecision;
+  /** Solo en la contraoferta. El middleware lo exige ahí y lo ignora en el resto. */
+  proposedPrice?: number | null;
   reasonNotes: string;
   actorEmail: string | null;
 }
 
-export interface ItemStatusResult {
+/** Respuesta del vendedor a una contraoferta de línea. */
+export interface ItemResponseRequest {
+  type: DocumentType;
+  guid: string;
+  productCode: string;
+  action: ItemResponse;
+  reasonNotes: string;
+  actorEmail: string | null;
+}
+
+/** Decisión del gerente sobre el plazo de pago pedido en la cabecera. */
+export interface PaymentDecisionRequest {
+  type: DocumentType;
+  guid: string;
+  status: PaymentDecision;
+  /** El plazo que se contrapropone. Obligatorio con `observed`. */
+  value?: string | null;
+  reasonNotes: string;
+  actorEmail: string | null;
+}
+
+/** Respuesta del vendedor a una contraoferta de plazo de pago. */
+export interface PaymentResponseRequest {
+  type: DocumentType;
+  guid: string;
+  action: PaymentResponse;
+  reasonNotes: string;
+  actorEmail: string | null;
+}
+
+/**
+ * Resultado común de las cuatro decisiones.
+ *
+ * `statusAfter` no es decorativo: el estado del documento es una proyección de los
+ * hechos, así que decidir una línea puede moverlo o no. Devolverlo evita que la UI
+ * tenga que adivinar si hizo falta algo más.
+ */
+export interface DecisionResult {
   ok: true;
   documentNumber: string | null;
-  lineNumber: number;
   statusBefore: string | null;
   statusAfter: string | null;
-  recomputed: boolean;
 }
 
 export interface RecomputeResult {

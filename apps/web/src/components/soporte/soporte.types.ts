@@ -88,21 +88,21 @@ export type SortField =
 
 export type SortDir = 'ASC' | 'DESC';
 
-/** Estado válido del vocabulario vigente, con su marca de terminal. */
-export interface StatusOption {
-  code: string;
-  terminal: boolean;
-}
+/**
+ * Vocabulario de las decisiones. Lo define el middleware; acá se declara como tipo
+ * para que el compilador atrape un valor mal escrito antes de que viaje.
+ */
+export const ITEM_DECISIONS = ['approved', 'rejected', 'countered'] as const;
+export const ITEM_RESPONSES = ['accept', 'reject'] as const;
 
-/** Resultado del override. `noop` = ya estaba en ese estado. */
-export interface OverrideResult {
-  ok: true;
-  noop: boolean;
-  documentNumber: string | null;
-  fromCode: string | null;
-  toCode: string;
-  isTerminal?: boolean;
-}
+/** En el plazo de pago, `observed` ES la contraoferta y viaja con `value`. */
+export const PAYMENT_DECISIONS = ['approved', 'rejected', 'observed'] as const;
+export const PAYMENT_RESPONSES = ['accept', 'reject'] as const;
+
+export type ItemDecision = (typeof ITEM_DECISIONS)[number];
+export type ItemResponse = (typeof ITEM_RESPONSES)[number];
+export type PaymentDecision = (typeof PAYMENT_DECISIONS)[number];
+export type PaymentResponse = (typeof PAYMENT_RESPONSES)[number];
 
 /** Línea de un documento. Precio y cantidad se muestran, nunca se editan. */
 export interface SupportItem {
@@ -141,19 +141,38 @@ export interface ManagerTurn {
   resolvedByEmail: string | null;
 }
 
+/**
+ * Plazo de pago pedido en la cabecera. `requested` en null = el vendedor no pidió
+ * nada y el panel no se muestra.
+ */
+export interface PaymentTerms {
+  requested: string | null;
+  /** `null` = sin decidir. `observed` es la contraoferta del gerente. */
+  status: string | null;
+  /** Lo concedido; con `observed`, el plazo que el gerente contrapropone. */
+  approved: string | null;
+  decidedByEmail: string | null;
+  decidedAt: string | null;
+}
+
 export interface DocumentItems {
   document: { guid: string; documentNumber: string | null; statusCode: string | null };
+  paymentTerms: PaymentTerms;
   managerTurn: ManagerTurn;
   items: SupportItem[];
 }
 
-export interface ItemStatusResult {
+/**
+ * Resultado común de las cuatro decisiones.
+ *
+ * `statusBefore`/`statusAfter` iguales NO es un fallo: el estado es una proyección
+ * de los hechos y puede faltar decidir otra línea o cerrar el turno del gerente.
+ */
+export interface DecisionResult {
   ok: true;
   documentNumber: string | null;
-  lineNumber: number;
   statusBefore: string | null;
   statusAfter: string | null;
-  recomputed: boolean;
 }
 
 export interface RecomputeResult {

@@ -4,7 +4,6 @@ import {
   Controller,
   Get,
   Param,
-  Patch,
   Post,
   Query,
   Req,
@@ -16,12 +15,16 @@ import { Roles } from '../auth/roles.decorator';
 import { BackOfficeRole } from '../auth/backoffice-role.enum';
 import { SupportService, Actor } from './support.service';
 import {
-  ALLOWED_AUTH_STATUS,
-  ALLOWED_SELLER_RESPONSE,
-  AuthorizationStatus,
   DocumentType,
   isDocumentType,
-  SellerResponse,
+  ITEM_DECISIONS,
+  ITEM_RESPONSES,
+  ItemDecision,
+  ItemResponse,
+  PAYMENT_DECISIONS,
+  PAYMENT_RESPONSES,
+  PaymentDecision,
+  PaymentResponse,
   SORTABLE_FIELDS,
 } from './support.types';
 
@@ -210,73 +213,181 @@ export class SupportController {
     return { success: true, data };
   }
 
-  // PATCH /api/support/documents/:type/:guid/items/:itemGuid — estado de UNA linea
-  //
-  // Solo estados. Precio, cantidad, descuento y producto no se leen del body: no
-  // estan en la firma, asi que aunque el cliente los mande no llegan a ningun lado.
-  @Patch('documents/:type/:guid/items/:itemGuid')
-  async setItemStatus(
-    @Param('type') type: string,
-    @Param('guid') guid: string,
-    @Param('itemGuid') itemGuid: string,
-    @Body()
-    body: {
-      authorizationStatus?: string | null;
-      sellerResponse?: string | null;
-      authorizationRequired?: boolean;
-      reasonNotes?: string;
-    },
-    @Req() req: AuthedRequest,
-  ) {
+  /**
+   * Motivo obligatorio en las cuatro decisiones.
+   *
+   * El flujo solo lo exige al rechazar. Acá se pide siempre porque soporte actúa a
+   * pedido de un tercero: sin el motivo, la decisión queda registrada a nombre de
+   * soporte y sin rastro de quién la pidió ni por qué, que es justo lo que hace
+   * falta cuando alguien pregunta seis meses después.
+   */
+  private parseMotivo(body?: { reasonNotes?: string }): string {
     const reasonNotes = (body?.reasonNotes ?? '').trim();
     if (!reasonNotes) {
-      throw new BadRequestException('El motivo es obligatorio');
-    }
-
-    const tocaAuth = body?.authorizationStatus !== undefined;
-    const tocaSeller = body?.sellerResponse !== undefined;
-    const tocaRequired = body?.authorizationRequired !== undefined;
-
-    if (!tocaAuth && !tocaSeller && !tocaRequired) {
       throw new BadRequestException(
-        'Hay que enviar al menos uno de: authorizationStatus, sellerResponse, authorizationRequired',
+        'El motivo es obligatorio: indicá quién pidió el cambio y por qué',
+      );
+    }
+    return reasonNotes;
+  }
+
+  /** El código de producto identifica la línea. Vacío no identifica nada. */
+  private parseProducto(productCode: string): string {
+    const code = (productCode ?? '').trim();
+    if (!code) throw new BadRequestException('Falta el código de producto');
+    return code;
+  }
+
+  // POST /api/support/documents/:type/:guid/items/:productCode/decide
+  //
+  // Decisión del gerente sobre una línea, ejecutada por soporte a su pedido. Precio,
+  // cantidad y producto no se leen del body: `proposedPrice` es el precio UNITARIO
+  // que se contraoferta, no una edición de la línea.
+  @Post('documents/:type/:guid/items/:productCode/decide')
+  async decideItem(
+    @Param('type') type: string,
+    @Param('guid') guid: string,
+    @Param('productCode') productCode: string,
+    @Body() body: { status?: string; proposedPrice?: number | string; reasonNotes?: string },
+    @Req() req: AuthedRequest,
+  ) {
+    const reasonNotes = this.parseMotivo(body);
+    const status = (body?.status ?? '').trim() as ItemDecision;
+    if (!ITEM_DECISIONS.includes(status)) {
+      throw new BadRequestException(
+        `Decisión inválida. Permitidas: ${ITEM_DECISIONS.join(', ')}`,
       );
     }
 
-    // Se valida acá además del middleware para que el rechazo no viaje y para que
-    // el mensaje nombre los valores permitidos, que es lo que la UI muestra.
-    if (tocaAuth) {
-      const value = (body.authorizationStatus || null) as AuthorizationStatus;
-      if (!ALLOWED_AUTH_STATUS.includes(value)) {
+    // La contraoferta sin precio dejaría al vendedor viendo una propuesta vacía. Se
+    // valida acá además del middleware para que el rechazo no viaje.
+    let proposedPrice: number | null = null;
+    if (status === 'countered') {
+      proposedPrice = Number(body?.proposedPrice);
+      if (!Number.isFinite(proposedPrice) || proposedPrice <= 0) {
         throw new BadRequestException(
-          `Estado de línea inválido. Permitidos: ${ALLOWED_AUTH_STATUS.map((v) => v ?? 'pendiente').join(', ')}`,
-        );
-      }
-    }
-    if (tocaSeller) {
-      const value = (body.sellerResponse || null) as SellerResponse;
-      if (!ALLOWED_SELLER_RESPONSE.includes(value)) {
-        throw new BadRequestException(
-          `Respuesta del vendedor inválida. Permitidos: ${ALLOWED_SELLER_RESPONSE.map((v) => v ?? 'sin responder').join(', ')}`,
+          'Para contraofertar hay que indicar un precio propuesto mayor a cero',
         );
       }
     }
 
     const who = actor(req);
-    const data = await this.support.setItemStatus(
+    const data = await this.support.decideItem(
       {
         type: this.parseType(type),
         guid: this.parseGuid(guid),
-        itemGuid: this.parseGuid(itemGuid),
-        ...(tocaAuth
-          ? { authorizationStatus: (body.authorizationStatus || null) as AuthorizationStatus }
-          : {}),
-        ...(tocaSeller
-          ? { sellerResponse: (body.sellerResponse || null) as SellerResponse }
-          : {}),
-        ...(tocaRequired
-          ? { authorizationRequired: Boolean(body.authorizationRequired) }
-          : {}),
+        productCode: this.parseProducto(productCode),
+        status,
+        proposedPrice,
+        reasonNotes,
+        actorEmail: who.email ?? null,
+      },
+      who,
+    );
+    return { success: true, data };
+  }
+
+  // POST /api/support/documents/:type/:guid/items/:productCode/respond
+  //
+  // Respuesta del vendedor a una contraoferta de línea. La ronda es UNA: si el
+  // vendedor ya respondió, el middleware rechaza y no se reabre.
+  @Post('documents/:type/:guid/items/:productCode/respond')
+  async respondItem(
+    @Param('type') type: string,
+    @Param('guid') guid: string,
+    @Param('productCode') productCode: string,
+    @Body() body: { action?: string; reasonNotes?: string },
+    @Req() req: AuthedRequest,
+  ) {
+    const reasonNotes = this.parseMotivo(body);
+    const action = (body?.action ?? '').trim() as ItemResponse;
+    if (!ITEM_RESPONSES.includes(action)) {
+      throw new BadRequestException(
+        `Respuesta inválida. Permitidas: ${ITEM_RESPONSES.join(', ')}`,
+      );
+    }
+
+    const who = actor(req);
+    const data = await this.support.respondItem(
+      {
+        type: this.parseType(type),
+        guid: this.parseGuid(guid),
+        productCode: this.parseProducto(productCode),
+        action,
+        reasonNotes,
+        actorEmail: who.email ?? null,
+      },
+      who,
+    );
+    return { success: true, data };
+  }
+
+  // POST /api/support/documents/:type/:guid/payment-terms/decide
+  //
+  // Decisión del gerente sobre el plazo de pago pedido en la cabecera. `observed` ES
+  // la contraoferta y viaja con el plazo propuesto en `value`.
+  @Post('documents/:type/:guid/payment-terms/decide')
+  async decidePaymentTerms(
+    @Param('type') type: string,
+    @Param('guid') guid: string,
+    @Body() body: { status?: string; value?: string; reasonNotes?: string },
+    @Req() req: AuthedRequest,
+  ) {
+    const reasonNotes = this.parseMotivo(body);
+    const status = (body?.status ?? '').trim() as PaymentDecision;
+    if (!PAYMENT_DECISIONS.includes(status)) {
+      throw new BadRequestException(
+        `Decisión inválida. Permitidas: ${PAYMENT_DECISIONS.join(', ')}`,
+      );
+    }
+
+    const value = (body?.value ?? '').trim();
+    if (status === 'observed' && !value) {
+      throw new BadRequestException(
+        'Para contraofertar el plazo de pago hay que indicar el plazo propuesto',
+      );
+    }
+
+    const who = actor(req);
+    const data = await this.support.decidePaymentTerms(
+      {
+        type: this.parseType(type),
+        guid: this.parseGuid(guid),
+        status,
+        value: value || null,
+        reasonNotes,
+        actorEmail: who.email ?? null,
+      },
+      who,
+    );
+    return { success: true, data };
+  }
+
+  // POST /api/support/documents/:type/:guid/payment-terms/respond
+  //
+  // Respuesta del vendedor a la contraoferta de plazo de pago. El middleware exige
+  // que el gerente haya cerrado su turno antes.
+  @Post('documents/:type/:guid/payment-terms/respond')
+  async respondPaymentTerms(
+    @Param('type') type: string,
+    @Param('guid') guid: string,
+    @Body() body: { action?: string; reasonNotes?: string },
+    @Req() req: AuthedRequest,
+  ) {
+    const reasonNotes = this.parseMotivo(body);
+    const action = (body?.action ?? '').trim() as PaymentResponse;
+    if (!PAYMENT_RESPONSES.includes(action)) {
+      throw new BadRequestException(
+        `Respuesta inválida. Permitidas: ${PAYMENT_RESPONSES.join(', ')}`,
+      );
+    }
+
+    const who = actor(req);
+    const data = await this.support.respondPaymentTerms(
+      {
+        type: this.parseType(type),
+        guid: this.parseGuid(guid),
+        action,
         reasonNotes,
         actorEmail: who.email ?? null,
       },

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
@@ -10,21 +11,21 @@ import { firstValueFrom } from 'rxjs';
 import { middlewareBase, middlewareHeaders } from '../common/middleware-request';
 import {
   ActionResult,
+  DecisionResult,
   DocumentActions,
   DocumentItems,
   DocumentsQuery,
   DocumentTimeline,
   DocumentType,
   InconsistentReport,
-  ItemStatusRequest,
-  ItemStatusResult,
-  OverrideRequest,
-  OverrideResult,
+  ItemDecisionRequest,
+  ItemResponseRequest,
   PagedDocuments,
+  PaymentDecisionRequest,
+  PaymentResponseRequest,
   ProjectedStatus,
   RecomputeResult,
   StatusCount,
-  StatusOption,
   TimelineQuery,
 } from './support.types';
 
@@ -57,20 +58,27 @@ const INCONSISTENT_PATH = '/mobility/support/diagnostics/inconsistent-status';
 const ACTIONS_PATH = (type: DocumentType, guid: string) =>
   `/mobility/support/documents/${type}/${encodeURIComponent(guid)}/actions`;
 
-/** Vocabulario VIGENTE de estados del tipo (no los que existen en los datos). */
-const VOCABULARY_PATH = '/mobility/support/vocabulary';
-
-/** Override de estado de cabecera. */
-const OVERRIDE_PATH = (type: DocumentType, guid: string) =>
-  `/mobility/support/documents/${type}/${encodeURIComponent(guid)}/status`;
-
-/** Lineas del documento con su estado + el turno del gerente. */
+/** Lineas del documento con su estado + el turno del gerente + el plazo de pago. */
 const ITEMS_PATH = (type: DocumentType, guid: string) =>
   `/mobility/support/documents/${type}/${encodeURIComponent(guid)}/items`;
 
-/** Estado de UNA linea. */
-const ITEM_PATH = (type: DocumentType, guid: string, itemGuid: string) =>
-  `${ITEMS_PATH(type, guid)}/${encodeURIComponent(itemGuid)}`;
+/**
+ * Decisiones sobre una linea. La linea se identifica por CODIGO DE PRODUCTO y no por
+ * su Guid porque asi la identifica el flujo del middleware: traducir aca seria
+ * inventar una segunda forma de nombrar la misma cosa.
+ */
+const ITEM_DECIDE_PATH = (type: DocumentType, guid: string, productCode: string) =>
+  `${ITEMS_PATH(type, guid)}/${encodeURIComponent(productCode)}/decide`;
+
+const ITEM_RESPOND_PATH = (type: DocumentType, guid: string, productCode: string) =>
+  `${ITEMS_PATH(type, guid)}/${encodeURIComponent(productCode)}/respond`;
+
+/** Decisiones sobre el plazo de pago pedido en la cabecera. */
+const PAYMENT_DECIDE_PATH = (type: DocumentType, guid: string) =>
+  `/mobility/support/documents/${type}/${encodeURIComponent(guid)}/payment-terms/decide`;
+
+const PAYMENT_RESPOND_PATH = (type: DocumentType, guid: string) =>
+  `/mobility/support/documents/${type}/${encodeURIComponent(guid)}/payment-terms/respond`;
 
 /** Recalculo de la cabecera a partir de los hechos. */
 const RECOMPUTE_PATH = (type: DocumentType, guid: string) =>
@@ -98,24 +106,15 @@ interface MwStatusesResponse {
   data: StatusCount[];
 }
 
-interface MwVocabularyResponse {
-  success: boolean;
-  data: StatusOption[];
-}
-
-interface MwOverrideResponse {
-  success: boolean;
-  data: OverrideResult;
-}
-
 interface MwItemsResponse {
   success: boolean;
   data: DocumentItems;
 }
 
-interface MwItemStatusResponse {
+/** Las cuatro decisiones devuelven la misma forma. */
+interface MwDecisionResponse {
   success: boolean;
-  data: ItemStatusResult;
+  data: DecisionResult;
 }
 
 interface MwRecomputeResponse {
@@ -155,9 +154,9 @@ function httpStatus(err: unknown): number | undefined {
 /**
  * Cliente HTTP de la consola de soporte hacia MobilityMiddleWare.
  *
- * En la fase 1 cubre una sola fuente (la bitacora). Las fases 2 y 3 suman los
- * endpoints de override, que iran contra `/mobility/support/*` y exigiran
- * `MIDDLEWARE_API_KEY`.
+ * Todo lo que escribe va contra `/mobility/support/*`, que del lado del middleware
+ * exige `MIDDLEWARE_API_KEY`. Ninguna llamada pide un estado destino: el estado es
+ * un valor calculado y solo se mueve como consecuencia de un hecho.
  */
 @Injectable()
 export class SupportClient {
@@ -256,67 +255,6 @@ export class SupportClient {
     }
   }
 
-  /**
-   * Vocabulario VIGENTE de estados del tipo de documento.
-   *
-   * Distinto de `listStatuses`: ese devuelve los estados que EXISTEN en los datos
-   * (para filtrar), este los que son VÁLIDOS (para elegir destino en el override).
-   * Sale del middleware y no de una copia local para no duplicar el vocabulario y
-   * quedar desincronizados.
-   */
-  async getVocabulary(type: DocumentType): Promise<StatusOption[]> {
-    try {
-      const res = await firstValueFrom(
-        this.http.get<MwVocabularyResponse>(`${this.base()}${VOCABULARY_PATH}`, {
-          params: { type },
-          headers: this.headers(),
-          timeout: 20000,
-        }),
-      );
-      return res.data.data;
-    } catch {
-      throw new ServiceUnavailableException(
-        'El vocabulario de estados no está disponible',
-      );
-    }
-  }
-
-  /**
-   * Fuerza el estado de un documento. Único camino de ESCRITURA del módulo.
-   *
-   * El middleware valida el vocabulario y exige motivo; acá se traduce su 400 a un
-   * `BadRequestException` con el mismo mensaje, para que soporte vea por qué fue
-   * rechazado en vez de un 503 genérico.
-   */
-  async overrideStatus(req: OverrideRequest): Promise<OverrideResult> {
-    try {
-      const res = await firstValueFrom(
-        this.http.patch<MwOverrideResponse>(
-          `${this.base()}${OVERRIDE_PATH(req.type, req.guid)}`,
-          {
-            toCode: req.toCode,
-            reasonCode: req.reasonCode,
-            reasonNotes: req.reasonNotes,
-            actorEmail: req.actorEmail,
-          },
-          { headers: this.headers(), timeout: 20000 },
-        ),
-      );
-      return res.data.data;
-    } catch (err) {
-      const status = httpStatus(err);
-      if (status === 404) throw new NotFoundException('Documento no encontrado');
-      if (status === 400) {
-        throw new BadRequestException(
-          errorBody(err)?.error ?? 'El cambio de estado fue rechazado',
-        );
-      }
-      throw new ServiceUnavailableException(
-        'No se pudo aplicar el cambio de estado',
-      );
-    }
-  }
-
   /** Lineas del documento con su estado y el turno del gerente. */
   async listItems(type: DocumentType, guid: string): Promise<DocumentItems> {
     try {
@@ -334,46 +272,120 @@ export class SupportClient {
   }
 
   /**
-   * Cambia el estado de una línea. Solo manda los campos de estado que vinieron:
-   * lo que no se envía, no se toca. Precio y cantidad ni se incluyen.
+   * Traduce el error del middleware para las cuatro decisiones.
+   *
+   * El 409 merece su propio caso: no es un pedido mal formado sino un choque con
+   * otro gerente que tiene tomada la revisión. Mostrarlo como 400 haría pensar que
+   * hay algo que corregir en el formulario, cuando lo único que hay que hacer es
+   * esperar (el bloqueo vence solo por inactividad).
    */
-  async setItemStatus(req: ItemStatusRequest): Promise<ItemStatusResult> {
-    const body: Record<string, unknown> = {
-      reasonNotes: req.reasonNotes,
-      actorEmail: req.actorEmail,
-    };
-    if (req.authorizationStatus !== undefined) {
-      body.authorizationStatus = req.authorizationStatus;
+  private decisionError(err: unknown, accion: string): never {
+    const status = httpStatus(err);
+    const detalle = errorBody(err)?.error;
+    if (status === 404) {
+      throw new NotFoundException(detalle ?? 'Documento no encontrado');
     }
-    if (req.sellerResponse !== undefined) body.sellerResponse = req.sellerResponse;
-    if (req.authorizationRequired !== undefined) {
-      body.authorizationRequired = req.authorizationRequired;
+    if (status === 409) {
+      throw new ConflictException(
+        detalle ?? 'Otro gerente tiene tomada la revisión de este documento',
+      );
     }
+    if (status === 400) {
+      throw new BadRequestException(detalle ?? `El flujo rechazó ${accion}`);
+    }
+    throw new ServiceUnavailableException(`No se pudo aplicar ${accion}`);
+  }
 
+  /**
+   * Decisión del GERENTE sobre una línea, ejecutada por soporte a su pedido.
+   *
+   * `proposedPrice` solo viaja en la contraoferta; el middleware lo exige en ese
+   * caso y lo ignora en los otros dos. El motivo es obligatorio siempre acá aunque
+   * el flujo solo lo exija al rechazar: es lo que deja registrado quién lo pidió.
+   */
+  async decideItem(req: ItemDecisionRequest): Promise<DecisionResult> {
     try {
       const res = await firstValueFrom(
-        this.http.patch<MwItemStatusResponse>(
-          `${this.base()}${ITEM_PATH(req.type, req.guid, req.itemGuid)}`,
-          body,
+        this.http.post<MwDecisionResponse>(
+          `${this.base()}${ITEM_DECIDE_PATH(req.type, req.guid, req.productCode)}`,
+          {
+            status: req.status,
+            proposedPrice: req.proposedPrice ?? null,
+            reasonNotes: req.reasonNotes,
+            actorEmail: req.actorEmail,
+          },
           { headers: this.headers(), timeout: 20000 },
         ),
       );
       return res.data.data;
     } catch (err) {
-      const status = httpStatus(err);
-      if (status === 404) {
-        throw new NotFoundException(
-          errorBody(err)?.error ?? 'Documento o línea no encontrados',
-        );
-      }
-      if (status === 400) {
-        throw new BadRequestException(
-          errorBody(err)?.error ?? 'El cambio de estado de la línea fue rechazado',
-        );
-      }
-      throw new ServiceUnavailableException(
-        'No se pudo aplicar el cambio en la línea',
+      this.decisionError(err, 'la decisión sobre la línea');
+    }
+  }
+
+  /** Respuesta del VENDEDOR a una contraoferta de línea, ejecutada por soporte. */
+  async respondItem(req: ItemResponseRequest): Promise<DecisionResult> {
+    try {
+      const res = await firstValueFrom(
+        this.http.post<MwDecisionResponse>(
+          `${this.base()}${ITEM_RESPOND_PATH(req.type, req.guid, req.productCode)}`,
+          {
+            action: req.action,
+            reasonNotes: req.reasonNotes,
+            actorEmail: req.actorEmail,
+          },
+          { headers: this.headers(), timeout: 20000 },
+        ),
       );
+      return res.data.data;
+    } catch (err) {
+      this.decisionError(err, 'la respuesta a la contraoferta');
+    }
+  }
+
+  /**
+   * Decisión del GERENTE sobre el plazo de pago pedido en la cabecera.
+   *
+   * El vocabulario no es el de las líneas: 'observed' ES la contraoferta y `value`
+   * el plazo que se contrapropone.
+   */
+  async decidePaymentTerms(req: PaymentDecisionRequest): Promise<DecisionResult> {
+    try {
+      const res = await firstValueFrom(
+        this.http.post<MwDecisionResponse>(
+          `${this.base()}${PAYMENT_DECIDE_PATH(req.type, req.guid)}`,
+          {
+            status: req.status,
+            value: req.value ?? null,
+            reasonNotes: req.reasonNotes,
+            actorEmail: req.actorEmail,
+          },
+          { headers: this.headers(), timeout: 20000 },
+        ),
+      );
+      return res.data.data;
+    } catch (err) {
+      this.decisionError(err, 'la decisión sobre el plazo de pago');
+    }
+  }
+
+  /** Respuesta del VENDEDOR a una contraoferta de plazo de pago. */
+  async respondPaymentTerms(req: PaymentResponseRequest): Promise<DecisionResult> {
+    try {
+      const res = await firstValueFrom(
+        this.http.post<MwDecisionResponse>(
+          `${this.base()}${PAYMENT_RESPOND_PATH(req.type, req.guid)}`,
+          {
+            action: req.action,
+            reasonNotes: req.reasonNotes,
+            actorEmail: req.actorEmail,
+          },
+          { headers: this.headers(), timeout: 20000 },
+        ),
+      );
+      return res.data.data;
+    } catch (err) {
+      this.decisionError(err, 'la respuesta al plazo de pago');
     }
   }
 

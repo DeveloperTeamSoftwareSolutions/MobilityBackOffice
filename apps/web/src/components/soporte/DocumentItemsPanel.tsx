@@ -1,28 +1,42 @@
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
-import { listItems, recompute, setItemStatus } from './soporte.api';
-import { DocumentItems, DocumentType, SupportItem } from './soporte.types';
+import { decideItem, listItems, recompute, respondItem } from './soporte.api';
+import {
+  DocumentItems,
+  DocumentType,
+  ItemDecision,
+  ItemResponse,
+  SupportItem,
+} from './soporte.types';
 import { formatDateTime } from './DocumentHeader';
+import { InfoTip } from './InfoTip';
+import { PaymentTermsPanel } from './PaymentTermsPanel';
 
-/** Estados que soporte puede poner. `countered` no está: viaja con un precio. */
-const AUTH_OPTIONS: { value: string; label: string }[] = [
-  { value: '', label: 'Pendiente' },
-  { value: 'approved', label: 'Aprobada' },
-  { value: 'rejected', label: 'Rechazada' },
-];
+/** Cómo se lee cada estado de línea en pantalla. */
+const ETIQUETA_AUTORIZACION: Record<string, string> = {
+  approved: 'Aprobada',
+  rejected: 'Rechazada',
+  countered: 'Contraofertada',
+  pending: 'Pendiente',
+};
 
-const SELLER_OPTIONS: { value: string; label: string }[] = [
-  { value: '', label: 'Sin responder' },
-  { value: 'accepted', label: 'Aceptada' },
-  { value: 'rejected', label: 'Rechazada' },
-];
+const ETIQUETA_VENDEDOR: Record<string, string> = {
+  accepted: 'Aceptó',
+  rejected: 'Rechazó',
+};
 
 function errorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
     const body = err.response?.data as { message?: string } | undefined;
     if (body?.message) return body.message;
   }
-  return 'No se pudo aplicar el cambio en la línea.';
+  return 'No se pudo aplicar la decisión sobre la línea.';
+}
+
+/** Formulario abierto sobre una línea: quién decide y qué. */
+interface Edicion {
+  productCode: string;
+  modo: 'gerente' | 'vendedor';
 }
 
 interface Props {
@@ -33,15 +47,20 @@ interface Props {
 }
 
 /**
- * Líneas del documento con su estado editable.
+ * Líneas del documento y las decisiones que soporte puede ejecutar sobre ellas.
  *
- * Es la "reparación limpia": corregir los hechos que el sistema usa para calcular el
- * estado del documento, en vez de estampar el estado a mano. Después de cada cambio
- * el middleware recalcula la cabecera, así que el resultado queda respaldado por los
- * datos y no se revierte solo.
+ * Soporte **no tiene un camino propio**: aprobar, rechazar o contraofertar una línea
+ * llama exactamente a lo mismo que llama el gerente desde su app, y responder una
+ * contraoferta a lo mismo que llama el vendedor. Por eso cada decisión deja su
+ * comentario en el hilo, dispara el aviso correspondiente y recalcula el estado del
+ * documento, igual que si la hubiera hecho su dueño.
  *
- * Producto, cantidad y precio se muestran para dar contexto pero **no se editan**:
- * ni siquiera viajan en el pedido.
+ * Lo único que cambia es quién la ejecuta y por qué, y eso va en el motivo — que acá
+ * es obligatorio siempre, aunque el flujo solo lo exija al rechazar.
+ *
+ * Cantidad, descuento y producto no se editan: no viajan en ningún pedido. El único
+ * número que se escribe es el precio de una contraoferta, que es una propuesta, no
+ * una edición de la línea.
  */
 export function DocumentItemsPanel({
   type,
@@ -53,13 +72,11 @@ export function DocumentItemsPanel({
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
 
-  // Línea que se está editando y el motivo tipeado para ese cambio.
-  const [editando, setEditando] = useState<string | null>(null);
+  const [edicion, setEdicion] = useState<Edicion | null>(null);
+  const [decision, setDecision] = useState<ItemDecision>('approved');
+  const [respuesta, setRespuesta] = useState<ItemResponse>('accept');
+  const [precio, setPrecio] = useState('');
   const [motivo, setMotivo] = useState('');
-  const [pendiente, setPendiente] = useState<{
-    authorizationStatus?: string | null;
-    sellerResponse?: string | null;
-  }>({});
   const [guardando, setGuardando] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -79,39 +96,86 @@ export function DocumentItemsPanel({
     void cargar();
   }, [cargar]);
 
-  function empezarEdicion(item: SupportItem) {
-    setEditando(item.guid);
+  function abrir(item: SupportItem, modo: 'gerente' | 'vendedor') {
+    setEdicion({ productCode: item.productCode ?? '', modo });
+    setDecision('approved');
+    setRespuesta('accept');
+    setPrecio('');
     setMotivo('');
-    setPendiente({});
     setAviso(null);
     setError(null);
   }
 
-  function cancelar() {
-    setEditando(null);
+  function cerrar() {
+    setEdicion(null);
     setMotivo('');
-    setPendiente({});
+    setPrecio('');
   }
 
-  async function aplicar(item: SupportItem) {
-    if (!motivo.trim() || Object.keys(pendiente).length === 0) return;
+  /** Mensaje común: el estado puede no moverse, y eso no es un fallo. */
+  function avisoDe(
+    statusBefore: string | null,
+    statusAfter: string | null,
+    prefijo: string,
+  ): string {
+    return statusBefore === statusAfter
+      ? `${prefijo} El estado del documento no cambió (sigue en ${statusAfter ?? 'sin estado'}).`
+      : `${prefijo} El documento pasó de ${statusBefore} a ${statusAfter}.`;
+  }
+
+  async function tras(statusAfter: string | null, texto: string) {
+    cerrar();
+    await cargar();
+    onDocumentStatusChange(statusAfter);
+    setAviso(texto);
+  }
+
+  async function aplicarDecision(item: SupportItem) {
+    const code = item.productCode;
+    if (!code || !motivo.trim()) return;
+    if (decision === 'countered' && !(Number(precio) > 0)) return;
+
     setGuardando(true);
     setError(null);
     try {
-      const result = await setItemStatus(
+      const result = await decideItem(
         type,
         guid,
-        item.guid,
-        pendiente,
+        code,
+        decision,
         motivo.trim(),
+        decision === 'countered' ? Number(precio) : null,
       );
-      cancelar();
-      await cargar();
-      onDocumentStatusChange(result.statusAfter);
-      setAviso(
-        result.statusBefore === result.statusAfter
-          ? `Línea ${result.lineNumber} actualizada. El estado del documento no cambió (sigue en ${result.statusAfter ?? 'sin estado'}).`
-          : `Línea ${result.lineNumber} actualizada. El documento pasó de ${result.statusBefore} a ${result.statusAfter}.`,
+      await tras(
+        result.statusAfter,
+        avisoDe(
+          result.statusBefore,
+          result.statusAfter,
+          `Línea ${item.lineNumber} decidida.`,
+        ),
+      );
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function aplicarRespuesta(item: SupportItem) {
+    const code = item.productCode;
+    if (!code || !motivo.trim()) return;
+
+    setGuardando(true);
+    setError(null);
+    try {
+      const result = await respondItem(type, guid, code, respuesta, motivo.trim());
+      await tras(
+        result.statusAfter,
+        avisoDe(
+          result.statusBefore,
+          result.statusAfter,
+          `Respuesta registrada en la línea ${item.lineNumber}.`,
+        ),
       );
     } catch (err) {
       setError(errorMessage(err));
@@ -147,172 +211,157 @@ export function DocumentItemsPanel({
   }
   if (!data) return null;
 
+  const turno = data.managerTurn;
+
+  /**
+   * ¿Qué se puede hacer con esta línea, y si no se puede nada, por qué?
+   *
+   * Se calcula con las mismas condiciones que aplica el middleware. Ofrecer un botón
+   * que después falla ya nos pasó con las acciones de cabecera: el usuario no
+   * distingue "no corresponde" de "está roto".
+   */
+  function disponibilidad(item: SupportItem): {
+    decidir: boolean;
+    responder: boolean;
+    motivo: string | null;
+  } {
+    if (!item.authorizationRequired) {
+      return { decidir: false, responder: false, motivo: 'No requiere autorización.' };
+    }
+    if (item.sellerResponse) {
+      return {
+        decidir: false,
+        responder: false,
+        motivo: 'El vendedor ya respondió y la ronda es una sola.',
+      };
+    }
+    if (item.authorizationStatus === 'countered' && turno.closed) {
+      return { decidir: false, responder: true, motivo: null };
+    }
+    if (turno.closed) {
+      return {
+        decidir: false,
+        responder: false,
+        motivo:
+          'El gerente ya cerró su turno. Para volver a decidir hay que reabrirlo desde las acciones del documento.',
+      };
+    }
+    return { decidir: true, responder: false, motivo: null };
+  }
+
   return (
-    <section className="bo-sp__card">
-      <header className="bo-sp__card-head">
-        <h3 className="bo-sp__doc-number">Líneas del documento</h3>
-        <button
-          type="button"
-          className="bo-sp__pager-button"
-          onClick={() => void recalcular()}
-          disabled={guardando}
-        >
-          Recalcular estado
-        </button>
-      </header>
+    <>
+      <PaymentTermsPanel
+        type={type}
+        guid={guid}
+        paymentTerms={data.paymentTerms}
+        managerTurn={turno}
+        onAplicado={async (estadoNuevo, texto) => {
+          await cargar();
+          onDocumentStatusChange(estadoNuevo);
+          setAviso(texto);
+        }}
+      />
 
-      {/*
-        El turno del gerente solo importa si el documento PASA por el gerente: al
-        menos una línea escalada, o un pedido de otra forma de pago. Si no, nunca
-        hubo turno que cerrar y avisar sobre él confunde (ORD-00005414: 0 líneas
-        escaladas, estado Processed, y la consola avisaba igual).
-        `relevant` lo calcula el middleware con la misma condición que la proyección.
-      */}
-      {!data.managerTurn.relevant && (
-        <p className="bo-sp__event-actor">
-          Este documento no pasa por el gerente: ninguna línea requiere autorización
-          y no hay pedido de otra forma de pago.
-        </p>
-      )}
-      {data.managerTurn.relevant && !data.managerTurn.closed && (
-        <p className="bo-sp__modal-warning">
-          El gerente todavía no cerró su turno. Aunque decidas todas las líneas, el
-          documento va a seguir en <strong>ReadyForApprove</strong> hasta que ese
-          cierre exista.
-        </p>
-      )}
-      {data.managerTurn.relevant && data.managerTurn.closed && (
-        <p className="bo-sp__event-actor">
-          Turno del gerente cerrado por{' '}
-          {data.managerTurn.resolvedByEmail ?? 'usuario desconocido'} el{' '}
-          {formatDateTime(data.managerTurn.resolvedAt)}.
-        </p>
-      )}
+      <section className="bo-sp__card">
+        <header className="bo-sp__card-head">
+          <h3 className="bo-sp__doc-number">
+            Líneas del documento
+            <InfoTip texto="Las decisiones de acá llaman a lo mismo que llama el gerente o el vendedor desde su app: dejan el comentario en el hilo, avisan a quien corresponde y recalculan el estado. Soporte queda registrado como autor; el motivo dice quién lo pidió." />
+          </h3>
+          <button
+            type="button"
+            className="bo-sp__pager-button"
+            onClick={() => void recalcular()}
+            disabled={guardando}
+          >
+            Recalcular estado
+          </button>
+        </header>
 
-      {aviso && <p className="bo-sp__modal-warning">{aviso}</p>}
-      {error && <p className="bo-sp__error">{error}</p>}
+        {/*
+          El turno del gerente solo importa si el documento PASA por el gerente: al
+          menos una línea escalada, o un pedido de otra forma de pago. Si no, nunca
+          hubo turno que cerrar y avisar sobre él confunde (ORD-00005414: 0 líneas
+          escaladas, estado Processed, y la consola avisaba igual).
+          `relevant` lo calcula el middleware con la misma condición que la proyección.
+        */}
+        {!turno.relevant && (
+          <p className="bo-sp__event-actor">
+            Este documento no pasa por el gerente: ninguna línea requiere autorización
+            y no hay pedido de otra forma de pago.
+          </p>
+        )}
+        {turno.relevant && !turno.closed && (
+          <p className="bo-sp__modal-warning">
+            El gerente todavía no cerró su turno. Aunque decidas todas las líneas, el
+            documento va a seguir en <strong>ReadyForApprove</strong> hasta que ese
+            cierre exista.
+          </p>
+        )}
+        {turno.relevant && turno.closed && (
+          <p className="bo-sp__event-actor">
+            Turno del gerente cerrado por{' '}
+            {turno.resolvedByEmail ?? 'usuario desconocido'} el{' '}
+            {formatDateTime(turno.resolvedAt)}.
+          </p>
+        )}
 
-      <div className="bo-sp__table-wrap">
-        <table className="bo-sp__table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Producto</th>
-              <th>Cant.</th>
-              <th>Precio</th>
-              <th>Requiere aut.</th>
-              <th>Autorización</th>
-              <th>Vendedor</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {data.items.map((item) => (
-              <tr key={item.guid}>
-                <td className="bo-sp__cell--strong">{item.lineNumber}</td>
-                <td>
-                  {item.productCode ?? '—'}
-                  {item.productDescription && (
-                    <span className="bo-sp__cell-sub">
-                      {item.productDescription}
-                    </span>
-                  )}
-                </td>
-                <td className="bo-sp__cell--number">{item.quantity ?? '—'}</td>
-                <td className="bo-sp__cell--number">{item.unitPrice ?? '—'}</td>
-                <td className="bo-sp__cell--muted">
-                  {item.authorizationRequired ? 'Sí' : 'No'}
-                </td>
+        {aviso && <p className="bo-sp__modal-warning">{aviso}</p>}
+        {error && <p className="bo-sp__error">{error}</p>}
 
-                {editando === item.guid ? (
-                  <>
+        <div className="bo-sp__table-wrap">
+          <table className="bo-sp__table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Producto</th>
+                <th>Cant.</th>
+                <th>Precio</th>
+                <th>Autorización</th>
+                <th>Vendedor</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {data.items.map((item) => {
+                const puede = disponibilidad(item);
+                const abierta = edicion?.productCode === item.productCode;
+
+                return (
+                  <tr key={item.guid}>
+                    <td className="bo-sp__cell--strong">{item.lineNumber}</td>
                     <td>
-                      <select
-                        className="bo-sp__select"
-                        value={
-                          pendiente.authorizationStatus !== undefined
-                            ? (pendiente.authorizationStatus ?? '')
-                            : (item.authorizationStatus ?? '')
-                        }
-                        onChange={(e) =>
-                          setPendiente((p) => ({
-                            ...p,
-                            authorizationStatus: e.target.value || null,
-                          }))
-                        }
-                      >
-                        {AUTH_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <select
-                        className="bo-sp__select"
-                        value={
-                          pendiente.sellerResponse !== undefined
-                            ? (pendiente.sellerResponse ?? '')
-                            : (item.sellerResponse ?? '')
-                        }
-                        onChange={(e) =>
-                          setPendiente((p) => ({
-                            ...p,
-                            sellerResponse: e.target.value || null,
-                          }))
-                        }
-                      >
-                        {SELLER_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <div className="bo-sp__item-edit">
-                        <input
-                          className="bo-sp__input"
-                          value={motivo}
-                          onChange={(e) => setMotivo(e.target.value)}
-                          placeholder="Motivo (obligatorio)"
-                        />
-                        <button
-                          type="button"
-                          className="bo-sp__button"
-                          onClick={() => void aplicar(item)}
-                          disabled={
-                            guardando ||
-                            !motivo.trim() ||
-                            Object.keys(pendiente).length === 0
-                          }
-                        >
-                          {guardando ? 'Guardando…' : 'Guardar'}
-                        </button>
-                        <button
-                          type="button"
-                          className="bo-sp__pager-button"
-                          onClick={cancelar}
-                          disabled={guardando}
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td>
-                      {item.authorizationStatus ?? 'pendiente'}
-                      {item.decidedByEmail && (
+                      {item.productCode ?? '—'}
+                      {item.productDescription && (
                         <span className="bo-sp__cell-sub">
-                          {item.decidedByEmail}
+                          {item.productDescription}
+                        </span>
+                      )}
+                    </td>
+                    <td className="bo-sp__cell--number">{item.quantity ?? '—'}</td>
+                    <td className="bo-sp__cell--number">
+                      {item.unitPrice ?? '—'}
+                      {item.proposedPrice != null && (
+                        <span className="bo-sp__cell-sub">
+                          Contraoferta: {item.proposedPrice}{' '}
+                          {item.proposedPriceCurrency ?? ''}
                         </span>
                       )}
                     </td>
                     <td>
-                      {item.sellerResponse ?? '—'}
+                      {item.authorizationRequired
+                        ? (ETIQUETA_AUTORIZACION[item.authorizationStatus ?? 'pending'] ??
+                          item.authorizationStatus)
+                        : 'No requiere'}
+                      {item.decidedByEmail && (
+                        <span className="bo-sp__cell-sub">{item.decidedByEmail}</span>
+                      )}
+                    </td>
+                    <td>
+                      {item.sellerResponse
+                        ? (ETIQUETA_VENDEDOR[item.sellerResponse] ?? item.sellerResponse)
+                        : '—'}
                       {item.sellerRespondedByEmail && (
                         <span className="bo-sp__cell-sub">
                           {item.sellerRespondedByEmail}
@@ -320,25 +369,136 @@ export function DocumentItemsPanel({
                       )}
                     </td>
                     <td>
-                      <button
-                        type="button"
-                        className="bo-sp__pager-button"
-                        onClick={() => empezarEdicion(item)}
-                      >
-                        Cambiar estado
-                      </button>
-                    </td>
-                  </>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                      {!abierta && (
+                        <div className="bo-sp__item-edit">
+                          {puede.decidir && (
+                            <button
+                              type="button"
+                              className="bo-sp__pager-button"
+                              onClick={() => abrir(item, 'gerente')}
+                            >
+                              Decidir por el gerente
+                            </button>
+                          )}
+                          {puede.responder && (
+                            <button
+                              type="button"
+                              className="bo-sp__pager-button"
+                              onClick={() => abrir(item, 'vendedor')}
+                            >
+                              Responder por el vendedor
+                            </button>
+                          )}
+                          {puede.motivo && (
+                            <span className="bo-sp__cell--muted">
+                              {puede.motivo}
+                              <InfoTip texto={puede.motivo} alineacion="derecha" />
+                            </span>
+                          )}
+                        </div>
+                      )}
 
-      {data.items.length === 0 && (
-        <p className="bo-sp__empty">El documento no tiene líneas.</p>
-      )}
-    </section>
+                      {abierta && edicion?.modo === 'gerente' && (
+                        <div className="bo-sp__item-edit">
+                          <select
+                            className="bo-sp__select"
+                            value={decision}
+                            onChange={(e) =>
+                              setDecision(e.target.value as ItemDecision)
+                            }
+                          >
+                            <option value="approved">Aprobar</option>
+                            <option value="rejected">Rechazar</option>
+                            <option value="countered">Contraofertar</option>
+                          </select>
+                          {decision === 'countered' && (
+                            <input
+                              className="bo-sp__input"
+                              type="number"
+                              min="0"
+                              step="0.0001"
+                              value={precio}
+                              onChange={(e) => setPrecio(e.target.value)}
+                              placeholder="Precio unitario propuesto"
+                            />
+                          )}
+                          <input
+                            className="bo-sp__input"
+                            value={motivo}
+                            onChange={(e) => setMotivo(e.target.value)}
+                            placeholder="Motivo: quién lo pidió y por qué"
+                          />
+                          <button
+                            type="button"
+                            className="bo-sp__button"
+                            onClick={() => void aplicarDecision(item)}
+                            disabled={
+                              guardando ||
+                              !motivo.trim() ||
+                              (decision === 'countered' && !(Number(precio) > 0))
+                            }
+                          >
+                            {guardando ? 'Guardando…' : 'Aplicar'}
+                          </button>
+                          <button
+                            type="button"
+                            className="bo-sp__pager-button"
+                            onClick={cerrar}
+                            disabled={guardando}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      )}
+
+                      {abierta && edicion?.modo === 'vendedor' && (
+                        <div className="bo-sp__item-edit">
+                          <select
+                            className="bo-sp__select"
+                            value={respuesta}
+                            onChange={(e) =>
+                              setRespuesta(e.target.value as ItemResponse)
+                            }
+                          >
+                            <option value="accept">Aceptar la contraoferta</option>
+                            <option value="reject">Rechazarla</option>
+                          </select>
+                          <input
+                            className="bo-sp__input"
+                            value={motivo}
+                            onChange={(e) => setMotivo(e.target.value)}
+                            placeholder="Motivo: quién lo pidió y por qué"
+                          />
+                          <button
+                            type="button"
+                            className="bo-sp__button"
+                            onClick={() => void aplicarRespuesta(item)}
+                            disabled={guardando || !motivo.trim()}
+                          >
+                            {guardando ? 'Guardando…' : 'Aplicar'}
+                          </button>
+                          <button
+                            type="button"
+                            className="bo-sp__pager-button"
+                            onClick={cerrar}
+                            disabled={guardando}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {data.items.length === 0 && (
+          <p className="bo-sp__empty">El documento no tiene líneas.</p>
+        )}
+      </section>
+    </>
   );
 }

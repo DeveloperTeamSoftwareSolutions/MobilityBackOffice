@@ -3,21 +3,21 @@ import { SupportClient } from './support.client';
 import { AuditService } from '../audit/audit.service';
 import {
   ActionResult,
+  DecisionResult,
   DocumentActions,
   DocumentItems,
   DocumentsQuery,
   DocumentTimeline,
   DocumentType,
   InconsistentReport,
-  ItemStatusRequest,
-  ItemStatusResult,
-  OverrideRequest,
-  OverrideResult,
+  ItemDecisionRequest,
+  ItemResponseRequest,
   PagedDocuments,
+  PaymentDecisionRequest,
+  PaymentResponseRequest,
   ProjectedStatus,
   RecomputeResult,
   StatusCount,
-  StatusOption,
   TimelineDocument,
   TimelineQuery,
 } from './support.types';
@@ -31,14 +31,13 @@ export interface Actor {
 /**
  * Logica de la consola de soporte.
  *
- * Fase 1: SOLO LECTURA. No escribe nada, ni en la base ni en `AuditLogs` — la
- * lectura ya queda trazada en los `ApiLogs` del middleware gracias al header
- * `x-source-app` que agrega `middleware-request`. Auditar cada consulta ademas en
- * `AuditLogs` duplicaria la traza sin agregar informacion.
+ * Las LECTURAS no se auditan en `AuditLogs`: ya quedan trazadas en los `ApiLogs` del
+ * middleware por el header `x-source-app` que agrega `middleware-request`, y
+ * duplicarlas no agregaria informacion.
  *
- * Las fases 2 y 3 (override de estados y banderas) SI auditan, porque ahi las
- * acciones son escrituras que alteran documentos de negocio. Ver
- * docs/SPEC_CONSOLA_SOPORTE.md §10.
+ * Las ESCRITURAS si, siempre: alteran documentos de negocio y soporte actua a pedido
+ * de un tercero, asi que el motivo —que dice quien lo pidio y por que— es la mitad
+ * util del registro. Ver docs/SPEC_CONSOLA_SOPORTE.md §10.
  */
 @Injectable()
 export class SupportService {
@@ -142,50 +141,123 @@ export class SupportService {
     return result;
   }
 
-  /** Lineas del documento con su estado y el turno del gerente. */
+  /** Lineas del documento, el plazo de pago y el turno del gerente. */
   listItems(type: DocumentType, guid: string): Promise<DocumentItems> {
     return this.client.listItems(type, guid);
   }
 
   /**
-   * Cambia el estado de una linea y deja traza.
+   * Traza comun de las cuatro decisiones.
    *
-   * A diferencia del override de cabecera, el middleware recalcula el estado del
-   * documento despues de este cambio: por eso el detalle registra el estado antes y
-   * despues, que es lo que le permite a soporte ver si el arreglo tuvo efecto.
+   * Registra el estado ANTES y DESPUES aunque no haya cambiado. Que una decision no
+   * mueva el documento es informacion, no ruido: es lo que responde el "¿por que
+   * sigue igual?" del dia siguiente (falta decidir otra linea, falta cerrar el turno,
+   * el vendedor todavia no respondio).
    */
-  async setItemStatus(
-    req: ItemStatusRequest,
-    actor: Actor,
-  ): Promise<ItemStatusResult> {
-    const result = await this.client.setItemStatus(req);
-
-    const cambios = [
-      req.authorizationStatus !== undefined
-        ? `autorizacion=${req.authorizationStatus ?? 'pendiente'}`
-        : null,
-      req.sellerResponse !== undefined
-        ? `vendedor=${req.sellerResponse ?? 'sin responder'}`
-        : null,
-      req.authorizationRequired !== undefined
-        ? `requiereAutorizacion=${req.authorizationRequired}`
-        : null,
-    ].filter(Boolean);
-
+  private async auditarDecision(params: {
+    accion: string;
+    entity: string;
+    result: DecisionResult;
+    actor: Actor;
+    reasonNotes: string;
+    detalle: string[];
+  }): Promise<void> {
     await this.audit.safeRecord({
-      action: 'SUPPORT_ITEM_OVERRIDE',
-      entity: req.type === 'quote' ? 'BusinessQuoteItems' : 'BusinessOrderItems',
-      entityId: result.documentNumber,
+      action: params.accion,
+      entity: params.entity,
+      entityId: params.result.documentNumber,
       category: 'support',
-      guidUsers: actor.guid ?? null,
+      guidUsers: params.actor.guid ?? null,
       detail: [
-        actor.email ?? 'desconocido',
-        `documento=${result.documentNumber}`,
-        `linea=${result.lineNumber}`,
-        ...cambios,
-        `estado=${result.statusBefore ?? 'sin estado'}->${result.statusAfter ?? 'sin estado'}`,
-        `motivo=${req.reasonNotes}`,
+        params.actor.email ?? 'desconocido',
+        `documento=${params.result.documentNumber}`,
+        ...params.detalle,
+        `estado=${params.result.statusBefore ?? 'sin estado'}->${params.result.statusAfter ?? 'sin estado'}`,
+        `motivo=${params.reasonNotes}`,
       ].join(' | '),
+    });
+  }
+
+  private entidadItems(type: DocumentType): string {
+    return type === 'quote' ? 'BusinessQuoteItems' : 'BusinessOrderItems';
+  }
+
+  private entidadCabecera(type: DocumentType): string {
+    return type === 'quote' ? 'BusinessQuotes' : 'BusinessOrders';
+  }
+
+  /** Decision del gerente sobre una linea, ejecutada por soporte a su pedido. */
+  async decideItem(req: ItemDecisionRequest, actor: Actor): Promise<DecisionResult> {
+    const result = await this.client.decideItem(req);
+
+    await this.auditarDecision({
+      accion: 'SUPPORT_ITEM_DECISION',
+      entity: this.entidadItems(req.type),
+      result,
+      actor,
+      reasonNotes: req.reasonNotes,
+      detalle: [
+        `producto=${req.productCode}`,
+        `decision=${req.status}`,
+        ...(req.status === 'countered' ? [`precioPropuesto=${req.proposedPrice}`] : []),
+      ],
+    });
+
+    return result;
+  }
+
+  /** Respuesta del vendedor a una contraoferta de linea. */
+  async respondItem(req: ItemResponseRequest, actor: Actor): Promise<DecisionResult> {
+    const result = await this.client.respondItem(req);
+
+    await this.auditarDecision({
+      accion: 'SUPPORT_ITEM_RESPONSE',
+      entity: this.entidadItems(req.type),
+      result,
+      actor,
+      reasonNotes: req.reasonNotes,
+      detalle: [`producto=${req.productCode}`, `respuesta=${req.action}`],
+    });
+
+    return result;
+  }
+
+  /** Decision del gerente sobre el plazo de pago pedido en la cabecera. */
+  async decidePaymentTerms(
+    req: PaymentDecisionRequest,
+    actor: Actor,
+  ): Promise<DecisionResult> {
+    const result = await this.client.decidePaymentTerms(req);
+
+    await this.auditarDecision({
+      accion: 'SUPPORT_PAYMENT_DECISION',
+      entity: this.entidadCabecera(req.type),
+      result,
+      actor,
+      reasonNotes: req.reasonNotes,
+      detalle: [
+        `decision=${req.status}`,
+        ...(req.status === 'observed' ? [`plazoPropuesto=${req.value}`] : []),
+      ],
+    });
+
+    return result;
+  }
+
+  /** Respuesta del vendedor a una contraoferta de plazo de pago. */
+  async respondPaymentTerms(
+    req: PaymentResponseRequest,
+    actor: Actor,
+  ): Promise<DecisionResult> {
+    const result = await this.client.respondPaymentTerms(req);
+
+    await this.auditarDecision({
+      accion: 'SUPPORT_PAYMENT_RESPONSE',
+      entity: this.entidadCabecera(req.type),
+      result,
+      actor,
+      reasonNotes: req.reasonNotes,
+      detalle: [`respuesta=${req.action}`],
     });
 
     return result;

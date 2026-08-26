@@ -1,9 +1,10 @@
 # Spec (SDD) — Consola de Soporte
 
-> Fecha: 2026-08-25
-> Estado: COMPLETA — fases 1, 2 y 3 (rol, linea de tiempo, listado, override de cabecera y estado de lineas)
-> Version objetivo: 2.1.0 (fase 1) · 2.2.0 (fase 2) · 2.3.0 (fase 3)
-> Middleware: v1.245.1 (soporte: acciones con intencion, override avanzado, lineas, proyeccion y diagnostico)
+> Fecha: 2026-08-26 (ultima actualizacion)
+> Estado: fases 1 a 4 implementadas. **La fase 4 (§8.quater) cambio los requerimientos y
+> revirtio el override libre de la fase 2 y el PATCH de linea de la fase 3.** Las secciones
+> §7.1 y §8 quedan como registro historico, no como descripcion del sistema actual.
+> Version BackOffice: 2.9.0 · Middleware: v1.248.0
 > Branch: `feature/consola-soporte`
 
 ---
@@ -35,15 +36,19 @@ en una fase posterior si el soporte las necesita.
 | D1 | El bypass va en un **router nuevo y separado** del Middleware, no modificando `PATCH /orders/:guid/status` | El endpoint existente lo usan vendedores y gerentes desde MobilityManager. Tocarlo cambiaria el flujo de negocio para todos |
 | D2 | **No se modifican las tablas de transiciones** (`documentStatus.js` — ver §4.bis) | Relajarlas afloja las reglas para TODO el ecosistema, no solo para soporte. El bypass debe ser un camino explicito, no una regla mas permisiva |
 | D3 | BackOffice **no escribe a SQL**: todo pasa por el Middleware | Regla dura del proyecto (`CLAUDE.md`). Ademas, escribir directo reproduce el problema que este modulo viene a eliminar |
-| D4 | Transiciones **de cualquier estado a cualquier estado**, incluidos los terminales (ordenes: `Invoiced`, `Rejected`, `Annulled`) | Decision del solicitante (2026-08-25). Mitigacion: confirmacion doble + motivo obligatorio. Ver riesgo R4 |
+| D4 | ~~Transiciones **de cualquier estado a cualquier estado**~~ | **REVERTIDA el 2026-08-26** por el equipo del solicitante: generaba demasiadas inconsistencias. Hoy solo se puede **volver atras** o **anular**. Ver §8.quater |
 | D5 | El rol de soporte es **exclusivo** (`MOBILITYBO_SUPPORT`), y **SuperAdmin tambien entra** | Decision del solicitante (2026-08-25). Mantiene la regla transversal de que SuperAdmin ve todo |
 | D6 | Prioridad del rol: **SuperAdmin > Soporte > Administrador > Marketing** | Soporte es un rol tecnico deliberado del DevelopersTeam; si a alguien se lo asignan, debe ganarle a los roles funcionales. Ver riesgo R2 |
 | D7 | Se ofrecen **dos operaciones distintas**: reparacion limpia (corregir los hechos + recalcular) y override duro (estampar el estado) | El estado es un valor DERIVADO, no almacenado. Ver §4 |
 | D8 | El router de soporte del Middleware exige **`requireApiKey`** | Es el unico camino del ecosistema que salta el scope de vendedor y la maquina de estados. Sin key seria alterable por cualquiera |
 | D9 | El **listado paginado** entra en el alcance de la fase 2 | Sin el, la consola solo sirve si ya se conoce el numero exacto. El ticket pide "al seleccionar o hacer clic en una orden", que implica un listado. Es solo lectura, asi que no agrega riesgo |
 | D14 | La consola ofrece **acciones con intencion** (escriben hechos) como camino principal, en vez de dejar elegir el estado | Forzar un valor derivado deja documentos en estados que nadie ve. Ver §8.bis |
-| D15 | El **override libre se conserva**, pero plegado en "Avanzado" y con advertencia | El ticket lo pedia explicitamente. Se cumple sin ponerlo como primera opcion |
+| D15 | ~~El **override libre se conserva**, plegado en "Avanzado"~~ | **REVERTIDA el 2026-08-26**. El ticket lo pedia; el equipo lo retiro tras ver las inconsistencias. Ver §8.quater |
 | D16 | La consola **marca los documentos desfasados** y ofrece un filtro para juntarlos | Un estado desfasado es invisible: nadie se entera hasta que alguien lo mira de casualidad |
+| D17 | Las decisiones sobre lineas y plazos de pago **reusan las funciones del flujo**, no escriben columnas | Esas funciones ademas comentan el hilo, avisan y recalculan. Escribir directo dejaria todo eso sin pasar. Ver §8.quater |
+| D18 | `asSupport` saltea la **pertenencia** y la **banda del aprobador**, nada mas | Sin lo segundo soporte solo podria rechazar. Es un control levantado: riesgo R6 |
+| D19 | El **autor** de la decision es soporte; el pedido va en el **motivo**, obligatorio siempre | Decision del solicitante (2026-08-26) |
+| D20 | La UI **no ofrece** una decision que el middleware va a rechazar | Desde afuera "no corresponde" y "esta roto" se ven igual (ORD-00005402) |
 
 ## 4. El hecho tecnico que gobierna el diseno
 
@@ -281,7 +286,7 @@ a ser **listado -> detalle** (clic en una fila abre su linea de tiempo).
 
 `/statuses` deriva los estados de los datos y no de una lista fija: si el flujo agrega
 un estado, el filtro lo muestra sin tocar codigo.
-
+### 7.1 Override de estados — ELIMINADO en la fase 4 (ver §8.quater). Historico: v1.241.0 / v2.2.0
 ### 7.1 Override de estados — COMPLETO (v1.241.0 / v2.2.0)
 
 ### 7.1 Cambios en MobilityMiddleWare
@@ -321,7 +326,7 @@ permanente de que un estado forzado sin respaldo en los hechos puede recalculars
 
 ---
 
-## 8. Fase 3 — Estado de las lineas — COMPLETO (v1.242.0 / v2.3.0)
+## 8. Fase 3 — Estado de las lineas — REEMPLAZADO en la fase 4 (ver §8.quater). Historico: v1.242.0 / v2.3.0
 
 ### 8.1 Cambios en MobilityMiddleWare
 
@@ -513,6 +518,141 @@ con "otra forma de pago", en el tramo de SAP, en anuladas y en convertidas a ord
 
 Tambien quedo verificado que el override libre **si** puede romper la consistencia (se
 forzo a proposito), que el diagnostico lo detecta, y que "Recalcular" lo corrige.
+---
+
+## 8.quater Fase 4 — Cambio de requerimientos: se saca el salto libre de estados
+
+> **Pedido del solicitante, 2026-08-26.** Reemplaza lo acordado en §7.1 y §8.
+> Lo que sigue documenta que cambio, que se elimino y por que.
+
+### Que pidio el equipo
+
+Textual: *"sacar lo de que los estados pueden pasar a cualquier otro estado asi nomas,
+porque eso genera muchas inconsistencias"*. En concreto:
+
+1. **Se elimina** el salto arbitrario de estados. Ni el override libre de §7.1 ni el
+   PATCH directo de estado de linea de §8 sobreviven.
+2. BackOffice solo puede **volver** un documento a un estado **anterior**, nunca a uno
+   donde nunca estuvo. **Avanzar tampoco**, aunque sea el siguiente logico.
+3. **Anular** sigue siempre disponible, con motivo.
+4. Sobre **lineas**: aceptar, rechazar y **contraofertar con un valor**.
+5. Sobre **plazos de pago**: verlos si existen, y aceptar / rechazar / contraofertar.
+6. Esos cambios de datos hacen que el estado **se recalcule**.
+7. Soporte actua **a pedido** de un vendedor (MobilityIA) o un gerente
+   (MobilityManager) que no puede hacerlo desde su app.
+8. El **boton de recalcular se queda**.
+
+### D17 — Soporte no tiene un camino propio: reusa el del flujo
+
+Las cuatro decisiones (decidir linea, responder linea, decidir plazo, responder plazo)
+llaman a las **mismas funciones** que usan el gerente y el vendedor.
+
+La alternativa —escribir las columnas desde el repositorio de soporte— parecia mas
+simple y es peor: esas funciones no hacen un UPDATE y listo. Ademas escriben el
+comentario de auditoria del hilo, toman el bloqueo de revision, encolan los avisos del
+circuito y recalculan el estado. Una escritura directa dejaria la linea cambiada y todo
+lo demas sin pasar: exactamente el tipo de incoherencia que esta consola vino a borrar.
+
+Es el mismo razonamiento de D14, un nivel mas abajo.
+
+### D18 — `asSupport`: que saltea y que no
+
+El parametro `asSupport` (default `false`, asi que ningun llamador existente cambia)
+saltea **dos** guardas y ninguna mas:
+
+| Guarda | Se saltea | Por que |
+|---|---|---|
+| Pertenencia (matriz de aprobadores / country manager / vendedor dueno) | **Si** | Soporte no es ninguno de los tres, por definicion |
+| Banda del aprobador (`beyond_approver_limit`) | **Si** | El email de soporte no esta en la matriz: `canApproverDecide` devuelve `sin_fila` y bloquea. Sin esta salida, `asSupport` solo podria **rechazar** |
+| Motivo obligatorio al rechazar | No | Regla de negocio |
+| Precio obligatorio al contraofertar | No | Sin precio, el vendedor ve una propuesta vacia |
+| Ronda unica (`already_answered_by_seller`) | No | La cerro MobilityIA en su UI; el MW no puede ser mas permisivo que su cliente |
+| Turno cerrado (`already_resolved`) | No | Para volver a decidir hay que reabrir el turno, que es una vuelta atras |
+| Bloqueo de otro gerente (`locked_by_another_manager`) | No | Protege contra dos personas escribiendo a la vez, que es justo el riesgo de soporte. Vence solo a los 30 min de inactividad |
+| Turno no cerrado para responder (`turn_not_closed`) | No | El vendedor todavia no ve la contraoferta |
+
+El salteo de la **banda** es un control que se levanta. Queda como riesgo **R6**.
+
+### D19 — El autor es soporte; el pedido va en el motivo
+
+Decision del solicitante: *"el que queda registrado como autor de la decision es
+soporte, donde en el motivo podra poner sus razones"*. No hay campo `onBehalfOf`
+separado.
+
+Por eso el motivo es **obligatorio siempre** en la consola, aunque el flujo solo lo
+exija al rechazar: sin el, la decision queda a nombre de soporte y sin rastro de quien
+la pidio ni por que.
+
+### D20 — La UI no ofrece lo que va a fallar
+
+Cada linea calcula si se puede decidir, responder, o nada — con las mismas condiciones
+que aplica el middleware. Ya paso con las acciones de cabecera que un boton disponible
+fallaba al apretarlo (ORD-00005402), y desde afuera *"no corresponde"* y *"esta roto"*
+se ven igual.
+
+| Situacion de la linea | Que ofrece |
+|---|---|
+| Escalada, turno abierto, sin respuesta del vendedor | Decidir por el gerente |
+| Contraofertada, turno cerrado, sin respuesta | Responder por el vendedor |
+| El vendedor ya respondio | Nada — la ronda es una sola |
+| Turno cerrado y sin contraoferta pendiente | Nada — hay que reabrir el turno desde las acciones |
+| No requiere autorizacion | Nada |
+
+### Que se elimino
+
+| Se fue | Estaba en | Por que |
+|---|---|---|
+| `PATCH /support/documents/:type/:guid/status` (override de cabecera) | §7.1 (D15) | Es el salto libre que el equipo pidio sacar |
+| `GET /support/vocabulary` | §7.1 | Solo servia para elegir destino en el override |
+| `PATCH /support/documents/:type/:guid/items/:itemGuid` | §8 | El gemelo a nivel linea del override: escribia `AuthorizationStatus` a mano, sin comentario en el hilo, sin aviso al vendedor y sin la ronda unica |
+| `StatusOverrideModal.tsx`, `ALLOWED_AUTH_STATUS`, `ALLOWED_SELLER_RESPONSE` | BackOffice | Sin uso tras lo anterior |
+
+**D15 queda revertida.** El ticket original pedia el override libre; el equipo lo
+retiro despues de ver las inconsistencias que produce. Se deja escrito para que dentro
+de seis meses nadie lo reintroduzca creyendo que falta.
+
+### Contrato nuevo
+
+Middleware (`/api/mobility/support`):
+
+| Metodo | Ruta | Que hace |
+|---|---|---|
+| POST | `/documents/:type/:guid/items/:productCode/decide` | `status` = `approved` / `rejected` / `countered` (+ `proposedPrice`) |
+| POST | `/documents/:type/:guid/items/:productCode/respond` | `action` = `accept` / `reject` |
+| POST | `/documents/:type/:guid/payment-terms/decide` | `status` = `approved` / `rejected` / `observed` (+ `value`) |
+| POST | `/documents/:type/:guid/payment-terms/respond` | `action` = `accept` / `reject` |
+| GET | `/item-statuses` | El vocabulario de las cuatro, para que la UI no lo repita |
+
+La linea se identifica por **codigo de producto**, no por Guid: asi la identifica el
+flujo, y traducir seria inventar una segunda forma de nombrar la misma cosa.
+
+En el plazo de pago, `observed` **ES** la contraoferta y `value` el plazo que se
+contrapropone. No es el mismo vocabulario que el de las lineas, y no se unifico para no
+inventar una traduccion que despues haya que mantener en dos lados.
+
+`GET /documents/:type/:guid/items` ahora devuelve tambien el bloque `paymentTerms`.
+
+### Registro de cambios en el Middleware
+
+> Pedido del solicitante: *"ten en cuenta los cambios en el middleware a la hora de que
+> terminemos y armemos la documentacion al final"*.
+
+| Version | Que cambio | Afecta al flujo existente |
+|---|---|---|
+| 1.240.0 | Router `/api/mobility/support` (listado sin scope de vendedor) + `requireApiKey` | No — router nuevo |
+| 1.241.0 | Override de estado de cabecera | **Revertido en 1.248.0** |
+| 1.242.0 | Estado de lineas por PATCH | **Revertido en 1.248.0** |
+| 1.243.0 | `projectCurrentStatus` / `projectStatusBatch` (solo lectura) | No — funciones nuevas |
+| 1.244.0 | Acciones con intencion (`describeActions` / `runAction`) | No — router de soporte |
+| 1.245.0 | Desempate del mismo segundo en la linea de tiempo (`compareEvents`) | Si, **cosmetico**: ordena mejor eventos con el mismo timestamp |
+| 1.246.0 | `managerTurn.relevant` + `TimeStamp` bumpeado en los 5 caminos de escritura de soporte | No — `TimeStamp` no se usa como filtro en ningun consumidor |
+| 1.247.0 | `target` en las acciones; se sacan las rutas de override del router | No — router de soporte |
+| 1.248.0 | `asSupport` en las 8 funciones de decision; 4 endpoints de decision; `paymentTerms` en `listItems`; se elimina el PATCH de linea | **No, con `asSupport` en `false`** — 704 tests verdes, 9 de ellos fijando la forma de las guardas |
+
+Lo unico que toca codigo **compartido** con MobilityIA y MobilityManager es `asSupport`
+(1.248.0) y el desempate de la linea de tiempo (1.245.0). El resto vive en el router de
+soporte, que ningun otro consumidor llama.
+
 ## 9. Riesgos
 
 | # | Riesgo | Mitigacion |
@@ -521,14 +661,31 @@ forzo a proposito), que el diagnostico lo detecta, y que "Recalcular" lo corrige
 | R2 | La app resuelve **un solo rol por usuario**. Alguien con `MOBILITYBO_ADMIN` + `MOBILITYBO_SUPPORT` pierde el acceso a Regiones (gana Soporte por D6) | Quien necesite ambos accesos va con SuperAdmin. Documentado en `ROLES_Y_PERMISOS.md` |
 | R3 | `MIDDLEWARE_API_KEY` pasa de opcional a **obligatoria** al llegar la fase 2 | Configurarla en ambos lados y actualizar `ENV_VARIABLES.md` en esa fase |
 | R4 | Reabrir una orden `Invoiced` o `Cancelled` **no se propaga a SAP**: quedan desincronizados | Habilitado por D4, con doble confirmacion y motivo obligatorio. El riesgo es aceptado, no eliminado |
-| R5 | Un override duro puede revertirse solo en el proximo recompute (§4) | La UI lo advierte; la reparacion limpia es el camino por defecto |
+| R5 | ~~Un override duro puede revertirse solo en el proximo recompute (§4)~~ | **Cerrado en la fase 4**: no queda ningun camino que escriba el estado a mano |
+| R6 | **`asSupport` saltea la banda del aprobador** (D18). Un usuario de soporte puede aprobar un descuento que ningun gerente podria firmar por si mismo | El motivo es obligatorio y queda en `AuditLogs` con el autor. **Es un control levantado, no eliminado por accidente**: si el equipo lo quiere de vuelta, la alternativa es que soporte declare a que gerente representa y se valide la banda de ESE gerente — cambia el contrato y la UI |
+| R7 | Soporte puede responder **por el vendedor**. La respuesta queda a nombre de soporte, no del vendedor | Decision del solicitante (D19). El motivo obliga a decir quien lo pidio |
 
 ## 10. Auditoria
 
-| Action | Category | Entity | Fase |
+| Action | Category | Entity | Que registra |
 |---|---|---|---|
-| `SUPPORT_STATUS_OVERRIDE` | `support` | `BusinessOrders` / `BusinessQuotes` | 2 |
-| `SUPPORT_FLAG_OVERRIDE` | `support` | `BusinessOrders` / `BusinessQuotes` | 3 |
+| `SUPPORT_ACTION` | `support` | `BusinessOrders` / `BusinessQuotes` | Vuelta atras, anulacion, reversion de anulacion |
+| `SUPPORT_RECOMPUTE` | `support` | `BusinessOrders` / `BusinessQuotes` | Recalculo, **solo si el estado cambio** |
+| `SUPPORT_ITEM_DECISION` | `support` | `BusinessOrderItems` / `BusinessQuoteItems` | Decision del gerente sobre una linea |
+| `SUPPORT_ITEM_RESPONSE` | `support` | `BusinessOrderItems` / `BusinessQuoteItems` | Respuesta del vendedor a una contraoferta |
+| `SUPPORT_PAYMENT_DECISION` | `support` | `BusinessOrders` / `BusinessQuotes` | Decision del gerente sobre el plazo de pago |
+| `SUPPORT_PAYMENT_RESPONSE` | `support` | `BusinessOrders` / `BusinessQuotes` | Respuesta del vendedor al plazo de pago |
 
-La fase 1 es solo lectura y no audita (la lectura de la timeline ya queda en los `ApiLogs` del
-Middleware por el header `x-source-app`).
+`SUPPORT_STATUS_OVERRIDE` y `SUPPORT_FLAG_OVERRIDE` **ya no se emiten**: las acciones que
+los producian se eliminaron en la fase 4. Las filas historicas quedan.
+
+Todas registran el estado **antes y despues**, incluso cuando no cambio. Que una decision
+no mueva el documento es informacion, no ruido: es lo que responde el *"¿por que sigue
+igual?"* del dia siguiente.
+
+Las **lecturas** no se auditan en `AuditLogs`: ya quedan en los `ApiLogs` del Middleware
+por el header `x-source-app`, y duplicarlas no agregaria nada.
+
+Del lado del Middleware, cada decision deja ademas su fila en `Auditories` y su comentario
+en el hilo del documento — los mismos que deja el gerente o el vendedor, porque es la misma
+funcion (D17).

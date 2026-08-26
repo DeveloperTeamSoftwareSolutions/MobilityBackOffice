@@ -145,10 +145,23 @@ export function StatusOverrideModal({
             />
           </label>
 
+          {/*
+            El texto anterior decía solo que el estado "se calcula a partir de los
+            ítems". Se reportó que confundía: se leía como si forzar el estado
+            ajustara esos datos. Ahora dice explícitamente qué NO hace y cuál es la
+            alternativa, que es la información que faltaba.
+          */}
           <p className="bo-sp__modal-warning">
-            El estado se calcula a partir de los ítems, el pago y el crédito. Si esos
-            datos no respaldan el estado que forzás, la próxima acción sobre el
-            documento puede volver a cambiarlo.
+            <strong>Forzar el estado no cambia los datos del documento.</strong>{' '}
+            Escribe el estado y nada más: los ítems, el pago y el crédito quedan
+            exactamente como están. Y como el sistema recalcula el estado a partir de
+            esos datos, si no respaldan lo que forzás, la próxima acción sobre el
+            documento lo va a revertir.
+          </p>
+          <p className="bo-sp__modal-warning">
+            Para un arreglo que quede firme, corregí el estado de las líneas en la
+            sección <strong>Líneas del documento</strong>. Eso sí cambia los datos, y
+            el estado se recalcula solo.
           </p>
 
           {tocaTerminal && confirming && (

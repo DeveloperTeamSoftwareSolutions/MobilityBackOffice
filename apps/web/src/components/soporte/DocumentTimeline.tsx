@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { TimelineEvent } from './soporte.types';
 import { formatDateTimeWithSeconds } from './DocumentHeader';
 
@@ -26,6 +27,36 @@ const ROLE_LABEL: Readonly<Record<string, string>> = {
   system: 'Sistema',
 };
 
+/** Orden de lectura de la bitácora. */
+export type TimelineOrder = 'asc' | 'desc';
+
+const ORDER_KEY = 'bo_sp_timeline_order';
+
+/**
+ * Preferencia guardada del orden.
+ *
+ * Va en `localStorage` porque es una comodidad de lectura por persona, no un dato del
+ * negocio: quien audita seguido prefiere ver lo último arriba, y no tiene sentido que
+ * lo cambie en cada documento. El acceso va en try/catch porque en una ventana privada
+ * o con las cookies bloqueadas `localStorage` puede lanzar excepción, y eso no debe
+ * romper la línea de tiempo.
+ */
+export function loadOrderPreference(): TimelineOrder {
+  try {
+    return localStorage.getItem(ORDER_KEY) === 'desc' ? 'desc' : 'asc';
+  } catch {
+    return 'asc';
+  }
+}
+
+function saveOrderPreference(order: TimelineOrder): void {
+  try {
+    localStorage.setItem(ORDER_KEY, order);
+  } catch {
+    /* Sin persistencia, la preferencia dura lo que la sesión. No es un error. */
+  }
+}
+
 interface Props {
   events: TimelineEvent[];
   /** Cuando está activo se muestran también las consultas (quién miró el documento). */
@@ -35,11 +66,22 @@ interface Props {
 /**
  * Línea de tiempo del documento: el "caminito" completo, del alta al cierre.
  *
- * Los eventos vienen ya ordenados y fundidos por el middleware — la UI no reordena
- * ni deduplica, solo presenta. `source` se muestra en cada hito porque es lo que
- * permite a soporte saber de qué tabla salió el dato cuando algo no cierra.
+ * Los eventos vienen ya ordenados y fundidos por el middleware. Lo único que hace la
+ * UI es poder **invertirlos**: quien audita seguido suele querer lo último arriba.
+ * No reordena por criterio propio ni deduplica — dar vuelta la lista es exacto y
+ * preserva el desempate del alta que resuelve el middleware.
+ *
+ * `source` se muestra en cada hito porque es lo que permite a soporte saber de qué
+ * tabla salió el dato cuando algo no cierra.
  */
 export function DocumentTimeline({ events, includeViews }: Props) {
+  const [order, setOrder] = useState<TimelineOrder>(loadOrderPreference);
+
+  function cambiarOrden(next: TimelineOrder) {
+    setOrder(next);
+    saveOrderPreference(next);
+  }
+
   if (events.length === 0) {
     return (
       <p className="bo-sp__empty">
@@ -49,9 +91,38 @@ export function DocumentTimeline({ events, includeViews }: Props) {
     );
   }
 
+  // La lista llega ordenada del más viejo al más nuevo desde el middleware. Darla
+  // vuelta es exacto: incluye el desempate del alta, que en descendente queda última.
+  const visibles = order === 'desc' ? [...events].reverse() : events;
+
   return (
-    <ol className="bo-sp__timeline">
-      {events.map((event, index) => (
+    <>
+      <div className="bo-sp__timeline-head">
+        <span className="bo-sp__timeline-count">
+          {events.length} {events.length === 1 ? 'hito' : 'hitos'}
+        </span>
+        <div className="bo-sp__order">
+          <button
+            type="button"
+            className={`bo-sp__order-button ${order === 'asc' ? 'bo-sp__order-button--active' : ''}`}
+            onClick={() => cambiarOrden('asc')}
+            aria-pressed={order === 'asc'}
+          >
+            Más antiguos primero
+          </button>
+          <button
+            type="button"
+            className={`bo-sp__order-button ${order === 'desc' ? 'bo-sp__order-button--active' : ''}`}
+            onClick={() => cambiarOrden('desc')}
+            aria-pressed={order === 'desc'}
+          >
+            Más recientes primero
+          </button>
+        </div>
+      </div>
+
+      <ol className="bo-sp__timeline">
+        {visibles.map((event, index) => (
         <li
           key={`${event.at}-${event.kind}-${index}`}
           className={`bo-sp__event bo-sp__event--${KIND_LABEL[event.kind] ? event.kind : 'other'}`}
@@ -85,7 +156,8 @@ export function DocumentTimeline({ events, includeViews }: Props) {
             )}
           </div>
         </li>
-      ))}
-    </ol>
+        ))}
+      </ol>
+    </>
   );
 }

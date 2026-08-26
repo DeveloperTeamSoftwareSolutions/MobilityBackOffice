@@ -528,3 +528,44 @@
 .bo-sp__item-edit .bo-sp__input {
   min-width: 200px;
 }
+
+/* Cabecera de la línea de tiempo: conteo + selector de orden */
+.bo-sp__timeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bo-sp__timeline-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bo-text-muted);
+}
+.bo-sp__order {
+  display: inline-flex;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  overflow: hidden;
+}
+.bo-sp__order-button {
+  height: 30px;
+  padding: 0 12px;
+  border: none;
+  background: var(--bo-surface);
+  color: var(--bo-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--bo-font);
+  cursor: pointer;
+}
+.bo-sp__order-button + .bo-sp__order-button {
+  border-left: 1px solid var(--bo-border);
+}
+.bo-sp__order-button:hover:not(.bo-sp__order-button--active) {
+  color: var(--bo-text);
+}
+.bo-sp__order-button--active {
+  background: var(--bo-accent);
+  color: #fff;
+}

@@ -1,6 +1,6 @@
 {
   "name": "@mobility-backoffice/api",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Mobility BackOffice backend — NestJS gateway (auth via ITManager)",
   "private": true,
   "scripts": {

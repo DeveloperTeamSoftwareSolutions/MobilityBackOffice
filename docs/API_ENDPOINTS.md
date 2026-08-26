@@ -1,7 +1,7 @@
 # API — Mobility BackOffice
 
 > Ultima actualizacion: 2026-08-25
-> Version: 2.3.0
+> Version: 2.3.1
 
 Toda respuesta incluye `success`. Los errores siguen el formato de Nest:
 `{ message, error, statusCode }`.

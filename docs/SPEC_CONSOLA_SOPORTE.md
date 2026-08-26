@@ -3,7 +3,7 @@
 > Fecha: 2026-08-25
 > Estado: COMPLETA — fases 1, 2 y 3 (rol, linea de tiempo, listado, override de cabecera y estado de lineas)
 > Version objetivo: 2.1.0 (fase 1) · 2.2.0 (fase 2) · 2.3.0 (fase 3)
-> Middleware: v1.242.0 (router de soporte, override y estado de lineas)
+> Middleware: v1.242.1 (router de soporte, override y estado de lineas)
 > Branch: `feature/consola-soporte`
 
 ---
@@ -103,6 +103,93 @@ Terminales vigentes: ordenes `Invoiced`, `Rejected`, `Annulled`; cotizaciones
 **tampoco en el modelo vigente existe una transicion de vuelta a `Draft`**.
 
 ---
+
+## 4.ter Como se recalcula el estado — referencia
+
+> Esta informacion vivia solo en los comentarios de `src/utils/documentStatus.js` del
+> Middleware. Se documenta aca porque la consola de soporte la necesita para explicar
+> por que un documento esta donde esta.
+>
+> **Si esta logica cambia en el Middleware, hay que actualizar esta seccion.**
+
+### Cuando corre el recalculo
+
+Por **eventos**, nunca por reloj. No hay ningun scheduler que revise documentos. Si
+nadie toca el documento, su estado se queda como esta indefinidamente — aunque sea
+incorrecto. Eso es lo que hace util el boton "Recalcular estado" de la consola, y
+tambien lo que explica que un override forzado sobreviva un tiempo: se revierte en la
+proxima accion sobre el documento, que puede ser en minutos o en semanas.
+
+| Actor | Accion | Funcion que dispara |
+|---|---|---|
+| Vendedor | Crea/edita la orden o la envia a aprobacion | `businessOrders.upsert` |
+| Gerente | Decide una linea | `businessOrderAuthorizations.decideItem` |
+| Gerente | Decide la forma de pago pedida | `decidePaymentMethod` |
+| Gerente | **Cierra su turno** | `resolveOrder` |
+| Vendedor | Responde una contraoferta | `respondItem` |
+| Vendedor | Responde sobre la forma de pago | `respondPaymentMethod` |
+| Creditos | Libera o deniega el credito | `creditApprovals.triggerRecompute` |
+| Sistema | Se valida un pago | `orderPayments.triggerRecompute` |
+| **Soporte** | Cambia el estado de una linea | `support.setItemStatus` |
+| **Soporte** | Aprieta "Recalcular estado" | `support.recomputeDocument` |
+
+El override de cabecera (`setStatusOverride`) es la unica escritura que **NO** dispara
+el recalculo, a proposito: recalcular desharia el override en el acto.
+
+### Que mira
+
+**Cabecera**: `CancelledAt`, `SentAt`, la fila de resolucion (turno del gerente),
+`OtherPaymentMethod` + `OtherPaymentMethodStatus`, y —solo cotizaciones—
+`ConvertedToOrderNumber` y `ValidUntil`.
+
+**Cada linea**: `AuthorizationRequired`, `AuthorizationStatus`, `SellerResponse`.
+
+### La escalera de decision — ORDEN
+
+Se evalua en orden y gana la primera condicion que se cumple.
+
+| # | Condicion | Estado |
+|---|---|---|
+| 1 | `CancelledAt` tiene valor | `Annulled` |
+| 2 | El estado actual esta en el tramo de SAP | **se preserva** (`SentToSAP`, `PendingDispatch`, `Dispatched`, `Invoiced`) |
+| 3 | `SentAt` vacio | `Draft` |
+| 4 | Ninguna linea escalada **y** sin pedido de otra forma de pago | `Processed` |
+| 5 | Alguna linea escalada sin decidir, o cabecera sin contestar | `ReadyForApprove` |
+| 6 | El gerente no cerro su turno (`resolvedAt` vacio) | `ReadyForApprove` |
+| 7 | Contraoferta esperando al vendedor, o cabecera observada | `Processed` |
+| 8 | Ninguna linea vendible | `Rejected` |
+| 9 | (resto) | `Processed` |
+
+### La escalera de decision — COTIZACION
+
+| # | Condicion | Estado |
+|---|---|---|
+| 1 | `CancelledAt` tiene valor | `Annulled` |
+| 2 | `ConvertedToOrderNumber` tiene valor | `ConvertedToOrder` |
+| 3 | `SentAt` vacio | `Draft` |
+| 4 | `ValidUntil` vencido | `Expired` |
+| 5 | Ninguna linea escalada **y** sin pedido de otra forma de pago | `AutomaticallyAuthorized` |
+| 6–9 | Igual que los pasos 5 a 9 de la orden | `ReadyForApprove` / `Processed` / `Rejected` |
+
+### Definiciones que hacen falta para leer las tablas
+
+**Linea escalada**: `AuthorizationRequired = 1`.
+
+**Linea vendible** (`isSellable`): no requiere autorizacion, **o** esta `approved`,
+**o** esta `countered` y el vendedor respondio `accepted`.
+
+**Tramo de SAP**: `SentToSAP`, `PendingDispatch`, `Dispatched`, `Invoiced` los escribe
+la integracion con SAP y el recalculo los preserva sin tocarlos. La proyeccion **no
+puede producirlos**, y tampoco sacar un documento de ahi: eso solo se logra con el
+override de cabecera, que es el caso peligroso de D4 (no se propaga a SAP).
+
+### Casos verificados en QATEST
+
+| Documento | Donde corta la escalera | Estado |
+|---|---|---|
+| ORD-00005413 | paso 3 (`SentAt` vacio) | `Draft` — por eso el override a `ReadyForApprove` se revirtio |
+| ORD-00005414 | paso 4 (0 lineas escaladas) | `Processed` — nunca pasa por el gerente |
+| ORD-00005411 | paso 6 (turno abierto) | `ReadyForApprove` pese a tener sus 2 lineas decididas |
 
 ## 5. Objetos de datos involucrados
 

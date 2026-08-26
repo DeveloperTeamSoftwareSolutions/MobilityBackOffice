@@ -126,6 +126,12 @@ export interface SupportItem {
 
 /** El turno del gerente: hecho de cabecera que las líneas no conocen. */
 export interface ManagerTurn {
+  /** `false` = el documento nunca pasa por el gerente; el turno no aplica. */
+  relevant: boolean;
+  /** Cuantas lineas requieren autorizacion. */
+  escalatedLines: number;
+  /** La cabecera pidio otra forma de pago. */
+  headerRequires: boolean;
   closed: boolean;
   resolvedAt: string | null;
   resolvedByEmail: string | null;

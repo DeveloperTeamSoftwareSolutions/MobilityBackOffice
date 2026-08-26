@@ -1,7 +1,7 @@
 # APIs y Endpoints Externos — Mobility BackOffice
 
 > Ultima actualizacion: 2026-08-25
-> Version: 2.3.0
+> Version: 2.3.1
 
 ## Integraciones activas
 

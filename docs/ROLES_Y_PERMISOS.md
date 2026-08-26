@@ -1,7 +1,7 @@
 # Roles y Permisos — Mobility BackOffice (ITManager)
 
 > Ultima actualizacion: 2026-08-25
-> Version: 2.3.0
+> Version: 2.3.1
 
 Define lo que se registra en ITManager para la app `MobilityBackOffice`: roles,
 permisos y el mapeo entre ellos. Todo lo crea, idempotente, el script

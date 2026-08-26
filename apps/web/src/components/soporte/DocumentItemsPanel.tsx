@@ -162,18 +162,26 @@ export function DocumentItemsPanel({
       </header>
 
       {/*
-        El turno del gerente no sale de las líneas. Sin esta fila, un documento con
-        todas las líneas decididas se queda igual en "Pendiente de aprobación", y
-        sin este aviso parecería que la consola no funciona.
+        El turno del gerente solo importa si el documento PASA por el gerente: al
+        menos una línea escalada, o un pedido de otra forma de pago. Si no, nunca
+        hubo turno que cerrar y avisar sobre él confunde (ORD-00005414: 0 líneas
+        escaladas, estado Processed, y la consola avisaba igual).
+        `relevant` lo calcula el middleware con la misma condición que la proyección.
       */}
-      {!data.managerTurn.closed && (
+      {!data.managerTurn.relevant && (
+        <p className="bo-sp__event-actor">
+          Este documento no pasa por el gerente: ninguna línea requiere autorización
+          y no hay pedido de otra forma de pago.
+        </p>
+      )}
+      {data.managerTurn.relevant && !data.managerTurn.closed && (
         <p className="bo-sp__modal-warning">
           El gerente todavía no cerró su turno. Aunque decidas todas las líneas, el
           documento va a seguir en <strong>ReadyForApprove</strong> hasta que ese
           cierre exista.
         </p>
       )}
-      {data.managerTurn.closed && (
+      {data.managerTurn.relevant && data.managerTurn.closed && (
         <p className="bo-sp__event-actor">
           Turno del gerente cerrado por{' '}
           {data.managerTurn.resolvedByEmail ?? 'usuario desconocido'} el{' '}

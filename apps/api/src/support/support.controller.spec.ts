@@ -209,3 +209,107 @@ describe('SupportController — listado', () => {
     expect(res).toEqual({ success: true, data: [] });
   });
 });
+
+describe('SupportController — override de estado', () => {
+  const resultado = {
+    ok: true as const,
+    noop: false,
+    documentNumber: 'ORD-00005413',
+    fromCode: 'Draft',
+    toCode: 'ReadyForApprove',
+    isTerminal: false,
+  };
+  let service: jest.Mocked<Pick<SupportService, 'overrideStatus'>>;
+  let controller: SupportController;
+
+  const req = { user: { email: 'soporte@duwest.com', guid: 'guid-soporte' } };
+
+  beforeEach(() => {
+    service = { overrideStatus: jest.fn().mockResolvedValue(resultado) };
+    controller = new SupportController(service as unknown as SupportService);
+  });
+
+  it('aplica el override y responde con success', async () => {
+    const res = await controller.overrideStatus(
+      'order',
+      'guid-doc',
+      { toCode: 'ReadyForApprove', reasonNotes: 'Ticket 1234' },
+      req,
+    );
+    expect(res).toEqual({ success: true, data: resultado });
+  });
+
+  it('propaga el actor logueado, no el que venga en el body', async () => {
+    await controller.overrideStatus(
+      'order',
+      'guid-doc',
+      { toCode: 'Draft', reasonNotes: 'motivo' },
+      req,
+    );
+    const [payload, actor] = service.overrideStatus.mock.calls[0];
+    expect(payload.actorEmail).toBe('soporte@duwest.com');
+    expect(actor).toEqual({ email: 'soporte@duwest.com', guid: 'guid-soporte' });
+  });
+
+  it('exige toCode', async () => {
+    await expect(
+      controller.overrideStatus('order', 'guid-doc', { reasonNotes: 'x' }, req),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(service.overrideStatus).not.toHaveBeenCalled();
+  });
+
+  it('exige motivo, y un motivo en blanco no cuenta', async () => {
+    await expect(
+      controller.overrideStatus(
+        'order',
+        'guid-doc',
+        { toCode: 'Draft', reasonNotes: '    ' },
+        req,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(service.overrideStatus).not.toHaveBeenCalled();
+  });
+
+  it('recorta el motivo antes de mandarlo', async () => {
+    await controller.overrideStatus(
+      'order',
+      'guid-doc',
+      { toCode: 'Draft', reasonNotes: '  Ticket 1234  ' },
+      req,
+    );
+    expect(service.overrideStatus.mock.calls[0][0].reasonNotes).toBe('Ticket 1234');
+  });
+
+  it('un reasonCode vacio viaja como null', async () => {
+    await controller.overrideStatus(
+      'order',
+      'guid-doc',
+      { toCode: 'Draft', reasonNotes: 'motivo', reasonCode: '   ' },
+      req,
+    );
+    expect(service.overrideStatus.mock.calls[0][0].reasonCode).toBeNull();
+  });
+
+  it('rechaza un tipo invalido', async () => {
+    await expect(
+      controller.overrideStatus(
+        'factura',
+        'guid-doc',
+        { toCode: 'Draft', reasonNotes: 'motivo' },
+        req,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(service.overrideStatus).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un guid vacio', async () => {
+    await expect(
+      controller.overrideStatus(
+        'order',
+        '   ',
+        { toCode: 'Draft', reasonNotes: 'motivo' },
+        req,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+});

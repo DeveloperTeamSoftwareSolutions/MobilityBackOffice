@@ -1,7 +1,7 @@
 # API — Mobility BackOffice
 
 > Ultima actualizacion: 2026-08-25
-> Version: 2.1.0
+> Version: 2.2.0
 
 Toda respuesta incluye `success`. Los errores siguen el formato de Nest:
 `{ message, error, statusCode }`.
@@ -80,8 +80,11 @@ Detalle en `docs/SPEC_RAG_EMBED.md` y `docs/EXTERNAL_APIS.md`.
 Es el rol exclusivo del DevelopersTeam: da trazabilidad de cualquier documento **sin** el
 scope de vendedor que limita al resto del ecosistema.
 
-> **Fase 1: solo lectura.** El override de estados y banderas llega en las fases 2 y 3 y
-> requiere endpoints nuevos en el Middleware. Ver `docs/SPEC_CONSOLA_SOPORTE.md`.
+> **Escritura**: solo el override de estado. Las banderas de control (items, pago,
+> credito) llegan en la fase 3. Ver `docs/SPEC_CONSOLA_SOPORTE.md`.
+>
+> **El override puede revertirse solo.** El estado es un valor DERIVADO: si los hechos no
+> respaldan el estado forzado, el proximo recompute lo vuelve a cambiar. La UI lo advierte.
 
 | Metodo | Ruta | Descripcion |
 |---|---|---|
@@ -89,6 +92,8 @@ scope de vendedor que limita al resto del ecosistema.
 | GET | `/api/support/statuses` | Estados presentes en los datos con su conteo, para el filtro. Query: `type` |
 | GET | `/api/support/documents/:type/:number` | Cabecera del documento. 400 si el tipo es invalido o el numero viene vacio; 404 si no existe |
 | GET | `/api/support/documents/:type/:number/timeline` | Bitacora unificada. Query: `includeViews`, `includeMessages` (`1`/`true`) |
+| GET | `/api/support/vocabulary` | Estados VALIDOS del tipo (para elegir destino del override), con su marca de terminal |
+| PATCH | `/api/support/documents/:type/:guid/status` | **Override de estado.** Body `{ toCode, reasonNotes, reasonCode? }`. 400 si falta `toCode`, si el motivo viene vacio o si `toCode` no pertenece al vocabulario; 404 si el documento no existe |
 
 ### Orden de rutas
 
@@ -118,3 +123,4 @@ Las escrituras dejan traza en `AuditLogs` con `AppId='MobilityBackOffice'`:
 | `REGION_CEBE_LINK` | `regions` | `ContinentProfitCenter` | codigo del CEBE |
 | `REGION_CEBE_UNLINK` | `regions` | `ContinentProfitCenter` | codigo del CEBE |
 | `REGION_SYNC` | `regions` | `ContinentProfitCenter` | — |
+| `SUPPORT_STATUS_OVERRIDE` | `support` | `BusinessOrders` / `BusinessQuotes` | numero del documento |

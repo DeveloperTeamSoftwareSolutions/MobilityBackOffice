@@ -13,6 +13,7 @@ import {
 import { DocumentHeader } from './DocumentHeader';
 import { DocumentList } from './DocumentList';
 import { DocumentTimeline } from './DocumentTimeline';
+import { StatusOverrideModal } from './StatusOverrideModal';
 import './soporte.css';
 
 /** Traduce el fallo HTTP al mensaje que ve soporte. */
@@ -46,10 +47,11 @@ function pageSizeForViewport(): number {
 }
 
 /**
- * Consola de soporte (fase 1: solo lectura).
+ * Consola de soporte.
  *
  * Dos vistas: el listado de documentos y, al hacer clic en una fila, su línea de
- * tiempo completa. La búsqueda, el orden y la paginación son server-side.
+ * tiempo completa, desde donde se puede forzar su estado. Busqueda, orden y
+ * paginacion son server-side.
  */
 export function SupportPanel() {
   const [type, setType] = useState<DocumentType>('order');
@@ -75,6 +77,7 @@ export function SupportPanel() {
   // crédito, que suele ser la explicación que busca soporte. Encendidos por
   // default; las consultas no, porque son ruido salvo que se las pida.
   const [includeMessages, setIncludeMessages] = useState(true);
+  const [overriding, setOverriding] = useState(false);
 
   /** Debounce de la búsqueda: 300ms y vuelta a la página 1. */
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -201,9 +204,37 @@ export function SupportPanel() {
     return (
       <div className="bo-sp-shell">
         <div className="bo-sp">
-          <button type="button" className="bo-sp__back" onClick={onBack}>
-            ← Volver al listado
-          </button>
+          <div className="bo-sp__detail-bar">
+            <button type="button" className="bo-sp__back" onClick={onBack}>
+              ← Volver al listado
+            </button>
+            <button
+              type="button"
+              className="bo-sp__button"
+              onClick={() => setOverriding(true)}
+            >
+              Forzar estado
+            </button>
+          </div>
+
+          {overriding && (
+            <StatusOverrideModal
+              document={selected}
+              type={type}
+              onClose={() => setOverriding(false)}
+              onApplied={(nuevoEstado) => {
+                setOverriding(false);
+                // El documento seleccionado quedo desactualizado: se refresca en
+                // memoria y se recarga la bitacora para ver el hito recien escrito.
+                const actualizado = { ...selected, statusCode: nuevoEstado };
+                setSelected(actualizado);
+                setDocuments((prev) =>
+                  prev.map((d) => (d.guid === actualizado.guid ? actualizado : d)),
+                );
+                void loadTimeline(actualizado, includeViews, includeMessages);
+              }}
+            />
+          )}
 
           <div className="bo-sp__toggles">
             <label className="bo-sp__toggle">

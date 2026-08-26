@@ -83,3 +83,19 @@ export type SortField =
   | 'documentDate';
 
 export type SortDir = 'ASC' | 'DESC';
+
+/** Estado válido del vocabulario vigente, con su marca de terminal. */
+export interface StatusOption {
+  code: string;
+  terminal: boolean;
+}
+
+/** Resultado del override. `noop` = ya estaba en ese estado. */
+export interface OverrideResult {
+  ok: true;
+  noop: boolean;
+  documentNumber: string | null;
+  fromCode: string | null;
+  toCode: string;
+  isTerminal?: boolean;
+}

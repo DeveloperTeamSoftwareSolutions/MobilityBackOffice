@@ -7,7 +7,9 @@ import {
   SortDir,
   SortField,
   StatusCount,
+  StatusOption,
   SupportDocument,
+  OverrideResult,
 } from './soporte.types';
 
 interface ApiData<T> {
@@ -78,6 +80,30 @@ export async function listStatuses(type: DocumentType): Promise<StatusCount[]> {
   const res = await httpClient.get<ApiData<StatusCount[]>>(
     '/api/support/statuses',
     { params: { type } },
+  );
+  return res.data.data;
+}
+
+/** Estados VÁLIDOS del tipo (para elegir destino), distinto de `listStatuses`. */
+export async function getVocabulary(type: DocumentType): Promise<StatusOption[]> {
+  const res = await httpClient.get<ApiData<StatusOption[]>>(
+    '/api/support/vocabulary',
+    { params: { type } },
+  );
+  return res.data.data;
+}
+
+/** Fuerza el estado de un documento. Única escritura de la consola. */
+export async function overrideStatus(
+  type: DocumentType,
+  guid: string,
+  toCode: string,
+  reasonNotes: string,
+  reasonCode?: string,
+): Promise<OverrideResult> {
+  const res = await httpClient.patch<ApiData<OverrideResult>>(
+    `/api/support/documents/${type}/${encodeURIComponent(guid)}/status`,
+    { toCode, reasonNotes, reasonCode },
   );
   return res.data.data;
 }

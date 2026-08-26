@@ -121,3 +121,29 @@ export const SORTABLE_FIELDS: readonly string[] = [
   'documentDate',
   'serverTimestamp',
 ];
+
+/** Estado valido del vocabulario vigente, con su marca de terminal. */
+export interface StatusOption {
+  code: string;
+  terminal: boolean;
+}
+
+/** Pedido de override de estado. `reasonNotes` es obligatorio. */
+export interface OverrideRequest {
+  type: DocumentType;
+  guid: string;
+  toCode: string;
+  reasonCode: string | null;
+  reasonNotes: string;
+  actorEmail: string | null;
+}
+
+/** Resultado del override. `noop` = ya estaba en ese estado. */
+export interface OverrideResult {
+  ok: true;
+  noop: boolean;
+  documentNumber: string | null;
+  fromCode: string | null;
+  toCode: string;
+  isTerminal?: boolean;
+}

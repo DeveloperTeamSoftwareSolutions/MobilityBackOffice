@@ -1,14 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { SupportClient } from './support.client';
+import { AuditService } from '../audit/audit.service';
 import {
   DocumentsQuery,
   DocumentTimeline,
   DocumentType,
+  OverrideRequest,
+  OverrideResult,
   PagedDocuments,
   StatusCount,
+  StatusOption,
   TimelineDocument,
   TimelineQuery,
 } from './support.types';
+
+/** Identidad del logueado, para la traza. */
+export interface Actor {
+  email?: string;
+  guid?: string;
+}
 
 /**
  * Logica de la consola de soporte.
@@ -24,7 +34,10 @@ import {
  */
 @Injectable()
 export class SupportService {
-  constructor(private readonly client: SupportClient) {}
+  constructor(
+    private readonly client: SupportClient,
+    private readonly audit: AuditService,
+  ) {}
 
   /** Bitacora completa (cabecera + hitos) de un documento. */
   getTimeline(query: TimelineQuery): Promise<DocumentTimeline> {
@@ -52,5 +65,49 @@ export class SupportService {
   /** Estados presentes en los datos, para el filtro de la consola. */
   listStatuses(type: DocumentType): Promise<StatusCount[]> {
     return this.client.listStatuses(type);
+  }
+
+  /** Estados VALIDOS del tipo, para elegir destino en el override. */
+  getVocabulary(type: DocumentType): Promise<StatusOption[]> {
+    return this.client.getVocabulary(type);
+  }
+
+  /**
+   * Fuerza el estado de un documento y deja traza en `AuditLogs`.
+   *
+   * La auditoria va con `safeRecord` (best-effort) a proposito: cuando llega acá el
+   * middleware YA commiteó el cambio, así que un fallo del log central no debe
+   * devolver un error al usuario por una operación que sí ocurrió. El hecho, además,
+   * queda registrado por partida doble del lado del middleware (`OrdersStatus` +
+   * `Auditories`), que es lo que alimenta la línea de tiempo.
+   */
+  async overrideStatus(
+    req: OverrideRequest,
+    actor: Actor,
+  ): Promise<OverrideResult> {
+    const result = await this.client.overrideStatus(req);
+
+    // Reescribir el mismo estado no cambió nada: no ensucia la traza.
+    if (result.noop) return result;
+
+    await this.audit.safeRecord({
+      action: 'SUPPORT_STATUS_OVERRIDE',
+      entity: req.type === 'quote' ? 'BusinessQuotes' : 'BusinessOrders',
+      entityId: result.documentNumber,
+      category: 'support',
+      guidUsers: actor.guid ?? null,
+      detail: [
+        actor.email ?? 'desconocido',
+        `documento=${result.documentNumber}`,
+        `de=${result.fromCode ?? 'sin estado'}`,
+        `a=${result.toCode}`,
+        `motivo=${req.reasonNotes}`,
+        req.reasonCode ? `codigo=${req.reasonCode}` : null,
+      ]
+        .filter(Boolean)
+        .join(' | '),
+    });
+
+    return result;
   }
 }

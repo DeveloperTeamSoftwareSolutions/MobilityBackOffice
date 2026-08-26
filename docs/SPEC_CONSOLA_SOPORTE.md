@@ -1,9 +1,9 @@
 # Spec (SDD) — Consola de Soporte
 
 > Fecha: 2026-08-25
-> Estado: fase 1 completa y verificada; listado de la fase 2 completo; override pendiente
+> Estado: fases 1 y 2 completas (rol, linea de tiempo, listado y override de estado); fase 3 pendiente
 > Version objetivo: 2.1.0 (fase 1) · 2.2.0 (fase 2) · 2.3.0 (fase 3)
-> Middleware: v1.240.0 (router de soporte)
+> Middleware: v1.241.0 (router de soporte + override)
 > Branch: `feature/consola-soporte`
 
 ---
@@ -192,7 +192,7 @@ a ser **listado -> detalle** (clic en una fila abre su linea de tiempo).
 `/statuses` deriva los estados de los datos y no de una lista fija: si el flujo agrega
 un estado, el filtro lo muestra sin tocar codigo.
 
-### 7.1 Override de estados — PENDIENTE DE APROBACION
+### 7.1 Override de estados — COMPLETO (v1.241.0 / v2.2.0)
 
 ### 7.1 Cambios en MobilityMiddleWare
 

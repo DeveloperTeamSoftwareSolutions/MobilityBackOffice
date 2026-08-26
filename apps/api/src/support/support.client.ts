@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
@@ -11,8 +12,11 @@ import {
   DocumentsQuery,
   DocumentTimeline,
   DocumentType,
+  OverrideRequest,
+  OverrideResult,
   PagedDocuments,
   StatusCount,
+  StatusOption,
   TimelineQuery,
 } from './support.types';
 
@@ -38,6 +42,13 @@ const TIMELINE_PATH = '/mobility/document-timeline';
 const DOCUMENTS_PATH = '/mobility/support/documents';
 const STATUSES_PATH = '/mobility/support/statuses';
 
+/** Vocabulario VIGENTE de estados del tipo (no los que existen en los datos). */
+const VOCABULARY_PATH = '/mobility/support/vocabulary';
+
+/** Override de estado. Es el unico camino de ESCRITURA del modulo. */
+const OVERRIDE_PATH = (type: DocumentType, guid: string) =>
+  `/mobility/support/documents/${type}/${encodeURIComponent(guid)}/status`;
+
 /** Respuesta del middleware para la bitacora. */
 interface MwTimelineResponse {
   success: boolean;
@@ -54,6 +65,22 @@ interface MwPagedResponse {
 interface MwStatusesResponse {
   success: boolean;
   data: StatusCount[];
+}
+
+interface MwVocabularyResponse {
+  success: boolean;
+  data: StatusOption[];
+}
+
+interface MwOverrideResponse {
+  success: boolean;
+  data: OverrideResult;
+}
+
+/** Mensaje de error que devuelve el middleware, si lo trae. */
+function errorBody(err: unknown): { error?: string; code?: string } | undefined {
+  return (err as { response?: { data?: { error?: string; code?: string } } })
+    ?.response?.data;
 }
 
 function httpStatus(err: unknown): number | undefined {
@@ -160,6 +187,67 @@ export class SupportClient {
     } catch {
       throw new ServiceUnavailableException(
         'Los estados de documentos no están disponibles',
+      );
+    }
+  }
+
+  /**
+   * Vocabulario VIGENTE de estados del tipo de documento.
+   *
+   * Distinto de `listStatuses`: ese devuelve los estados que EXISTEN en los datos
+   * (para filtrar), este los que son VÁLIDOS (para elegir destino en el override).
+   * Sale del middleware y no de una copia local para no duplicar el vocabulario y
+   * quedar desincronizados.
+   */
+  async getVocabulary(type: DocumentType): Promise<StatusOption[]> {
+    try {
+      const res = await firstValueFrom(
+        this.http.get<MwVocabularyResponse>(`${this.base()}${VOCABULARY_PATH}`, {
+          params: { type },
+          headers: this.headers(),
+          timeout: 20000,
+        }),
+      );
+      return res.data.data;
+    } catch {
+      throw new ServiceUnavailableException(
+        'El vocabulario de estados no está disponible',
+      );
+    }
+  }
+
+  /**
+   * Fuerza el estado de un documento. Único camino de ESCRITURA del módulo.
+   *
+   * El middleware valida el vocabulario y exige motivo; acá se traduce su 400 a un
+   * `BadRequestException` con el mismo mensaje, para que soporte vea por qué fue
+   * rechazado en vez de un 503 genérico.
+   */
+  async overrideStatus(req: OverrideRequest): Promise<OverrideResult> {
+    try {
+      const res = await firstValueFrom(
+        this.http.patch<MwOverrideResponse>(
+          `${this.base()}${OVERRIDE_PATH(req.type, req.guid)}`,
+          {
+            toCode: req.toCode,
+            reasonCode: req.reasonCode,
+            reasonNotes: req.reasonNotes,
+            actorEmail: req.actorEmail,
+          },
+          { headers: this.headers(), timeout: 20000 },
+        ),
+      );
+      return res.data.data;
+    } catch (err) {
+      const status = httpStatus(err);
+      if (status === 404) throw new NotFoundException('Documento no encontrado');
+      if (status === 400) {
+        throw new BadRequestException(
+          errorBody(err)?.error ?? 'El cambio de estado fue rechazado',
+        );
+      }
+      throw new ServiceUnavailableException(
+        'No se pudo aplicar el cambio de estado',
       );
     }
   }

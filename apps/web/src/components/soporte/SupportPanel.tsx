@@ -14,6 +14,7 @@ import { DocumentHeader } from './DocumentHeader';
 import { DocumentList } from './DocumentList';
 import { DocumentTimeline } from './DocumentTimeline';
 import { StatusOverrideModal } from './StatusOverrideModal';
+import { DocumentItemsPanel } from './DocumentItemsPanel';
 import './soporte.css';
 
 /** Traduce el fallo HTTP al mensaje que ve soporte. */
@@ -189,6 +190,20 @@ export function SupportPanel() {
     setPage(1);
   }
 
+  /**
+   * El estado del documento pudo moverse por un cambio en una linea o por un
+   * recalculo. Se refresca la fila seleccionada, el listado y la bitacora.
+   */
+  function onDocumentStatusChange(nuevoEstado: string | null) {
+    if (!selected || !nuevoEstado) return;
+    const actualizado = { ...selected, statusCode: nuevoEstado };
+    setSelected(actualizado);
+    setDocuments((prev) =>
+      prev.map((d) => (d.guid === actualizado.guid ? actualizado : d)),
+    );
+    void loadTimeline(actualizado, includeViews, includeMessages);
+  }
+
   function onToggleViews(next: boolean) {
     setIncludeViews(next);
     if (selected) void loadTimeline(selected, next, includeMessages);
@@ -263,6 +278,11 @@ export function SupportPanel() {
           {timeline && !detailError && !detailLoading && (
             <>
               <DocumentHeader document={timeline.document} />
+              <DocumentItemsPanel
+                type={type}
+                guid={selected.guid}
+                onDocumentStatusChange={onDocumentStatusChange}
+              />
               <DocumentTimeline
                 events={timeline.events}
                 includeViews={includeViews}

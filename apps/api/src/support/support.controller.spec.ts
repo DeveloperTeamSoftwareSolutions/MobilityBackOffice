@@ -313,3 +313,128 @@ describe('SupportController — override de estado', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 });
+
+describe('SupportController — estado de lineas', () => {
+  const resultado = {
+    ok: true as const,
+    documentNumber: 'ORD-00005409',
+    lineNumber: 1,
+    statusBefore: 'ReadyForApprove',
+    statusAfter: 'Processed',
+    recomputed: true,
+  };
+  let service: jest.Mocked<
+    Pick<SupportService, 'setItemStatus' | 'listItems' | 'recompute'>
+  >;
+  let controller: SupportController;
+  const req = { user: { email: 'soporte@duwest.com', guid: 'guid-soporte' } };
+
+  beforeEach(() => {
+    service = {
+      setItemStatus: jest.fn().mockResolvedValue(resultado),
+      listItems: jest.fn().mockResolvedValue({ items: [] }),
+      recompute: jest.fn().mockResolvedValue({}),
+    };
+    controller = new SupportController(service as unknown as SupportService);
+  });
+
+  const payload = () => service.setItemStatus.mock.calls[0][0];
+
+  it('acepta approved y rejected', async () => {
+    await controller.setItemStatus(
+      'order',
+      'g',
+      'i',
+      { authorizationStatus: 'approved', reasonNotes: 'ticket' },
+      req,
+    );
+    expect(payload().authorizationStatus).toBe('approved');
+  });
+
+  it('acepta volver la linea a pendiente con null', async () => {
+    await controller.setItemStatus(
+      'order',
+      'g',
+      'i',
+      { authorizationStatus: null, reasonNotes: 'ticket' },
+      req,
+    );
+    expect(payload().authorizationStatus).toBeNull();
+  });
+
+  it('RECHAZA countered: viaja con un precio y soporte no toca precios', async () => {
+    await expect(
+      controller.setItemStatus(
+        'order',
+        'g',
+        'i',
+        { authorizationStatus: 'countered', reasonNotes: 'ticket' },
+        req,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(service.setItemStatus).not.toHaveBeenCalled();
+  });
+
+  it('rechaza una respuesta de vendedor invalida', async () => {
+    await expect(
+      controller.setItemStatus(
+        'order',
+        'g',
+        'i',
+        { sellerResponse: 'maybe', reasonNotes: 'ticket' },
+        req,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('exige motivo', async () => {
+    await expect(
+      controller.setItemStatus(
+        'order',
+        'g',
+        'i',
+        { authorizationStatus: 'approved', reasonNotes: '  ' },
+        req,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(service.setItemStatus).not.toHaveBeenCalled();
+  });
+
+  it('exige al menos un campo de estado', async () => {
+    await expect(
+      controller.setItemStatus('order', 'g', 'i', { reasonNotes: 'ticket' }, req),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('no propaga campos que no vinieron en el body', async () => {
+    await controller.setItemStatus(
+      'order',
+      'g',
+      'i',
+      { authorizationStatus: 'approved', reasonNotes: 'ticket' },
+      req,
+    );
+    expect(payload()).not.toHaveProperty('sellerResponse');
+    expect(payload()).not.toHaveProperty('authorizationRequired');
+  });
+
+  it('el actor sale del token', async () => {
+    await controller.setItemStatus(
+      'order',
+      'g',
+      'i',
+      { authorizationStatus: 'rejected', reasonNotes: 'ticket' },
+      req,
+    );
+    expect(payload().actorEmail).toBe('soporte@duwest.com');
+  });
+
+  it('el recalculo responde con success', async () => {
+    const res = await controller.recompute('order', 'g', req);
+    expect(res).toEqual({ success: true, data: {} });
+    expect(service.recompute).toHaveBeenCalledWith('order', 'g', {
+      email: 'soporte@duwest.com',
+      guid: 'guid-soporte',
+    });
+  });
+});

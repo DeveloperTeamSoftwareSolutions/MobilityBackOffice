@@ -99,3 +99,56 @@ export interface OverrideResult {
   toCode: string;
   isTerminal?: boolean;
 }
+
+/** Línea de un documento. Precio y cantidad se muestran, nunca se editan. */
+export interface SupportItem {
+  guid: string;
+  lineNumber: number;
+  productCode: string | null;
+  productDescription: string | null;
+  unitOfMeasure: string | null;
+  quantity: number | null;
+  unitPrice: number | null;
+  lineTotal: number | null;
+  authorizationRequired: boolean;
+  authorizationStatus: string | null;
+  authorizationReason: string | null;
+  authTriggerReason: string | null;
+  proposedPrice: number | null;
+  proposedPriceCurrency: string | null;
+  decidedByEmail: string | null;
+  decidedAt: string | null;
+  sellerResponse: string | null;
+  sellerResponseReason: string | null;
+  sellerRespondedByEmail: string | null;
+  sellerRespondedAt: string | null;
+}
+
+/** El turno del gerente: hecho de cabecera que las líneas no conocen. */
+export interface ManagerTurn {
+  closed: boolean;
+  resolvedAt: string | null;
+  resolvedByEmail: string | null;
+}
+
+export interface DocumentItems {
+  document: { guid: string; documentNumber: string | null; statusCode: string | null };
+  managerTurn: ManagerTurn;
+  items: SupportItem[];
+}
+
+export interface ItemStatusResult {
+  ok: true;
+  documentNumber: string | null;
+  lineNumber: number;
+  statusBefore: string | null;
+  statusAfter: string | null;
+  recomputed: boolean;
+}
+
+export interface RecomputeResult {
+  ok: true;
+  documentNumber: string | null;
+  statusBefore: string | null;
+  statusAfter: string | null;
+}

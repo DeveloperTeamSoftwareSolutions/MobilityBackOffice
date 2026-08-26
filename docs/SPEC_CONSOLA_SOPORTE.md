@@ -1,9 +1,9 @@
 # Spec (SDD) — Consola de Soporte
 
 > Fecha: 2026-08-25
-> Estado: fases 1 y 2 completas (rol, linea de tiempo, listado y override de estado); fase 3 pendiente
+> Estado: COMPLETA — fases 1, 2 y 3 (rol, linea de tiempo, listado, override de cabecera y estado de lineas)
 > Version objetivo: 2.1.0 (fase 1) · 2.2.0 (fase 2) · 2.3.0 (fase 3)
-> Middleware: v1.241.0 (router de soporte + override)
+> Middleware: v1.242.0 (router de soporte, override y estado de lineas)
 > Branch: `feature/consola-soporte`
 
 ---
@@ -231,7 +231,7 @@ permanente de que un estado forzado sin respaldo en los hechos puede recalculars
 
 ---
 
-## 8. Fase 3 — Banderas de control (pendiente de aprobacion)
+## 8. Fase 3 — Estado de las lineas — COMPLETO (v1.242.0 / v2.3.0)
 
 ### 8.1 Cambios en MobilityMiddleWare
 
@@ -251,11 +251,29 @@ Espejo de los tres, con `@Roles(Soporte)`, motivo obligatorio y traza `SUPPORT_F
 
 ---
 
+
+### 8.3 Decisiones de la fase 3
+
+| # | Decision | Razon |
+|---|---|---|
+| D10 | **`countered` queda afuera** de los estados que soporte puede poner | Una contraoferta viaja con `ProposedPrice`. Estamparla sin precio deja al vendedor viendo una contraoferta vacia, y soporte no toca precios (restriccion del solicitante) |
+| D11 | Se escriben (y limpian) los **campos acompañantes**: `DecidedByEmail`, `DecidedAt`, `SellerRespondedByEmail`, `SellerRespondedAt` | No son un extra: sin ellos queda una linea aprobada por nadie, que es la incoherencia que este modulo viene a eliminar |
+| D12 | El cambio de linea **SI dispara `recomputeStatus`**; el override de cabecera no | Es la diferencia entre reparacion limpia y override duro (§4). Corregidos los hechos, el estado derivado queda firme |
+| D13 | La consola **muestra** si el turno del gerente esta cerrado, pero **no permite cerrarlo** | Sin mostrarlo, la consola miente por omision: con todas las lineas decididas el documento sigue en `ReadyForApprove` y parece que la herramienta fallo. Permitir cerrarlo es otro boton con su propio riesgo; se evalua si el uso lo pide |
+
+### 8.4 Verificado contra QATEST (2026-08-25)
+
+- Cambio de linea y **reversion completa**: estado, `DecidedByEmail` y `DecidedAt` vuelven a null.
+- `countered` rechazado con 400 y la lista de valores permitidos.
+- Item de otro documento devuelve 404 (la linea se valida contra el documento de la URL).
+- `recompute` de ORD-00005413: `ReadyForApprove` a `Draft`.
+- ORD-00005411, con sus 2 lineas ya decididas y el turno abierto, sigue en
+  `ReadyForApprove`: confirma en vivo la trampa que motiva D13.
 ## 9. Riesgos
 
 | # | Riesgo | Mitigacion |
 |---|---|---|
-| R1 | **`SellerResponse` falta en `BusinessQuoteItems` en PROD** (item 2 del `DEPLOY_SQL_PENDIENTE.md` del Middleware). Sin esa columna el recalculo de cotizaciones falla con "Invalid column name" | Aplicar la columna **antes** de desplegar la fase 3 para cotizaciones |
+| R1 | **BLOQUEANTE. `SellerResponse` falta en `BusinessQuoteItems` en PROD** (item 2 del `DEPLOY_SQL_PENDIENTE.md` del Middleware). Sin esa columna el recalculo de cotizaciones falla con "Invalid column name" | Aplicar la columna **antes** de desplegar la fase 3 para cotizaciones |
 | R2 | La app resuelve **un solo rol por usuario**. Alguien con `MOBILITYBO_ADMIN` + `MOBILITYBO_SUPPORT` pierde el acceso a Regiones (gana Soporte por D6) | Quien necesite ambos accesos va con SuperAdmin. Documentado en `ROLES_Y_PERMISOS.md` |
 | R3 | `MIDDLEWARE_API_KEY` pasa de opcional a **obligatoria** al llegar la fase 2 | Configurarla en ambos lados y actualizar `ENV_VARIABLES.md` en esa fase |
 | R4 | Reabrir una orden `Invoiced` o `Cancelled` **no se propaga a SAP**: quedan desincronizados | Habilitado por D4, con doble confirmacion y motivo obligatorio. El riesgo es aceptado, no eliminado |

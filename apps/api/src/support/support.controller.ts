@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Patch,
+  Post,
   Query,
   Req,
   UseGuards,
@@ -15,8 +16,12 @@ import { Roles } from '../auth/roles.decorator';
 import { BackOfficeRole } from '../auth/backoffice-role.enum';
 import { SupportService, Actor } from './support.service';
 import {
+  ALLOWED_AUTH_STATUS,
+  ALLOWED_SELLER_RESPONSE,
+  AuthorizationStatus,
   DocumentType,
   isDocumentType,
+  SellerResponse,
   SORTABLE_FIELDS,
 } from './support.types';
 
@@ -171,6 +176,106 @@ export class SupportController {
         actorEmail: who.email ?? null,
       },
       who,
+    );
+    return { success: true, data };
+  }
+
+  // GET /api/support/documents/:type/:guid/items — lineas + turno del gerente
+  @Get('documents/:type/:guid/items')
+  async items(@Param('type') type: string, @Param('guid') guid: string) {
+    const data = await this.support.listItems(
+      this.parseType(type),
+      this.parseGuid(guid),
+    );
+    return { success: true, data };
+  }
+
+  // PATCH /api/support/documents/:type/:guid/items/:itemGuid — estado de UNA linea
+  //
+  // Solo estados. Precio, cantidad, descuento y producto no se leen del body: no
+  // estan en la firma, asi que aunque el cliente los mande no llegan a ningun lado.
+  @Patch('documents/:type/:guid/items/:itemGuid')
+  async setItemStatus(
+    @Param('type') type: string,
+    @Param('guid') guid: string,
+    @Param('itemGuid') itemGuid: string,
+    @Body()
+    body: {
+      authorizationStatus?: string | null;
+      sellerResponse?: string | null;
+      authorizationRequired?: boolean;
+      reasonNotes?: string;
+    },
+    @Req() req: AuthedRequest,
+  ) {
+    const reasonNotes = (body?.reasonNotes ?? '').trim();
+    if (!reasonNotes) {
+      throw new BadRequestException('El motivo es obligatorio');
+    }
+
+    const tocaAuth = body?.authorizationStatus !== undefined;
+    const tocaSeller = body?.sellerResponse !== undefined;
+    const tocaRequired = body?.authorizationRequired !== undefined;
+
+    if (!tocaAuth && !tocaSeller && !tocaRequired) {
+      throw new BadRequestException(
+        'Hay que enviar al menos uno de: authorizationStatus, sellerResponse, authorizationRequired',
+      );
+    }
+
+    // Se valida acá además del middleware para que el rechazo no viaje y para que
+    // el mensaje nombre los valores permitidos, que es lo que la UI muestra.
+    if (tocaAuth) {
+      const value = (body.authorizationStatus || null) as AuthorizationStatus;
+      if (!ALLOWED_AUTH_STATUS.includes(value)) {
+        throw new BadRequestException(
+          `Estado de línea inválido. Permitidos: ${ALLOWED_AUTH_STATUS.map((v) => v ?? 'pendiente').join(', ')}`,
+        );
+      }
+    }
+    if (tocaSeller) {
+      const value = (body.sellerResponse || null) as SellerResponse;
+      if (!ALLOWED_SELLER_RESPONSE.includes(value)) {
+        throw new BadRequestException(
+          `Respuesta del vendedor inválida. Permitidos: ${ALLOWED_SELLER_RESPONSE.map((v) => v ?? 'sin responder').join(', ')}`,
+        );
+      }
+    }
+
+    const who = actor(req);
+    const data = await this.support.setItemStatus(
+      {
+        type: this.parseType(type),
+        guid: this.parseGuid(guid),
+        itemGuid: this.parseGuid(itemGuid),
+        ...(tocaAuth
+          ? { authorizationStatus: (body.authorizationStatus || null) as AuthorizationStatus }
+          : {}),
+        ...(tocaSeller
+          ? { sellerResponse: (body.sellerResponse || null) as SellerResponse }
+          : {}),
+        ...(tocaRequired
+          ? { authorizationRequired: Boolean(body.authorizationRequired) }
+          : {}),
+        reasonNotes,
+        actorEmail: who.email ?? null,
+      },
+      who,
+    );
+    return { success: true, data };
+  }
+
+  // POST /api/support/documents/:type/:guid/recompute — recalcula desde los hechos
+  @Post('documents/:type/:guid/recompute')
+  async recompute(
+    @Param('type') type: string,
+    @Param('guid') guid: string,
+    @Req() req: AuthedRequest,
+  ) {
+    const data = await this.support.recompute(
+      this.parseType(type),
+      this.parseGuid(guid),
+      actor(req),
     );
     return { success: true, data };
   }

@@ -22,7 +22,7 @@ usa el dev server de Vite en `:5183`, que proxyea `/api` al backend.
 | Regiones comerciales | **completo** (v1.0.0) | SUPERADMIN, Administrador |
 | Documentacion del RAG (embebido) | **completo** (v1.1.0) | SUPERADMIN, Marketing |
 | Templates de WhatsApp (Marketing) | pendiente | SUPERADMIN, Marketing |
-| Consola de soporte | **fases 1 y 2 completas** (v2.2.0) | SUPERADMIN, Soporte |
+| Consola de soporte | **completa** (v2.3.0) | SUPERADMIN, Soporte |
 
 ## Puesta en marcha
 

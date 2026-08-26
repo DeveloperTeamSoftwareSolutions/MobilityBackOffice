@@ -517,3 +517,14 @@
 .bo-sp__button--danger:hover:not(:disabled) {
   background: #9b2c2c;
 }
+
+/* Edición inline del estado de una línea */
+.bo-sp__item-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bo-sp__item-edit .bo-sp__input {
+  min-width: 200px;
+}

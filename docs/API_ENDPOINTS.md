@@ -1,7 +1,7 @@
 # API — Mobility BackOffice
 
 > Ultima actualizacion: 2026-08-25
-> Version: 2.2.0
+> Version: 2.3.0
 
 Toda respuesta incluye `success`. Los errores siguen el formato de Nest:
 `{ message, error, statusCode }`.
@@ -94,6 +94,9 @@ scope de vendedor que limita al resto del ecosistema.
 | GET | `/api/support/documents/:type/:number/timeline` | Bitacora unificada. Query: `includeViews`, `includeMessages` (`1`/`true`) |
 | GET | `/api/support/vocabulary` | Estados VALIDOS del tipo (para elegir destino del override), con su marca de terminal |
 | PATCH | `/api/support/documents/:type/:guid/status` | **Override de estado.** Body `{ toCode, reasonNotes, reasonCode? }`. 400 si falta `toCode`, si el motivo viene vacio o si `toCode` no pertenece al vocabulario; 404 si el documento no existe |
+| GET | `/api/support/documents/:type/:guid/items` | Lineas del documento + `managerTurn` (si el gerente cerro su turno) |
+| PATCH | `/api/support/documents/:type/:guid/items/:itemGuid` | **Estado de una linea.** Body `{ authorizationStatus?, sellerResponse?, authorizationRequired?, reasonNotes }`. Solo estados: precio, cantidad, descuento y producto NO se leen. `countered` es rechazado |
+| POST | `/api/support/documents/:type/:guid/recompute` | Recalcula el estado del documento a partir de los hechos |
 
 ### Orden de rutas
 
@@ -124,3 +127,5 @@ Las escrituras dejan traza en `AuditLogs` con `AppId='MobilityBackOffice'`:
 | `REGION_CEBE_UNLINK` | `regions` | `ContinentProfitCenter` | codigo del CEBE |
 | `REGION_SYNC` | `regions` | `ContinentProfitCenter` | — |
 | `SUPPORT_STATUS_OVERRIDE` | `support` | `BusinessOrders` / `BusinessQuotes` | numero del documento |
+| `SUPPORT_ITEM_OVERRIDE` | `support` | `BusinessOrderItems` / `BusinessQuoteItems` | numero del documento |
+| `SUPPORT_RECOMPUTE` | `support` | `BusinessOrders` / `BusinessQuotes` | numero del documento (solo si el estado cambio) |

@@ -9,12 +9,16 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { middlewareBase, middlewareHeaders } from '../common/middleware-request';
 import {
+  DocumentItems,
   DocumentsQuery,
   DocumentTimeline,
   DocumentType,
+  ItemStatusRequest,
+  ItemStatusResult,
   OverrideRequest,
   OverrideResult,
   PagedDocuments,
+  RecomputeResult,
   StatusCount,
   StatusOption,
   TimelineQuery,
@@ -45,9 +49,21 @@ const STATUSES_PATH = '/mobility/support/statuses';
 /** Vocabulario VIGENTE de estados del tipo (no los que existen en los datos). */
 const VOCABULARY_PATH = '/mobility/support/vocabulary';
 
-/** Override de estado. Es el unico camino de ESCRITURA del modulo. */
+/** Override de estado de cabecera. */
 const OVERRIDE_PATH = (type: DocumentType, guid: string) =>
   `/mobility/support/documents/${type}/${encodeURIComponent(guid)}/status`;
+
+/** Lineas del documento con su estado + el turno del gerente. */
+const ITEMS_PATH = (type: DocumentType, guid: string) =>
+  `/mobility/support/documents/${type}/${encodeURIComponent(guid)}/items`;
+
+/** Estado de UNA linea. */
+const ITEM_PATH = (type: DocumentType, guid: string, itemGuid: string) =>
+  `${ITEMS_PATH(type, guid)}/${encodeURIComponent(itemGuid)}`;
+
+/** Recalculo de la cabecera a partir de los hechos. */
+const RECOMPUTE_PATH = (type: DocumentType, guid: string) =>
+  `/mobility/support/documents/${type}/${encodeURIComponent(guid)}/recompute`;
 
 /** Respuesta del middleware para la bitacora. */
 interface MwTimelineResponse {
@@ -75,6 +91,21 @@ interface MwVocabularyResponse {
 interface MwOverrideResponse {
   success: boolean;
   data: OverrideResult;
+}
+
+interface MwItemsResponse {
+  success: boolean;
+  data: DocumentItems;
+}
+
+interface MwItemStatusResponse {
+  success: boolean;
+  data: ItemStatusResult;
+}
+
+interface MwRecomputeResponse {
+  success: boolean;
+  data: RecomputeResult;
 }
 
 /** Mensaje de error que devuelve el middleware, si lo trae. */
@@ -249,6 +280,83 @@ export class SupportClient {
       throw new ServiceUnavailableException(
         'No se pudo aplicar el cambio de estado',
       );
+    }
+  }
+
+  /** Lineas del documento con su estado y el turno del gerente. */
+  async listItems(type: DocumentType, guid: string): Promise<DocumentItems> {
+    try {
+      const res = await firstValueFrom(
+        this.http.get<MwItemsResponse>(`${this.base()}${ITEMS_PATH(type, guid)}`, {
+          headers: this.headers(),
+          timeout: 20000,
+        }),
+      );
+      return res.data.data;
+    } catch (err) {
+      if (httpStatus(err) === 404) throw new NotFoundException('Documento no encontrado');
+      throw new ServiceUnavailableException('Las líneas del documento no están disponibles');
+    }
+  }
+
+  /**
+   * Cambia el estado de una línea. Solo manda los campos de estado que vinieron:
+   * lo que no se envía, no se toca. Precio y cantidad ni se incluyen.
+   */
+  async setItemStatus(req: ItemStatusRequest): Promise<ItemStatusResult> {
+    const body: Record<string, unknown> = {
+      reasonNotes: req.reasonNotes,
+      actorEmail: req.actorEmail,
+    };
+    if (req.authorizationStatus !== undefined) {
+      body.authorizationStatus = req.authorizationStatus;
+    }
+    if (req.sellerResponse !== undefined) body.sellerResponse = req.sellerResponse;
+    if (req.authorizationRequired !== undefined) {
+      body.authorizationRequired = req.authorizationRequired;
+    }
+
+    try {
+      const res = await firstValueFrom(
+        this.http.patch<MwItemStatusResponse>(
+          `${this.base()}${ITEM_PATH(req.type, req.guid, req.itemGuid)}`,
+          body,
+          { headers: this.headers(), timeout: 20000 },
+        ),
+      );
+      return res.data.data;
+    } catch (err) {
+      const status = httpStatus(err);
+      if (status === 404) {
+        throw new NotFoundException(
+          errorBody(err)?.error ?? 'Documento o línea no encontrados',
+        );
+      }
+      if (status === 400) {
+        throw new BadRequestException(
+          errorBody(err)?.error ?? 'El cambio de estado de la línea fue rechazado',
+        );
+      }
+      throw new ServiceUnavailableException(
+        'No se pudo aplicar el cambio en la línea',
+      );
+    }
+  }
+
+  /** Recalcula la cabecera a partir de los hechos. No cambia nada por sí mismo. */
+  async recompute(type: DocumentType, guid: string): Promise<RecomputeResult> {
+    try {
+      const res = await firstValueFrom(
+        this.http.post<MwRecomputeResponse>(
+          `${this.base()}${RECOMPUTE_PATH(type, guid)}`,
+          {},
+          { headers: this.headers(), timeout: 20000 },
+        ),
+      );
+      return res.data.data;
+    } catch (err) {
+      if (httpStatus(err) === 404) throw new NotFoundException('Documento no encontrado');
+      throw new ServiceUnavailableException('No se pudo recalcular el documento');
     }
   }
 }

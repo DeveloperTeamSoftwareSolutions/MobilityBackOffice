@@ -10,6 +10,9 @@ import {
   StatusOption,
   SupportDocument,
   OverrideResult,
+  DocumentItems,
+  ItemStatusResult,
+  RecomputeResult,
 } from './soporte.types';
 
 interface ApiData<T> {
@@ -104,6 +107,51 @@ export async function overrideStatus(
   const res = await httpClient.patch<ApiData<OverrideResult>>(
     `/api/support/documents/${type}/${encodeURIComponent(guid)}/status`,
     { toCode, reasonNotes, reasonCode },
+  );
+  return res.data.data;
+}
+
+/** Líneas del documento con su estado y el turno del gerente. */
+export async function listItems(
+  type: DocumentType,
+  guid: string,
+): Promise<DocumentItems> {
+  const res = await httpClient.get<ApiData<DocumentItems>>(
+    `/api/support/documents/${type}/${encodeURIComponent(guid)}/items`,
+  );
+  return res.data.data;
+}
+
+/**
+ * Cambia el estado de una línea. Solo se mandan los campos de estado presentes:
+ * lo que no se envía no se toca. Precio y cantidad no forman parte del contrato.
+ */
+export async function setItemStatus(
+  type: DocumentType,
+  guid: string,
+  itemGuid: string,
+  cambios: {
+    authorizationStatus?: string | null;
+    sellerResponse?: string | null;
+    authorizationRequired?: boolean;
+  },
+  reasonNotes: string,
+): Promise<ItemStatusResult> {
+  const res = await httpClient.patch<ApiData<ItemStatusResult>>(
+    `/api/support/documents/${type}/${encodeURIComponent(guid)}/items/${encodeURIComponent(itemGuid)}`,
+    { ...cambios, reasonNotes },
+  );
+  return res.data.data;
+}
+
+/** Recalcula el estado del documento a partir de los hechos. */
+export async function recompute(
+  type: DocumentType,
+  guid: string,
+): Promise<RecomputeResult> {
+  const res = await httpClient.post<ApiData<RecomputeResult>>(
+    `/api/support/documents/${type}/${encodeURIComponent(guid)}/recompute`,
+    {},
   );
   return res.data.data;
 }

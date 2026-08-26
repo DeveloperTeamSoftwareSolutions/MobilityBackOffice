@@ -147,3 +147,82 @@ export interface OverrideResult {
   toCode: string;
   isTerminal?: boolean;
 }
+
+/**
+ * Estados de linea que soporte puede escribir. `countered` queda AFUERA: una
+ * contraoferta viaja con un precio propuesto, y soporte no toca precios.
+ */
+export const ALLOWED_AUTH_STATUS = [null, 'approved', 'rejected'] as const;
+export const ALLOWED_SELLER_RESPONSE = [null, 'accepted', 'rejected'] as const;
+
+export type AuthorizationStatus = (typeof ALLOWED_AUTH_STATUS)[number];
+export type SellerResponse = (typeof ALLOWED_SELLER_RESPONSE)[number];
+
+/** Linea de un documento. Precio y cantidad viajan SOLO para mostrarlos. */
+export interface SupportItem {
+  guid: string;
+  lineNumber: number;
+  productCode: string | null;
+  productDescription: string | null;
+  unitOfMeasure: string | null;
+  quantity: number | null;
+  unitPrice: number | null;
+  lineTotal: number | null;
+  authorizationRequired: boolean;
+  authorizationStatus: string | null;
+  authorizationReason: string | null;
+  authTriggerReason: string | null;
+  proposedPrice: number | null;
+  proposedPriceCurrency: string | null;
+  decidedByEmail: string | null;
+  decidedAt: string | null;
+  sellerResponse: string | null;
+  sellerResponseReason: string | null;
+  sellerRespondedByEmail: string | null;
+  sellerRespondedAt: string | null;
+}
+
+/**
+ * El turno del gerente. Es un hecho de CABECERA que las lineas no conocen: sin la
+ * fila de resolucion el documento se queda en `ReadyForApprove` aunque todas las
+ * lineas esten decididas. Se expone para que soporte entienda por que no avanza.
+ */
+export interface ManagerTurn {
+  closed: boolean;
+  resolvedAt: string | null;
+  resolvedByEmail: string | null;
+}
+
+export interface DocumentItems {
+  document: { guid: string; documentNumber: string | null; statusCode: string | null };
+  managerTurn: ManagerTurn;
+  items: SupportItem[];
+}
+
+/** Cambio de estado de UNA linea. Solo estados. */
+export interface ItemStatusRequest {
+  type: DocumentType;
+  guid: string;
+  itemGuid: string;
+  authorizationStatus?: AuthorizationStatus;
+  sellerResponse?: SellerResponse;
+  authorizationRequired?: boolean;
+  reasonNotes: string;
+  actorEmail: string | null;
+}
+
+export interface ItemStatusResult {
+  ok: true;
+  documentNumber: string | null;
+  lineNumber: number;
+  statusBefore: string | null;
+  statusAfter: string | null;
+  recomputed: boolean;
+}
+
+export interface RecomputeResult {
+  ok: true;
+  documentNumber: string | null;
+  statusBefore: string | null;
+  statusAfter: string | null;
+}

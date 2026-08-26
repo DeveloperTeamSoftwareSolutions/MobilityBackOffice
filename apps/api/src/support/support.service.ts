@@ -2,12 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { SupportClient } from './support.client';
 import { AuditService } from '../audit/audit.service';
 import {
+  DocumentItems,
   DocumentsQuery,
   DocumentTimeline,
   DocumentType,
+  ItemStatusRequest,
+  ItemStatusResult,
   OverrideRequest,
   OverrideResult,
   PagedDocuments,
+  RecomputeResult,
   StatusCount,
   StatusOption,
   TimelineDocument,
@@ -107,6 +111,85 @@ export class SupportService {
         .filter(Boolean)
         .join(' | '),
     });
+
+    return result;
+  }
+
+  /** Lineas del documento con su estado y el turno del gerente. */
+  listItems(type: DocumentType, guid: string): Promise<DocumentItems> {
+    return this.client.listItems(type, guid);
+  }
+
+  /**
+   * Cambia el estado de una linea y deja traza.
+   *
+   * A diferencia del override de cabecera, el middleware recalcula el estado del
+   * documento despues de este cambio: por eso el detalle registra el estado antes y
+   * despues, que es lo que le permite a soporte ver si el arreglo tuvo efecto.
+   */
+  async setItemStatus(
+    req: ItemStatusRequest,
+    actor: Actor,
+  ): Promise<ItemStatusResult> {
+    const result = await this.client.setItemStatus(req);
+
+    const cambios = [
+      req.authorizationStatus !== undefined
+        ? `autorizacion=${req.authorizationStatus ?? 'pendiente'}`
+        : null,
+      req.sellerResponse !== undefined
+        ? `vendedor=${req.sellerResponse ?? 'sin responder'}`
+        : null,
+      req.authorizationRequired !== undefined
+        ? `requiereAutorizacion=${req.authorizationRequired}`
+        : null,
+    ].filter(Boolean);
+
+    await this.audit.safeRecord({
+      action: 'SUPPORT_ITEM_OVERRIDE',
+      entity: req.type === 'quote' ? 'BusinessQuoteItems' : 'BusinessOrderItems',
+      entityId: result.documentNumber,
+      category: 'support',
+      guidUsers: actor.guid ?? null,
+      detail: [
+        actor.email ?? 'desconocido',
+        `documento=${result.documentNumber}`,
+        `linea=${result.lineNumber}`,
+        ...cambios,
+        `estado=${result.statusBefore ?? 'sin estado'}->${result.statusAfter ?? 'sin estado'}`,
+        `motivo=${req.reasonNotes}`,
+      ].join(' | '),
+    });
+
+    return result;
+  }
+
+  /**
+   * Recalcula la cabecera desde los hechos. Se audita igual que una escritura
+   * aunque no cambie datos por si mismo: puede mover el estado del documento, y
+   * saber quien lo disparo importa cuando alguien pregunta por que cambio.
+   */
+  async recompute(
+    type: DocumentType,
+    guid: string,
+    actor: Actor,
+  ): Promise<RecomputeResult> {
+    const result = await this.client.recompute(type, guid);
+
+    if (result.statusBefore !== result.statusAfter) {
+      await this.audit.safeRecord({
+        action: 'SUPPORT_RECOMPUTE',
+        entity: type === 'quote' ? 'BusinessQuotes' : 'BusinessOrders',
+        entityId: result.documentNumber,
+        category: 'support',
+        guidUsers: actor.guid ?? null,
+        detail: [
+          actor.email ?? 'desconocido',
+          `documento=${result.documentNumber}`,
+          `estado=${result.statusBefore ?? 'sin estado'}->${result.statusAfter ?? 'sin estado'}`,
+        ].join(' | '),
+      });
+    }
 
     return result;
   }

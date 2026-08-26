@@ -4,4 +4,4 @@
  * Se expone en GET /api/health y se muestra en la TopBar.
  */
 export const APP_NAME = 'MobilityBackOffice';
-export const APP_VERSION = '2.2.0';
+export const APP_VERSION = '2.3.0';

@@ -146,11 +146,20 @@ export function DocumentTimeline({ events, includeViews }: Props) {
                 filas, y con los hitos juntos no se sabía a cuál pertenecía cada uno.
               */}
               <span className="bo-sp__event-meta">
+                {/*
+                  El actor NO se trunca. Antes se cortaba a 260px y una dirección
+                  larga terminaba en puntos suspensivos, justo en el dato que soporte
+                  necesita leer entero. El rol va en su propio `span` para que, si no
+                  entra al lado del mail, baje debajo por el salto natural de línea en
+                  vez de comerse el texto.
+                */}
                 <span className="bo-sp__event-who">
                   {event.actorEmail ?? 'Sin actor registrado'}
-                  {event.actorRole
-                    ? ` · ${ROLE_LABEL[event.actorRole] ?? event.actorRole}`
-                    : ''}
+                  {event.actorRole && (
+                    <span className="bo-sp__event-role">
+                      {ROLE_LABEL[event.actorRole] ?? event.actorRole}
+                    </span>
+                  )}
                 </span>
                 {/*
                   El origen es de qué tabla salió el dato: soporte lo necesita solo

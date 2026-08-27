@@ -209,7 +209,7 @@
   content: '';
   position: absolute;
   left: 5px;
-  top: 18px;
+  top: 20px;
   bottom: 0;
   width: 2px;
   background: var(--bo-border);
@@ -222,7 +222,8 @@
   flex: 0 0 12px;
   width: 12px;
   height: 12px;
-  margin-top: 5px;
+  /* Alineado con la primera linea del cuerpo, que arranca 4px mas abajo. */
+  margin-top: 7px;
   border-radius: 50%;
   background: var(--bo-text-muted);
   z-index: 1;
@@ -263,8 +264,8 @@
   gap: 4px;
   flex: 1;
   min-width: 0;
-  padding: 2px 8px 10px 8px;
-  margin-bottom: 10px;
+  padding: 4px 8px 14px 8px;
+  margin-bottom: 14px;
   border-bottom: 1px solid var(--bo-border);
 }
 .bo-sp__event:last-child .bo-sp__event-body {
@@ -336,14 +337,27 @@
   font-size: 12px;
   color: var(--bo-text-muted);
 }
+/*
+  El actor se muestra COMPLETO. Truncarlo a 260px cortaba las direcciones largas
+  justo en el dato que soporte necesita leer entero. Si no entra, el mail parte por
+  caracteres y el rol baja solo.
+*/
 .bo-sp__event-who {
   margin: 0;
   font-size: 12px;
   color: var(--bo-text-muted);
+  overflow-wrap: anywhere;
+}
+/*
+  El rol es un `span` aparte y no texto pegado al mail: asi el salto de linea cae
+  entre los dos y nunca en medio de la direccion. El separador es CSS para que no
+  quede un "·" suelto al principio de un renglon.
+*/
+.bo-sp__event-role {
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 260px;
+}
+.bo-sp__event-role::before {
+  content: ' · ';
 }
 .bo-sp__event-source {
   margin: 0;
@@ -457,10 +471,16 @@
   columna se leia partida en dos. `inline-flex` en el boton de orden ignora el
   `text-align` del `th`, asi que ademas hay que empujarlo con `margin-left: auto`.
 */
-.bo-sp__th--number {
+/*
+  Va calificado con `.bo-sp__table th` a proposito. Como clase suelta pesa (0,1,0) y
+  `.bo-sp__table th` pesa (0,1,1): el `text-align: left` del encabezado general
+  ganaba por especificidad aunque esta regla estuviera mas abajo, y la alineacion no
+  se aplicaba nunca.
+*/
+.bo-sp__table th.bo-sp__th--number {
   text-align: right;
 }
-.bo-sp__th--number .bo-sp__th-button {
+.bo-sp__table th.bo-sp__th--number .bo-sp__th-button {
   margin-left: auto;
 }
 .bo-sp__cell-sub {

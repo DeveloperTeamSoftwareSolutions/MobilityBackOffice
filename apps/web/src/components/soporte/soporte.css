@@ -197,15 +197,15 @@
 .bo-sp__event {
   position: relative;
   display: flex;
-  gap: 16px;
-  padding: 0 0 20px 0;
+  gap: 12px;
+  padding: 0 0 8px 0;
 }
 /* Riel vertical: no se dibuja en el último hito. */
 .bo-sp__event::before {
   content: '';
   position: absolute;
   left: 5px;
-  top: 16px;
+  top: 14px;
   bottom: 0;
   width: 2px;
   background: var(--bo-border);
@@ -249,18 +249,27 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding-bottom: 4px;
   flex: 1;
   min-width: 0;
 }
-.bo-sp__event-head {
+/*
+  Un hito = una fila. El título se queda con el espacio sobrante y el resto se
+  acomoda a su derecha; en pantallas angostas la fila se parte sola en vez de
+  desbordar.
+*/
+.bo-sp__event-row {
   display: flex;
   align-items: baseline;
   gap: 10px;
   flex-wrap: wrap;
 }
+/*
+  El ancho fijo del tipo alinea los títulos en una columna, que es lo que hace
+  legible una lista larga: el ojo baja recto en vez de zigzaguear.
+*/
 .bo-sp__event-kind {
-  font-size: 12px;
+  flex: 0 0 108px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -269,34 +278,59 @@
 .bo-sp__event-time {
   font-size: 12px;
   color: var(--bo-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .bo-sp__event-title {
+  flex: 1 1 240px;
+  min-width: 0;
   margin: 0;
   font-size: 14px;
   font-weight: 600;
   color: var(--bo-text);
 }
+/* El detalle es el único que baja de renglón, y solo cuando existe. */
 .bo-sp__event-detail {
-  margin: 0;
+  margin: 0 0 0 118px;
   font-size: 13px;
   color: var(--bo-text);
 }
+/*
+  `event-actor` lo usan tambien los otros paneles para sus notas al pie, que son
+  parrafos largos. Por eso el actor de la linea de tiempo tiene su propia clase:
+  truncar a 260px alli es correcto, en un parrafo seria un bug.
+*/
 .bo-sp__event-actor {
   margin: 0;
   font-size: 12px;
   color: var(--bo-text-muted);
 }
+.bo-sp__event-who {
+  margin: 0;
+  font-size: 12px;
+  color: var(--bo-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+}
 .bo-sp__event-source {
   margin: 0;
   font-size: 11px;
   color: var(--bo-text-muted);
-  opacity: 0.75;
+  opacity: 0.7;
+  white-space: nowrap;
 }
 
+/*
+  Los dos toggles van uno al lado del otro. Apilados se comian dos renglones enteros
+  arriba de la ficha para ofrecer dos casillas que caben de sobra en uno.
+*/
 .bo-sp__toggles {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 20px;
 }
 
 /* Volver al listado */
@@ -595,28 +629,29 @@
 }
 
 /* Acciones: una fila compacta por acción */
+/*
+  Las acciones van en FILA y envuelven. Antes cada una era una franja de ancho
+  completo con su rotulo, su globo y un boton "Aplicar" al final: cuatro acciones
+  ocupaban media pantalla para ofrecer cuatro clics.
+*/
 .bo-sp__actions {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
 }
 .bo-sp__action {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid var(--bo-border);
-  border-radius: var(--bo-radius-sm);
+  gap: 4px;
 }
-.bo-sp__action--off {
-  opacity: 0.55;
-}
-.bo-sp__action-label {
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--bo-text);
+/* Recuento de las que no aplican: nota al pie en la cabecera, no una opcion mas. */
+.bo-sp__action-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--bo-text-muted);
 }
 .bo-sp__button--sm {
   height: 30px;
@@ -656,7 +691,11 @@
   font-weight: 400;
   line-height: 1.45;
   text-align: left;
-  white-space: normal;
+  /*
+    `pre-line` y no `normal`: hay globos que listan varios items (el de las acciones
+    que no aplican), y con `normal` quedaban todos pegados en un parrafo.
+  */
+  white-space: pre-line;
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.12s ease;

@@ -26,8 +26,11 @@ interface Props {
  * calcule el estado. Por eso no puede producir un estado inalcanzable, que es lo que
  * sí puede pasar forzando el estado a mano.
  *
- * Las acciones que no aplican se muestran deshabilitadas CON el motivo, en vez de
- * ocultarse: saber por qué no se puede es tan útil como poder.
+ * Las que no aplican **no se dibujan**. Antes se mostraban deshabilitadas con su
+ * motivo, y el resultado era una lista de botones grises que el usuario tenía que
+ * descartar de a uno para encontrar el que sí servía. El motivo no se pierde: queda
+ * en una sola línea con el detalle a un hover, que ocupa un renglón en vez de tres
+ * por acción.
  */
 export function DocumentActionsPanel({
   type,
@@ -80,51 +83,66 @@ export function DocumentActionsPanel({
   if (error && !data) return <p className="bo-sp__error">{error}</p>;
   if (!data) return null;
 
+  const disponibles = data.actions.filter((a) => a.available);
+  const noDisponibles = data.actions.filter((a) => !a.available);
+
   return (
     <section className="bo-sp__card">
       <header className="bo-sp__card-head">
         <h3 className="bo-sp__doc-number">
-          ¿Qué querés hacer?
+          Acciones
           <InfoTip texto="Cada acción corrige los datos del documento y deja que el sistema recalcule el estado. Por eso el resultado siempre queda firme: el documento no puede terminar en un estado que nadie vea." />
         </h3>
+        {/*
+          El recuento de las que no aplican va en la cabecera y no en la lista: es
+          una nota al pie, no una opción. El detalle de cada una queda en el globo.
+        */}
+        {noDisponibles.length > 0 && (
+          <span className="bo-sp__action-note">
+            {noDisponibles.length}{' '}
+            {noDisponibles.length === 1 ? 'acción no aplica' : 'acciones no aplican'}
+            <InfoTip
+              alineacion="derecha"
+              texto={noDisponibles
+                .map((a) => `${a.label}: ${a.reason ?? 'no aplica a este documento.'}`)
+                .join('\n')}
+            />
+          </span>
+        )}
       </header>
 
       {aviso && <p className="bo-sp__modal-warning">{aviso}</p>}
       {error && <p className="bo-sp__error">{error}</p>}
 
-      <div className="bo-sp__actions">
-        {data.actions.map((a) => (
-          <div
-            key={a.action + (a.target ?? "")}
-            className={`bo-sp__action ${a.available ? '' : 'bo-sp__action--off'}`}
-          >
-            <span className="bo-sp__action-label">{a.label}</span>
-            {/*
-              El efecto y el motivo de indisponibilidad van al globo, no a la
-              pantalla: eran tres bloques de texto por accion compitiendo entre si.
-            */}
-            <InfoTip
-              texto={
-                a.available
-                  ? a.effect
-                  : `No disponible: ${a.reason ?? 'no aplica a este documento.'}`
-              }
-            />
-            <button
-              type="button"
-              className={`bo-sp__button bo-sp__button--sm ${a.warning ? 'bo-sp__button--danger' : ''}`}
-              disabled={!a.available || ejecutando}
-              onClick={() => {
-                setElegida(a);
-                setMotivo('');
-                setAviso(null);
-              }}
-            >
-              Aplicar
-            </button>
-          </div>
-        ))}
-      </div>
+      {disponibles.length === 0 ? (
+        <p className="bo-sp__event-actor">
+          No hay ninguna acción disponible sobre este documento.
+        </p>
+      ) : (
+        <div className="bo-sp__actions">
+          {disponibles.map((a) => (
+            <div key={a.action + (a.target ?? '')} className="bo-sp__action">
+              {/*
+                El rótulo ES el botón: antes había un texto y un "Aplicar" al lado
+                diciendo lo mismo, y cada acción se comía una fila entera.
+              */}
+              <button
+                type="button"
+                className={`bo-sp__button bo-sp__button--sm ${a.warning ? 'bo-sp__button--danger' : ''}`}
+                disabled={ejecutando}
+                onClick={() => {
+                  setElegida(a);
+                  setMotivo('');
+                  setAviso(null);
+                }}
+              >
+                {a.label}
+              </button>
+              <InfoTip texto={a.effect} />
+            </div>
+          ))}
+        </div>
+      )}
 
       {elegida && (
         <div className="bo-sp__modal-backdrop" role="dialog" aria-modal="true">

@@ -121,6 +121,12 @@ export function DocumentTimeline({ events, includeViews }: Props) {
         </div>
       </div>
 
+      {/*
+        Cada hito ocupa UNA fila. Antes eran cinco renglones apilados (tipo, hora,
+        título, actor, origen) y veinte hitos no entraban en la pantalla, aunque
+        sobraba ancho a los costados. Ahora todo eso va en la misma línea y el
+        detalle —que la mayoría de los hitos no tiene— baja solo cuando existe.
+      */}
       <ol className="bo-sp__timeline">
         {visibles.map((event, index) => (
         <li
@@ -129,30 +135,32 @@ export function DocumentTimeline({ events, includeViews }: Props) {
         >
           <div className="bo-sp__event-marker" aria-hidden="true" />
           <div className="bo-sp__event-body">
-            <div className="bo-sp__event-head">
+            <div className="bo-sp__event-row">
               <span className="bo-sp__event-kind">
                 {KIND_LABEL[event.kind] ?? event.kind}
               </span>
+              <span className="bo-sp__event-title">{event.title}</span>
+              <span className="bo-sp__event-who">
+                {event.actorEmail ?? 'Sin actor registrado'}
+                {event.actorRole
+                  ? ` · ${ROLE_LABEL[event.actorRole] ?? event.actorRole}`
+                  : ''}
+              </span>
+              {/*
+                El origen es de qué tabla salió el dato: soporte lo necesita solo
+                cuando algo no cierra, así que va al final, atenuado y sin renglón
+                propio.
+              */}
+              {event.source && (
+                <span className="bo-sp__event-source">{event.source}</span>
+              )}
               <time className="bo-sp__event-time" dateTime={event.at}>
                 {formatDateTimeWithSeconds(event.at)}
               </time>
             </div>
 
-            <p className="bo-sp__event-title">{event.title}</p>
-
             {event.detail && (
               <p className="bo-sp__event-detail">{event.detail}</p>
-            )}
-
-            <p className="bo-sp__event-actor">
-              {event.actorEmail ?? 'Sin actor registrado'}
-              {event.actorRole
-                ? ` · ${ROLE_LABEL[event.actorRole] ?? event.actorRole}`
-                : ''}
-            </p>
-
-            {event.source && (
-              <p className="bo-sp__event-source">Origen: {event.source}</p>
             )}
           </div>
         </li>

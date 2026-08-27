@@ -158,6 +158,35 @@ describe('DocumentItemsPanel — qué decisiones se ofrecen', () => {
     expect(screen.queryByText('Responder por el vendedor')).toBeNull();
   });
 
+  it('avisa del turno pendiente solo mientras el documento espere al gerente', async () => {
+    montar([item()], turno());
+    expect(
+      await screen.findByText(/El gerente todavía no cerró su turno/),
+    ).toBeInTheDocument();
+  });
+
+  it('NO avisa del turno pendiente si el documento ya avanzó', async () => {
+    // ORD-00005419: solo-cabecera, plazo decidido, sin fila de resolución. El aviso
+    // decía que iba a quedarse en ReadyForApprove cuando ya estaba en Processed.
+    montar(
+      [item({ authorizationRequired: false })],
+      turno({ relevant: true, escalatedLines: 0, headerRequires: true }),
+      'Processed',
+    );
+    await waitFor(() => expect(listItems).toHaveBeenCalled());
+    expect(screen.queryByText(/El gerente todavía no cerró su turno/)).toBeNull();
+    expect(
+      await screen.findByText(/no tenía ninguna línea escalada/),
+    ).toBeInTheDocument();
+  });
+
+  it('dice que el cierre del turno no se hace desde la consola', async () => {
+    montar([item()], turno());
+    expect(
+      await screen.findByText(/El cierre no se puede hacer desde acá/),
+    ).toBeInTheDocument();
+  });
+
   it('muestra la contraoferta vigente junto al precio', async () => {
     montar(
       [item({ authorizationStatus: 'countered', proposedPrice: 88, proposedPriceCurrency: 'USD' })],

@@ -653,6 +653,61 @@ Lo unico que toca codigo **compartido** con MobilityIA y MobilityManager es `asS
 (1.248.0) y el desempate de la linea de tiempo (1.245.0). El resto vive en el router de
 soporte, que ningun otro consumidor llama.
 
+### D21 — BackOffice NO confirma el envio (decision del equipo, 2026-08-27)
+
+Una cosa es **decidir** (aprobar, rechazar, contraofertar lineas y plazos) y otra es
+**confirmar** esas decisiones. Lo segundo es lo que le saca el documento al gerente y se
+lo devuelve al vendedor, y **queda en manos del gerente**.
+
+**Ya se cumplia, y ahora esta verificado en el codigo**: las unicas funciones que
+insertan en `BusinessOrdersResolutions` / `BusinessQuotesResolutions` son `resolveOrder`
+y `resolveQuote`, llamadas solo desde `businessOrderApprovals`, `businessQuoteApprovals`
+y `priceApprovalsMobility` — los routers del gerente. El router de soporte solo LEE esa
+tabla y, en la vuelta atras a `ReadyForApprove`, marca la fila como eliminada.
+
+| Accion | BackOffice |
+|---|---|
+| Decidir lineas y plazos de pago | Si |
+| Responder por el vendedor | Si |
+| **Confirmar el envio (cerrar el turno)** | **No** |
+| Reabrir un turno cerrado (vuelta atras) | Si |
+
+### El caso SOLO-CABECERA, que parece una excepcion y no lo es
+
+**ORD-00005419** (reportada el 2026-08-27): sin lineas escaladas, con pedido de plazo de
+pago. Soporte rechazo el plazo por el gerente y la orden paso directo a `Processed`, sin
+fila de resolucion. Parecia que soporte habia cerrado el turno ademas de decidir.
+
+No lo hizo. Es la **regla 2026-08-17 de `decideStatusChange`**: con las tres banderas de
+segmento en 1, el documento asciende a `Processed` sin esperar el cierre del turno. Solo
+puede dispararse en documentos solo-cabecera, porque con lineas escaladas
+`ProcessedPrices` no llega a 1 sin `resolvedAt`.
+
+La logica es que ahi no habia turno que cerrar: la unica tarea del gerente era decidir el
+plazo. **Se comporta igual si la decision la toma el gerente desde su app** — no lo
+introduce esta consola.
+
+Contraste verificado el mismo dia — **ORD-00005420**: una linea escalada y aprobada desde
+la consola, sin resolucion -> `ProcessedPrices = 0` -> la regla de retencion la sostiene
+en `ReadyForApprove`. Correcto, y es lo que el equipo espera.
+
+> **Pendiente de definir con el equipo**: si para un documento solo-cabecera *decidir*
+> deba contar como *confirmar*. Hoy cuenta, por la regla de arriba. Cambiarlo implica
+> tocar `decideStatusChange`, que es logica compartida con MobilityIA y MobilityManager.
+
+**Bug de la consola corregido en el camino**: el aviso *"El gerente todavia no cerro su
+turno"* se mostraba mirando solo la fila de resolucion, asi que aparecia sobre documentos
+que ya estaban en `Processed` — afirmando que se iban a quedar en `ReadyForApprove`
+cuando ya habian salido de ahi. Ahora se muestra solo mientras el documento sigue en
+`ReadyForApprove`, aclara que el cierre no se hace desde la consola, y el caso
+solo-cabecera tiene su propia explicacion.
+
+### Como verificar todo esto en la base
+
+Ver **`docs/QUIEN_TIENE_EL_DOCUMENTO.md`**: que columna dice quien tiene el documento,
+donde vive la confirmacion de envio, que significan las tres banderas, y las consultas
+listas para correr en SSMS (verificadas contra QATEST).
+
 ### Verificado contra QATEST (2026-08-26)
 
 **14 escenarios sobre ordenes desechables (`ZZDEC-`), 0 fallos**, borradas al terminar.

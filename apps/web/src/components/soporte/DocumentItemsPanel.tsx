@@ -229,6 +229,16 @@ export function DocumentItemsPanel({
     !data.document.statusCode || NEGOCIABLES.includes(data.document.statusCode);
 
   /**
+   * El aviso del turno pendiente solo es cierto mientras el documento SIGA esperando
+   * al gerente. Antes se mostraba con solo mirar `closed`, y aparecía sobre
+   * documentos que ya estaban en `Processed`: decía que iban a quedarse en
+   * `ReadyForApprove` cuando ya habían salido de ahí (ORD-00005419).
+   */
+  const enTurnoDelGerente = data.document.statusCode === 'ReadyForApprove';
+  const esperaAlGerente = turno.relevant && !turno.closed && enTurnoDelGerente;
+  const avanzoSinCierre = turno.relevant && !turno.closed && !enTurnoDelGerente;
+
+  /**
    * ¿Qué se puede hacer con esta línea, y si no se puede nada, por qué?
    *
    * Se calcula con las mismas condiciones que aplica el middleware. Ofrecer un botón
@@ -324,11 +334,28 @@ export function DocumentItemsPanel({
             y no hay pedido de otra forma de pago.
           </p>
         )}
-        {turno.relevant && !turno.closed && (
+        {esperaAlGerente && (
           <p className="bo-sp__modal-warning">
             El gerente todavía no cerró su turno. Aunque decidas todas las líneas, el
             documento va a seguir en <strong>ReadyForApprove</strong> hasta que ese
-            cierre exista.
+            cierre exista. <strong>El cierre no se puede hacer desde acá</strong>: lo
+            confirma el gerente desde su app.
+          </p>
+        )}
+        {/*
+          Un documento SOLO-CABECERA (pedido de plazo de pago, sin líneas escaladas)
+          avanza sin fila de resolución: decidido el plazo, el gerente ya no tiene
+          nada pendiente. Es una regla del middleware, igual para él que para acá.
+          Sin esta explicación la consola avisaba "el gerente no cerró su turno"
+          sobre un documento que ya estaba en Processed, y parecía una incoherencia.
+        */}
+        {avanzoSinCierre && (
+          <p className="bo-sp__event-actor">
+            El documento avanzó a <strong>{data.document.statusCode}</strong> sin fila
+            de cierre de turno
+            {turno.escalatedLines === 0
+              ? ': no tenía ninguna línea escalada, así que decidido el plazo de pago el gerente ya no tenía nada pendiente.'
+              : '. Revisá el histórico para ver qué lo movió.'}
           </p>
         )}
         {turno.relevant && turno.closed && (

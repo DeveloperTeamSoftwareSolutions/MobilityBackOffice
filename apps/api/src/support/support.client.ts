@@ -402,6 +402,13 @@ export class SupportClient {
       return res.data.data;
     } catch (err) {
       if (httpStatus(err) === 404) throw new NotFoundException('Documento no encontrado');
+      // 409 = el documento ya es de SAP. El mensaje del middleware explica cuál de
+      // las dos señales lo bloqueó, así que se pasa tal cual en vez de un 503 mudo.
+      if (httpStatus(err) === 409) {
+        throw new ConflictException(
+          errorBody(err)?.error ?? 'El documento ya es de SAP y no se puede modificar',
+        );
+      }
       throw new ServiceUnavailableException('No se pudo recalcular el documento');
     }
   }
@@ -502,6 +509,13 @@ export class SupportClient {
     } catch (err) {
       const status = httpStatus(err);
       if (status === 404) throw new NotFoundException('Documento no encontrado');
+      // 409 = el documento ya es de SAP. Se distingue del 400 para que la UI pueda
+      // tratarlo como lo que es: no hay nada que corregir en el pedido.
+      if (status === 409) {
+        throw new ConflictException(
+          errorBody(err)?.error ?? 'El documento ya es de SAP y no se puede modificar',
+        );
+      }
       if (status === 400) {
         throw new BadRequestException(
           errorBody(err)?.error ?? 'La acción fue rechazada',

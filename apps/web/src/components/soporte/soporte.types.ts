@@ -156,6 +156,8 @@ export interface PaymentTerms {
 }
 
 export interface DocumentItems {
+  /** El documento ya es de SAP: la consola no ofrece ninguna decisión. */
+  sap?: SapLock;
   document: { guid: string; documentNumber: string | null; statusCode: string | null };
   paymentTerms: PaymentTerms;
   managerTurn: ManagerTurn;
@@ -212,7 +214,25 @@ export interface SupportAction {
   warning?: boolean;
 }
 
+/**
+ * El documento ya es de SAP: la consola no lo toca de ninguna forma.
+ *
+ * Se marca por dos señales, y hacen falta las dos: el identificador que estampa SAP
+ * al crear el documento, y el estado dentro del tramo de SAP —que el vendedor
+ * escribe al entregarlo, antes de que SAP conteste—. Con solo el identificador
+ * quedaba abierta toda la ventana entre la entrega y la respuesta.
+ */
+export interface SapLock {
+  locked: boolean;
+  sapId?: string | null;
+  sapNumber?: string | null;
+  /** Entregado a SAP pero todavía sin identificador: SAP no contestó aún. */
+  entregadoSinId?: boolean;
+  message?: string;
+}
+
 export interface DocumentActions {
+  sap?: SapLock;
   documentNumber: string | null;
   statusCode: string | null;
   actions: SupportAction[];

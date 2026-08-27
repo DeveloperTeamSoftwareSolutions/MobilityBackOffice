@@ -86,6 +86,33 @@ export function DocumentActionsPanel({
   const disponibles = data.actions.filter((a) => a.available);
   const noDisponibles = data.actions.filter((a) => !a.available);
 
+  /*
+    El documento ya es de SAP. No es "una acción más que no aplica": es el panel
+    entero el que no aplica, así que se dice de frente y no se dibuja nada más.
+    El middleware ya devuelve la lista vacía; esto explica por qué.
+  */
+  if (data.sap?.locked) {
+    return (
+      <section className="bo-sp__card">
+        <header className="bo-sp__card-head">
+          <h3 className="bo-sp__doc-number">Acciones</h3>
+          <span className="bo-sp__status bo-sp__status--cancelled">Bloqueado por SAP</span>
+        </header>
+        <p className="bo-sp__modal-danger">
+          {data.sap.message ??
+            'El documento ya es de SAP y no se puede modificar desde acá.'}
+        </p>
+        <p className="bo-sp__event-actor">
+          {data.sap.entregadoSinId
+            ? 'Fue entregado a SAP y SAP todavía no devolvió su identificador. Aunque el circuito no haya terminado, el documento ya no es nuestro.'
+            : `Identificador de SAP: ${data.sap.sapId ?? data.sap.sapNumber}.`}{' '}
+          Cualquier corrección tiene que hacerse del lado de SAP: un cambio hecho acá
+          no se propaga y dejaría los dos sistemas diciendo cosas distintas.
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section className="bo-sp__card">
       <header className="bo-sp__card-head">

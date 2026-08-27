@@ -1,6 +1,6 @@
 # Quién tiene el documento — cómo leerlo en la base
 
-> Última actualización: 2026-08-27 · BackOffice v2.9.6 · Middleware v1.248.0
+> Última actualización: 2026-08-27 · BackOffice v2.10.0 · Middleware v1.249.0
 >
 > Para verificar el estado real de una orden o cotización **sin depender de lo que
 > muestren MobilityIA o MobilityManager**. Todo lo de acá es `SELECT`: no escribe nada.
@@ -239,3 +239,51 @@ solo desde los routers del gerente (`businessOrderApprovals`, `businessQuoteAppr
 | Anular / deshacer una anulación | Sí |
 | Volver a un estado anterior | Sí, solo a estados en los que el documento estuvo |
 | Escribir el `StatusCode` a mano | **No.** Ningún camino lo hace |
+
+---
+
+## 8. Documentos que ya son de SAP — bloqueados
+
+Decisión del equipo, 2026-08-27. Un documento entregado a SAP **no se modifica desde
+BackOffice de ninguna forma**: ni acciones, ni decisiones sobre líneas o plazos, ni
+siquiera el recálculo del estado.
+
+Reemplaza la regla anterior, que permitía anularlo avisando que "no se propaga". Una
+anulación que SAP no ve deja a los dos sistemas diciendo cosas distintas, que es peor
+que no poder anular.
+
+### Se miran DOS señales, y hacen falta las dos
+
+| Señal | Columna | Cuándo se escribe |
+|---|---|---|
+| Identificador de SAP | `SapOrderId` / `SapOrderNumber` (órdenes), `SapOfferId` / `SapQuoteNumber` (cotizaciones) | Cuando SAP responde que **creó** el documento |
+| Estado en el tramo de SAP | `StatusCode` ∈ `SentToSAP`, `PendingDispatch`, `Dispatched`, `Invoiced` | Cuando el **vendedor entrega**, antes de que SAP conteste |
+
+> **Por qué no alcanza el identificador solo.** Entre que el vendedor entrega y SAP
+> responde —o si SAP falla, ver `SapLastError`— el documento está en manos de SAP y
+> todavía sin identificador. **Medido en QATEST el 2026-08-27: 45 órdenes en el tramo
+> de SAP y ninguna con identificador estampado.** Bloquear solo por el identificador no
+> habría bloqueado nada.
+
+### Verlo en la base
+
+```sql
+SELECT OrderNumber, StatusCode, SapOrderId, SapOrderNumber, SapOrderCreatedAt, SapLastError,
+       CASE
+           WHEN NULLIF(LTRIM(RTRIM(SapOrderId)),'') IS NOT NULL
+             OR NULLIF(LTRIM(RTRIM(SapOrderNumber)),'') IS NOT NULL
+                THEN 'BLOQUEADO (tiene identificador de SAP)'
+           WHEN StatusCode IN ('SentToSAP','PendingDispatch','Dispatched','Invoiced')
+                THEN 'BLOQUEADO (entregado, SAP todavia no contesto)'
+           ELSE 'editable desde BackOffice'
+       END AS BloqueoBackOffice
+FROM dbo.BusinessOrders
+WHERE OrderNumber = @Numero
+  AND (DeletedTimestamp IS NULL OR DeletedTimestamp = 0);
+```
+
+### Qué se ve en la consola
+
+El panel de acciones se reemplaza por un cartel que dice cuál de las dos señales lo
+bloqueó, y las líneas dejan de ofrecer decisiones. Si alguien llama la API igual,
+responde **409 `SAP_LOCKED`**.

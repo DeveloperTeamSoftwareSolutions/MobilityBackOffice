@@ -1,10 +1,10 @@
 # Spec (SDD) — Consola de Soporte
 
-> Fecha: 2026-08-26 (ultima actualizacion)
+> Fecha: 2026-08-27 (ultima actualizacion)
 > Estado: fases 1 a 4 implementadas. **La fase 4 (§8.quater) cambio los requerimientos y
 > revirtio el override libre de la fase 2 y el PATCH de linea de la fase 3.** Las secciones
 > §7.1 y §8 quedan como registro historico, no como descripcion del sistema actual.
-> Version BackOffice: 2.9.0 · Middleware: v1.248.0
+> Version BackOffice: 2.10.0 · Middleware: v1.249.0
 > Branch: `feature/consola-soporte`
 
 ---
@@ -49,6 +49,8 @@ en una fase posterior si el soporte las necesita.
 | D18 | `asSupport` saltea la **pertenencia** y la **banda del aprobador**, nada mas | Sin lo segundo soporte solo podria rechazar. Es un control levantado: riesgo R6 |
 | D19 | El **autor** de la decision es soporte; el pedido va en el **motivo**, obligatorio siempre | Decision del solicitante (2026-08-26) |
 | D20 | La UI **no ofrece** una decision que el middleware va a rechazar | Desde afuera "no corresponde" y "esta roto" se ven igual (ORD-00005402) |
+| D21 | BackOffice **no confirma el envio** (no cierra el turno del gerente) | Decidir y confirmar son cosas distintas; lo segundo devuelve el documento al vendedor. Ver §8.quater |
+| D22 | Un documento **que ya es de SAP no se toca**, ni para recalcular | Reemplaza a D4. Un cambio que SAP no ve deja los dos sistemas en desacuerdo. Ver §8.quinquies |
 
 ## 4. El hecho tecnico que gobierna el diseno
 
@@ -752,7 +754,7 @@ reabrir el turno del gerente para que vuelva a contraofertar.
 | R1 | **BLOQUEANTE. `SellerResponse` falta en `BusinessQuoteItems` en PROD** (item 2 del `DEPLOY_SQL_PENDIENTE.md` del Middleware). Sin esa columna el recalculo de cotizaciones falla con "Invalid column name" | Aplicar la columna **antes** de desplegar la fase 3 para cotizaciones |
 | R2 | La app resuelve **un solo rol por usuario**. Alguien con `MOBILITYBO_ADMIN` + `MOBILITYBO_SUPPORT` pierde el acceso a Regiones (gana Soporte por D6) | Quien necesite ambos accesos va con SuperAdmin. Documentado en `ROLES_Y_PERMISOS.md` |
 | R3 | `MIDDLEWARE_API_KEY` pasa de opcional a **obligatoria** al llegar la fase 2 | Configurarla en ambos lados y actualizar `ENV_VARIABLES.md` en esa fase |
-| R4 | Reabrir una orden `Invoiced` o `Cancelled` **no se propaga a SAP**: quedan desincronizados | Habilitado por D4, con doble confirmacion y motivo obligatorio. El riesgo es aceptado, no eliminado |
+| R4 | ~~Reabrir una orden `Invoiced` o `Cancelled` no se propaga a SAP~~ | **Cerrado el 2026-08-27 (D22)**: un documento que ya es de SAP no se puede tocar desde la consola de ninguna forma |
 | R5 | ~~Un override duro puede revertirse solo en el proximo recompute (§4)~~ | **Cerrado en la fase 4**: no queda ningun camino que escriba el estado a mano |
 | R6 | **`asSupport` saltea la banda del aprobador** (D18). Un usuario de soporte puede aprobar un descuento que ningun gerente podria firmar por si mismo | El motivo es obligatorio y queda en `AuditLogs` con el autor. **Es un control levantado, no eliminado por accidente**: si el equipo lo quiere de vuelta, la alternativa es que soporte declare a que gerente representa y se valide la banda de ESE gerente — cambia el contrato y la UI |
 | R7 | Soporte puede responder **por el vendedor**. La respuesta queda a nombre de soporte, no del vendedor | Decision del solicitante (D19). El motivo obliga a decir quien lo pidio |
@@ -781,3 +783,54 @@ por el header `x-source-app`, y duplicarlas no agregaria nada.
 Del lado del Middleware, cada decision deja ademas su fila en `Auditories` y su comentario
 en el hilo del documento — los mismos que deja el gerente o el vendedor, porque es la misma
 funcion (D17).
+
+---
+
+## 8.quinquies D22 — Un documento que ya es de SAP no se toca
+
+> Decision del equipo, 2026-08-27. **Reemplaza a D4.**
+
+D4 permitia actuar sobre un documento del tramo de SAP con doble confirmacion y un
+aviso de que el cambio "no se propaga". El equipo lo retiro: una anulacion que SAP no
+ve deja a los dos sistemas diciendo cosas distintas, que es peor que no poder anular.
+
+Ahora **ninguna** operacion de la consola toca un documento de SAP: ni acciones, ni
+decisiones sobre lineas o plazos, ni el recalculo del estado.
+
+### Se miran DOS senales, y hacen falta las dos
+
+El pedido original decia "que ya tengan un id de sap". Investigando salio que el ID no
+alcanza:
+
+| Senal | Columna | Cuando se escribe |
+|---|---|---|
+| ID de SAP | `SapOrderId` / `SapOfferId` (y sus `*Number`) | Cuando SAP responde que **creo** el documento (`attachSapInfo`) |
+| Tramo de SAP | `StatusCode` en `SAP_CHAIN` | Cuando el **vendedor entrega** (`sendToSap`), ANTES de que SAP conteste |
+
+`sendToSap` **no escribe el ID**: solo mueve el estado a `SentToSAP`. El ID llega
+despues, por la integracion.
+
+**Medido en QATEST el 2026-08-27: 45 ordenes en el tramo de SAP, NINGUNA con ID
+estampado.** Bloquear solo por ID no habria bloqueado nada, y habria dejado editable
+justo la ventana en la que el documento esta en vuelo hacia SAP.
+
+### Implementacion
+
+`bloqueoSap` en `support.repository`. Se chequea en los cuatro caminos de escritura
+(acciones, recalculo y las cuatro decisiones); `describeActions` devuelve la lista de
+acciones **vacia** y `listItems` expone `sap` para que la UI muestre el motivo. La ruta
+responde **409 `SAP_LOCKED`** — no 400: el documento existe y esta bien, simplemente ya
+no es nuestro.
+
+`runAction` chequea el bloqueo DOS veces a proposito. La primera va **antes** de buscar
+la accion en la lista: como esa lista viene vacia, sin ese chequeo el usuario recibia
+*"Accion desconocida: 'annul'"*, que es falso y no explica nada.
+
+### Verificado contra QATEST (2026-08-27)
+
+Sobre una orden **real** en `SentToSAP` sin ID (ORD-00005393): los siete caminos de
+escritura responden 409 y la orden queda **intacta** — ni `StatusCode` ni
+`ServerTimestamp` cambian. Sobre una orden desechable con ID estampado y estado normal:
+igual. Control negativo: una orden sin SAP sigue ofreciendo todas sus acciones.
+
+Ver `docs/QUIEN_TIENE_EL_DOCUMENTO.md` §8 para la consulta que lo muestra en la base.

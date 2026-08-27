@@ -108,3 +108,55 @@ describe('DocumentActionsPanel — qué se dibuja', () => {
     expect(screen.queryByRole('button', { name: 'Aplicar' })).toBeNull();
   });
 });
+
+describe('DocumentActionsPanel — documento que ya es de SAP', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function montarSap(sap: Record<string, unknown>) {
+    listActions.mockResolvedValue({
+      documentNumber: 'ORD-1',
+      statusCode: 'SentToSAP',
+      sap,
+      actions: [],
+    } as unknown as DocumentActions);
+    return render(
+      <DocumentActionsPanel type="order" guid="g" onDocumentStatusChange={() => {}} />,
+    );
+  }
+
+  it('no ofrece ninguna acción y explica por qué', async () => {
+    montarSap({
+      locked: true,
+      sapId: '0000123456',
+      message: 'La orden ya tiene identificador de SAP (0000123456): desde la consola de soporte no se puede modificar de ninguna forma.',
+    });
+    expect(await screen.findByText(/ya tiene identificador de SAP/)).toBeInTheDocument();
+    expect(screen.getByText('Bloqueado por SAP')).toBeInTheDocument();
+    // Ni siquiera anular, que antes se ofrecía con una advertencia.
+    expect(screen.queryByRole('button', { name: /Anular/ })).toBeNull();
+  });
+
+  it('distingue el caso entregado-y-SAP-todavía-no-contestó', async () => {
+    // Es el que el identificador solo no cubría: 45 órdenes así en QATEST.
+    montarSap({ locked: true, entregadoSinId: true, message: 'ya fue entregado a SAP' });
+    expect(
+      await screen.findByText(/todavía no devolvió su identificador/),
+    ).toBeInTheDocument();
+  });
+
+  it('un documento normal sigue mostrando sus acciones', async () => {
+    listActions.mockResolvedValue({
+      documentNumber: 'ORD-1',
+      statusCode: 'ReadyForApprove',
+      sap: { locked: false },
+      actions: [accion({ label: 'Anular' })],
+    } as unknown as DocumentActions);
+    render(
+      <DocumentActionsPanel type="order" guid="g" onDocumentStatusChange={() => {}} />,
+    );
+    expect(await screen.findByRole('button', { name: 'Anular' })).toBeInTheDocument();
+    expect(screen.queryByText('Bloqueado por SAP')).toBeNull();
+  });
+});

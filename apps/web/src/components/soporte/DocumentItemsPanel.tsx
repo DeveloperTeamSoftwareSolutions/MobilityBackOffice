@@ -250,6 +250,15 @@ export function DocumentItemsPanel({
     responder: boolean;
     motivo: string | null;
   } {
+    // Ya es de SAP: no hay decisión posible sobre ninguna línea. Va primero porque
+    // gana sobre cualquier otra razón.
+    if (data?.sap?.locked) {
+      return {
+        decidir: false,
+        responder: false,
+        motivo: 'El documento ya es de SAP.',
+      };
+    }
     if (!item.authorizationRequired) {
       return { decidir: false, responder: false, motivo: 'No requiere autorización.' };
     }
@@ -311,6 +320,8 @@ export function DocumentItemsPanel({
             Líneas del documento
             <InfoTip texto="Las decisiones de acá llaman a lo mismo que llama el gerente o el vendedor desde su app: dejan el comentario en el hilo, avisan a quien corresponde y recalculan el estado. Soporte queda registrado como autor; el motivo dice quién lo pidió." />
           </h3>
+          {/* Con el documento en SAP el recálculo tampoco corre: se oculta. */}
+          {!data.sap?.locked && (
           <button
             type="button"
             className="bo-sp__pager-button"
@@ -319,6 +330,7 @@ export function DocumentItemsPanel({
           >
             Recalcular estado
           </button>
+          )}
         </header>
 
         {/*

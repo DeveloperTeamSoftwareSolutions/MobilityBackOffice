@@ -348,8 +348,8 @@ export function DocumentItemsPanel({
               <tr>
                 <th>#</th>
                 <th>Producto</th>
-                <th>Cant.</th>
-                <th>Precio</th>
+                <th className="bo-sp__th--number">Cant.</th>
+                <th className="bo-sp__th--number">Precio</th>
                 <th>Autorización</th>
                 <th>Vendedor</th>
                 <th />

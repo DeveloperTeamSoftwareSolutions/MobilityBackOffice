@@ -194,18 +194,22 @@
   padding: 0 0 0 8px;
   list-style: none;
 }
+/*
+  El `gap` es chico porque el body agrega 8px de `padding-left` propio (lo necesita
+  para que el resaltado del hover no quede pegado al texto). Entre los dos dan la
+  separacion real de 12px contra el marcador.
+*/
 .bo-sp__event {
   position: relative;
   display: flex;
-  gap: 12px;
-  padding: 0 0 8px 0;
+  gap: 4px;
 }
 /* Riel vertical: no se dibuja en el último hito. */
 .bo-sp__event::before {
   content: '';
   position: absolute;
   left: 5px;
-  top: 14px;
+  top: 18px;
   bottom: 0;
   width: 2px;
   background: var(--bo-border);
@@ -245,12 +249,27 @@
   background: var(--bo-danger);
 }
 
+/*
+  Aire vertical y una linea divisoria por hito.
+  Comprimir las cinco lineas a una dejo la lista tan apretada que no se sabia que
+  dato iba con que hito: la separacion horizontal era mucha y la vertical ninguna.
+  El divisor le da al ojo un carril para cruzar de punta a punta, y el `padding`
+  devuelve el aire que se habia perdido. Va en el body y no en el `li` para no
+  cortar el riel de la izquierda.
+*/
 .bo-sp__event-body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   flex: 1;
   min-width: 0;
+  padding: 2px 8px 10px 8px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--bo-border);
+}
+.bo-sp__event:last-child .bo-sp__event-body {
+  border-bottom: none;
+  margin-bottom: 0;
 }
 /*
   Un hito = una fila. El título se queda con el espacio sobrante y el resto se
@@ -262,6 +281,18 @@
   align-items: baseline;
   gap: 10px;
   flex-wrap: wrap;
+}
+/* Quien / de donde / cuando: un solo bloque pegado al margen derecho. */
+.bo-sp__event-meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-left: auto;
+}
+/* Al pasar el mouse se resalta la fila entera: sirve para seguirla hasta la fecha. */
+.bo-sp__event:hover .bo-sp__event-body {
+  background: var(--bo-bg);
+  border-radius: var(--bo-radius-sm);
 }
 /*
   El ancho fijo del tipo alinea los títulos en una columna, que es lo que hace
@@ -419,6 +450,18 @@
   text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+/*
+  El encabezado de una columna numerica tiene que alinearse con sus valores. Sin
+  esto el titulo quedaba pegado a la izquierda y el numero a la derecha, y la
+  columna se leia partida en dos. `inline-flex` en el boton de orden ignora el
+  `text-align` del `th`, asi que ademas hay que empujarlo con `margin-left: auto`.
+*/
+.bo-sp__th--number {
+  text-align: right;
+}
+.bo-sp__th--number .bo-sp__th-button {
+  margin-left: auto;
 }
 .bo-sp__cell-sub {
   display: block;

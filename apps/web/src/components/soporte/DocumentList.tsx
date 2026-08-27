@@ -7,12 +7,18 @@ import {
 import { formatDateTime } from './DocumentHeader';
 
 /** Columnas de la tabla. `sort` null = no ordenable. */
-const COLUMNS: { key: string; label: string; sort: SortField | null }[] = [
+/** `numeric` alinea el encabezado a la derecha, como sus valores. */
+const COLUMNS: {
+  key: string;
+  label: string;
+  sort: SortField | null;
+  numeric?: boolean;
+}[] = [
   { key: 'documentNumber', label: 'Documento', sort: 'documentNumber' },
   { key: 'statusCode', label: 'Estado', sort: 'statusCode' },
   { key: 'customerName', label: 'Cliente', sort: 'customerName' },
   { key: 'sellerEmail', label: 'Vendedor', sort: 'sellerEmail' },
-  { key: 'total', label: 'Total', sort: 'total' },
+  { key: 'total', label: 'Total', sort: 'total', numeric: true },
   { key: 'documentDate', label: 'Fecha', sort: 'documentDate' },
 ];
 
@@ -69,7 +75,10 @@ export function DocumentList({
           <thead>
             <tr>
               {COLUMNS.map((col) => (
-                <th key={col.key}>
+                <th
+                  key={col.key}
+                  className={col.numeric ? 'bo-sp__th--number' : undefined}
+                >
                   {col.sort ? (
                     <button
                       type="button"

@@ -140,23 +140,29 @@ export function DocumentTimeline({ events, includeViews }: Props) {
                 {KIND_LABEL[event.kind] ?? event.kind}
               </span>
               <span className="bo-sp__event-title">{event.title}</span>
-              <span className="bo-sp__event-who">
-                {event.actorEmail ?? 'Sin actor registrado'}
-                {event.actorRole
-                  ? ` · ${ROLE_LABEL[event.actorRole] ?? event.actorRole}`
-                  : ''}
-              </span>
               {/*
-                El origen es de qué tabla salió el dato: soporte lo necesita solo
-                cuando algo no cierra, así que va al final, atenuado y sin renglón
-                propio.
+                Quién, de dónde salió el dato y cuándo van agrupados en UN bloque
+                pegado al margen derecho. Sueltos parecían tres datos flotando entre
+                filas, y con los hitos juntos no se sabía a cuál pertenecía cada uno.
               */}
-              {event.source && (
-                <span className="bo-sp__event-source">{event.source}</span>
-              )}
-              <time className="bo-sp__event-time" dateTime={event.at}>
-                {formatDateTimeWithSeconds(event.at)}
-              </time>
+              <span className="bo-sp__event-meta">
+                <span className="bo-sp__event-who">
+                  {event.actorEmail ?? 'Sin actor registrado'}
+                  {event.actorRole
+                    ? ` · ${ROLE_LABEL[event.actorRole] ?? event.actorRole}`
+                    : ''}
+                </span>
+                {/*
+                  El origen es de qué tabla salió el dato: soporte lo necesita solo
+                  cuando algo no cierra, así que va atenuado y al final.
+                */}
+                {event.source && (
+                  <span className="bo-sp__event-source">{event.source}</span>
+                )}
+                <time className="bo-sp__event-time" dateTime={event.at}>
+                  {formatDateTimeWithSeconds(event.at)}
+                </time>
+              </span>
             </div>
 
             {event.detail && (

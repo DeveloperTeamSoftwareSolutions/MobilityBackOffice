@@ -157,6 +157,11 @@
   background: rgba(197, 48, 48, 0.08);
   color: var(--bo-danger);
 }
+/* Algo esperando una decision: ni cerrado ni rechazado. */
+.bo-sp__status--pending {
+  background: rgba(180, 83, 9, 0.1);
+  color: var(--bo-warning);
+}
 
 .bo-sp__facts {
   display: grid;
@@ -621,6 +626,30 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+/*
+  Area de accion del plazo de pago, separada de los datos por una linea. Antes los
+  botones colgaban del ultimo dato y no se distinguia que era informacion del
+  documento y que era algo para apretar.
+*/
+.bo-sp__pay-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 16px;
+  border-top: 1px solid var(--bo-border);
+}
+.bo-sp__pay-form .bo-sp__input {
+  min-width: 220px;
+  flex: 1 1 220px;
+}
+/* Ocupa la fila entera para que el formulario arranque debajo, no al lado. */
+.bo-sp__pay-form-title {
+  flex: 1 0 100%;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bo-text-muted);
 }
 .bo-sp__item-edit .bo-sp__input {
   min-width: 200px;

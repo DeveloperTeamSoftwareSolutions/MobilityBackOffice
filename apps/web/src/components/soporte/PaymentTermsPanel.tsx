@@ -18,11 +18,20 @@ function errorMessage(err: unknown): string {
   return 'No se pudo aplicar la decisión sobre el plazo de pago.';
 }
 
-/** Cómo se lee cada estado del plazo de pago en pantalla. */
-const ETIQUETA: Record<string, string> = {
-  approved: 'Aprobado',
-  rejected: 'Rechazado',
-  observed: 'Contraofertado por el gerente',
+/** Cómo se lee cada estado del plazo de pago en pantalla, y con qué color. */
+const ESTADO: Record<string, { label: string; modificador: string }> = {
+  approved: { label: 'Aprobado', modificador: '' },
+  rejected: { label: 'Rechazado', modificador: 'bo-sp__status--cancelled' },
+  observed: {
+    label: 'Contraofertado por el gerente',
+    modificador: 'bo-sp__status--pending',
+  },
+};
+
+/** Sin decidir es un estado más, y el que más importa: bloquea el cierre del turno. */
+const SIN_DECIDIR = {
+  label: 'Sin decidir',
+  modificador: 'bo-sp__status--pending',
 };
 
 interface Props {
@@ -79,6 +88,13 @@ export function PaymentTermsPanel({
   const negociable = !documentStatus || NEGOCIABLES.includes(documentStatus);
   const puedeResponder =
     paymentTerms.status === 'observed' && managerTurn.closed && negociable;
+
+  const estado = paymentTerms.status
+    ? (ESTADO[paymentTerms.status] ?? {
+        label: paymentTerms.status,
+        modificador: '',
+      })
+    : SIN_DECIDIR;
 
   function cerrar() {
     setModo(null);
@@ -141,31 +157,34 @@ export function PaymentTermsPanel({
           Plazo de pago
           <InfoTip texto="El vendedor pidió una forma de pago distinta de la estándar. Es un pedido de cabecera: manda el documento al gerente aunque ninguna línea lo requiera, y bloquea el cierre del turno hasta que se decida." />
         </h3>
+        {/*
+          El estado va como chip en la cabecera, igual que en la ficha del documento:
+          es el dato que se busca primero y así se lee sin bajar la vista.
+        */}
+        <span className={`bo-sp__status ${estado.modificador}`}>{estado.label}</span>
       </header>
 
+      {/*
+        `bo-sp__fact` en cada bloque no es decorativo: sin esa clase el `dd` sale con
+        la sangría de 40px que le pone el navegador y la lista queda desalineada.
+      */}
       <dl className="bo-sp__facts">
-        <div>
-          <dt>Pedido</dt>
+        <div className="bo-sp__fact">
+          <dt>Lo que pidió el vendedor</dt>
           <dd>{paymentTerms.requested}</dd>
         </div>
-        <div>
-          <dt>Estado</dt>
-          <dd>
-            {paymentTerms.status
-              ? (ETIQUETA[paymentTerms.status] ?? paymentTerms.status)
-              : 'Sin decidir'}
-          </dd>
-        </div>
         {paymentTerms.approved && (
-          <div>
+          <div className="bo-sp__fact">
             <dt>
-              {paymentTerms.status === 'observed' ? 'Contrapropuesta' : 'Concedido'}
+              {paymentTerms.status === 'observed'
+                ? 'Lo que contrapropuso el gerente'
+                : 'Lo concedido'}
             </dt>
             <dd>{paymentTerms.approved}</dd>
           </div>
         )}
         {paymentTerms.decidedByEmail && (
-          <div>
+          <div className="bo-sp__fact">
             <dt>Decidido por</dt>
             <dd>
               {paymentTerms.decidedByEmail}
@@ -179,8 +198,13 @@ export function PaymentTermsPanel({
 
       {error && <p className="bo-sp__error">{error}</p>}
 
+      {/*
+        El área de acción va separada de los datos por una línea. Antes los botones
+        colgaban del último dato y no se distinguía qué era información del documento
+        y qué era algo que uno podía apretar.
+      */}
       {modo === null && (
-        <div className="bo-sp__item-edit">
+        <div className="bo-sp__pay-form">
           {puedeDecidir && (
             <button
               type="button"
@@ -210,7 +234,8 @@ export function PaymentTermsPanel({
       )}
 
       {modo === 'gerente' && (
-        <div className="bo-sp__item-edit">
+        <div className="bo-sp__pay-form">
+          <span className="bo-sp__pay-form-title">Decisión del gerente</span>
           <select
             className="bo-sp__select"
             value={decision}
@@ -258,7 +283,8 @@ export function PaymentTermsPanel({
       )}
 
       {modo === 'vendedor' && (
-        <div className="bo-sp__item-edit">
+        <div className="bo-sp__pay-form">
+          <span className="bo-sp__pay-form-title">Respuesta del vendedor</span>
           <select
             className="bo-sp__select"
             value={respuesta}

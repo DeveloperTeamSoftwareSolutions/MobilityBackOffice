@@ -1,6 +1,6 @@
 # Vistas y tablas deprecadas — que NO puede consumir BackOffice
 
-> Ultima actualizacion: 2026-08-27 · Version: 2.13.1
+> Ultima actualizacion: 2026-08-27 · Version: 2.14.0
 >
 > Fuente: `RESUMEN DE VISTAS OK Y PARA DEPRECAR.xlsx` y
 > `tables to deprecate from SAPServices.xlsx`, relevamiento del equipo sobre

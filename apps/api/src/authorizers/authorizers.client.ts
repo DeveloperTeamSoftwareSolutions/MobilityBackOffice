@@ -44,6 +44,21 @@ const PROFIT_CENTERS_PATH = '/v2/mobility/profit-centers';
  */
 const COUNTRY_MANAGERS_PATH = '/mobility/commercial-team-hierarchy/country-manager';
 
+/**
+ * Arbol de la jerarquia comercial. Se consulta SOLO cuando la lista de Country Managers
+ * vino vacia, para poder distinguir "no hay nodo COUNTRY MANAGER" de "hay nodo pero
+ * ninguno de esta sociedad". En el caso normal no se pide.
+ */
+const HIERARCHY_TREE_PATH = '/mobility/commercial-team-hierarchy/tree';
+
+/**
+ * Como identifica el middleware a los Country Managers: `cth.Name LIKE 'COUNTRY MANAGER%'`.
+ * Es una convencion de NOMBRE, no un flag ni un tipo de rol, asi que se replica igual
+ * para el diagnostico. Si el middleware cambia el criterio, esto queda viejo — pero el
+ * unico efecto es un mensaje de vacio menos preciso, nunca un dato incorrecto.
+ */
+const COUNTRY_MANAGER_NODE_PREFIX = 'COUNTRY MANAGER';
+
 /** Fila tal como la publica el middleware (camelCase). */
 interface MwAuthorizerRow {
   companyCode?: string | null;
@@ -217,6 +232,34 @@ export class AuthorizersClient {
         country: text(item.country),
         businessUnit: text(item.businessUnit),
       }));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * ¿Existe algun nodo `COUNTRY MANAGER%` en la jerarquia?
+   *
+   * Solo se llama cuando la lista vino vacia. `null` = no se pudo averiguar, y entonces
+   * la UI no afirma ninguna de las dos causas.
+   */
+  async hasCountryManagerNode(): Promise<boolean | null> {
+    if (!this.base()) return null;
+
+    try {
+      const res = await firstValueFrom(
+        this.http.get<{ data?: { name?: string | null }[] }>(
+          `${this.base()}${HIERARCHY_TREE_PATH}`,
+          { headers: this.headers(), timeout: 20000 },
+        ),
+      );
+
+      return (res.data?.data ?? []).some((node) =>
+        (node.name ?? '')
+          .trim()
+          .toUpperCase()
+          .startsWith(COUNTRY_MANAGER_NODE_PREFIX),
+      );
     } catch {
       return null;
     }

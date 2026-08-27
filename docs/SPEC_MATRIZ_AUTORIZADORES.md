@@ -1,6 +1,6 @@
 # Matriz de autorizadores — especificacion
 
-> Ultima actualizacion: 2026-08-27 · Version: 2.13.1
+> Ultima actualizacion: 2026-08-27 · Version: 2.14.0
 >
 > Quien puede autorizar en cada sociedad y con que limites. Seccion de **consulta**:
 > reemplaza tener que entrar a la base para responder esa pregunta.
@@ -164,6 +164,51 @@ seccion aparte**, con un rotulo que explica que es otro permiso: no tienen banda
 CEBEs, y su fuente es
 `/mobility/commercial-team-hierarchy/country-manager?companyCode=`.
 
+### De donde salen realmente
+
+No de SAP ni de la matriz: de tablas propias de Mobility.
+
+```sql
+FROM [dbo].[CommercialTeamHierarchies] cth
+INNER JOIN [dbo].[CommercialTeamMembers] m ON m.GuidCommercialTeamHierarchies = cth.Guid
+INNER JOIN [dbo].[Users] u ON u.Guid = m.GuidUsers
+   AND LTRIM(RTRIM(u.SapCompanyCode)) = @CompanyCode
+WHERE cth.Name LIKE 'COUNTRY MANAGER%'
+```
+
+Tres consecuencias que conviene tener presentes al leer la pantalla:
+
+1. **Quien es Country Manager se decide por el NOMBRE del nodo**, con un `LIKE` sobre
+   texto libre. No hay flag ni tipo de rol: existe una columna `m.Role` en
+   `CommercialTeamMembers` pero **no se usa para filtrar**. Si alguien renombra el nodo
+   ("Country Mgr", "CountryManager", un prefijo), esas personas **desaparecen de esta
+   pantalla en silencio**.
+
+2. **La sociedad sale del MIEMBRO** (`Users.SapCompanyCode`) y no del `Country` del
+   nodo. Es deliberado y correcto: hay paises con mas de una sociedad —Guatemala tiene
+   GT y BAN con las sociedades 2100 y 2200— y el `Country` del nodo las mezclaria.
+
+3. **El `INNER JOIN` a `Users` es deliberado** (sin fila en `Users` no hay correo al que
+   escribir), pero un Country Manager sin esa fila, o con `SapCompanyCode` vacio o
+   distinto, **tampoco aparece**.
+
+Los casos 1 y 3 llegan como **200 con lista vacia**. Para no presentarlos como un hecho
+del negocio, cuando la lista viene vacia BackOffice consulta
+`/mobility/commercial-team-hierarchy/tree` y separa:
+
+| `diagnosis` | Que muestra la pantalla |
+|---|---|
+| `sin_nodo` | Advertencia: no hay nodo `COUNTRY MANAGER%`; **no afirma que nadie autorice** |
+| `sin_miembros` | Advertencia: hay nodo, pero nadie de esta sociedad — revisar la ficha de usuario |
+| `unavailable` | No se pudo consultar (incluye "no se pudo mirar el arbol") |
+
+Esa llamada extra **solo ocurre en el caso vacio**. Y sigue siendo una heuristica: el
+diagnostico replica el mismo `LIKE` del middleware, asi que si alla cambia el criterio,
+lo que se degrada es la precision del mensaje — nunca el dato.
+
+> Esta consulta usa las TABLAS directamente, no `VIEW_CommercialTeamHierarchyMobility`.
+> Ninguna de las tres figura en el relevamiento de deprecadas.
+
 **Un fallo de esa consulta NO se muestra como "no hay ninguno".** El DTO trae
 `available: false` y la UI avisa que la lista esta *incompleta*. Decir "nadie autoriza
 otra forma de pago" cuando en realidad fallo la consulta es la misma clase de afirmacion
@@ -215,6 +260,16 @@ sumarlo; por eso hubo que excluir tambien lo que pide `SuperAdmin` explicitament
    distintas del mismo dato dentro del mismo repo.
 
 3. **La banda interpretada deberia salir por HTTP.** Ver §5.
+
+4. **Los Country Managers se identifican por el NOMBRE del nodo.**
+   `getCountryManagersByCompany` filtra con `WHERE cth.Name LIKE 'COUNTRY MANAGER%'` —
+   texto libre, no un flag ni un tipo. Existe `CommercialTeamMembers.Role` pero no se
+   usa para filtrar. Un renombre del nodo ("Country Mgr", un prefijo) deja de devolver
+   a todos **sin error**: el endpoint responde 200 con lista vacia, indistinguible de
+   "esta sociedad no tiene ninguno". Lo mismo con el `INNER JOIN` a `Users`: un CM sin
+   esa fila, o con `SapCompanyCode` vacio, desaparece igual de callado.
+   Un flag en la tabla —o usar `Role`— lo volveria un contrato de dato y no de
+   convencion de nombre.
 
 ---
 

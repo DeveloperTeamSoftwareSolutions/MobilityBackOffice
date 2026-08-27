@@ -50,5 +50,9 @@ export async function getCountryManagers(companyCode: string): Promise<CountryMa
     '/api/authorizers/country-managers',
     { params: { companyCode } },
   );
-  return { available: res.data.available, data: res.data.data };
+  return {
+    available: res.data.available,
+    diagnosis: res.data.diagnosis,
+    data: res.data.data,
+  };
 }

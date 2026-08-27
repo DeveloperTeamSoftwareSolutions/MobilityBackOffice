@@ -11,6 +11,46 @@ import { CountryManagersResult } from './autorizadores.types';
  *
  * No tienen banda ni CEBEs: su permiso no es por descuento ni por centro.
  */
+
+/**
+ * Qué decir cuando la lista viene vacía.
+ *
+ * El endpoint devuelve 200 con lista vacía por tres causas distintas y **solo una es un
+ * hecho del negocio**. Las otras dos son problemas de carga, y presentarlas como “nadie
+ * autoriza otra forma de pago” sería afirmar algo falso con toda seguridad. El backend
+ * las separa consultando el árbol de la jerarquía; acá cada una dice qué mirar.
+ */
+function EmptyState({ diagnosis }: { diagnosis: CountryManagersResult['diagnosis'] }) {
+  if (diagnosis === 'sin_nodo') {
+    return (
+      <p className="bo-az__warn">
+        No se encontró ningún nodo <strong>Country Manager</strong> en la jerarquía comercial.
+        La consulta los identifica por el <strong>nombre del nodo</strong>, así que esto
+        también pasa si lo renombraron. <strong>No significa que nadie autorice</strong> otra
+        forma de pago: significa que desde acá no se puede saber quién.
+      </p>
+    );
+  }
+
+  if (diagnosis === 'sin_miembros') {
+    return (
+      <p className="bo-az__warn">
+        La jerarquía tiene un nodo <strong>Country Manager</strong>, pero ninguno de sus
+        integrantes resuelve a esta sociedad. Puede ser que no tenga uno asignado, o que al
+        integrante le falte la ficha de usuario con su sociedad SAP cargada.
+      </p>
+    );
+  }
+
+  // 'ok' con data vacía no debería ocurrir; se trata como el caso conservador.
+  return (
+    <p className="bo-az__empty">
+      No se encontró ningún Country Manager para esta sociedad. Los pedidos de otra forma de
+      pago no tendrían quién los autorice.
+    </p>
+  );
+}
+
 export function CountryManagersPanel({ result }: { result: CountryManagersResult | null }) {
   return (
     <section className="bo-az__cm">
@@ -29,10 +69,7 @@ export function CountryManagersPanel({ result }: { result: CountryManagersResult
           autoriza otra forma de pago hasta que la consulta responda.
         </p>
       ) : result.data.length === 0 ? (
-        <p className="bo-az__empty">
-          Esta sociedad no tiene ningún Country Manager cargado. Los pedidos de otra forma de
-          pago no tienen quién los autorice.
-        </p>
+        <EmptyState diagnosis={result.diagnosis} />
       ) : (
         <ul className="bo-az__cmlist">
           {result.data.map((cm) => (

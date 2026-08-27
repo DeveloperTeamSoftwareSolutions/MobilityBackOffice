@@ -18,41 +18,65 @@ function cm(over: Partial<CountryManager> = {}): CountryManager {
 
 describe('CountryManagersPanel', () => {
   it('explica que es un permiso distinto al de la matriz', () => {
-    render(<CountryManagersPanel result={{ available: true, data: [cm()] }} />);
+    render(<CountryManagersPanel result={{ available: true, diagnosis: 'ok', data: [cm()] }} />);
     expect(screen.getByText(/otra forma de pago/)).toBeInTheDocument();
     expect(screen.getByText(/no sale de la matriz/)).toBeInTheDocument();
   });
 
   it('lista nombre y correo', () => {
-    render(<CountryManagersPanel result={{ available: true, data: [cm()] }} />);
+    render(<CountryManagersPanel result={{ available: true, diagnosis: 'ok', data: [cm()] }} />);
     expect(screen.getByText('Ana Cardona')).toBeInTheDocument();
     expect(screen.getByText('ana@duwy.com')).toBeInTheDocument();
   });
 
+
   it('un fallo NO se muestra como "no hay ninguno"', () => {
-    // Decir que nadie autoriza otra forma de pago cuando en realidad fallo la consulta
-    // es exactamente la afirmacion falsa que esta pantalla intenta evitar.
-    render(<CountryManagersPanel result={{ available: false, data: [] }} />);
+    render(
+      <CountryManagersPanel result={{ available: false, diagnosis: 'unavailable', data: [] }} />,
+    );
     expect(screen.getByText(/incompleta/)).toBeInTheDocument();
-    expect(screen.queryByText(/no tiene ningún Country Manager/)).not.toBeInTheDocument();
   });
 
-  it('una sociedad realmente vacia lo dice con su consecuencia', () => {
-    render(<CountryManagersPanel result={{ available: true, data: [] }} />);
-    expect(screen.getByText(/no tiene ningún Country Manager/)).toBeInTheDocument();
-    expect(screen.getByText(/no tienen quién los autorice/)).toBeInTheDocument();
+  it('sin nodo en la jerarquia NO afirma que nadie autorice', () => {
+    // Es el caso mas enganoso: la consulta identifica a los CM por el NOMBRE del nodo,
+    // asi que un renombre los esconde a todos y el endpoint responde 200 con vacio.
+    render(
+      <CountryManagersPanel result={{ available: true, diagnosis: 'sin_nodo', data: [] }} />,
+    );
+    expect(screen.getByText(/nombre del nodo/)).toBeInTheDocument();
+    expect(screen.getByText(/No significa que nadie autorice/)).toBeInTheDocument();
+  });
+
+  it('con nodo pero sin miembros de la sociedad apunta a la ficha de usuario', () => {
+    render(
+      <CountryManagersPanel result={{ available: true, diagnosis: 'sin_miembros', data: [] }} />,
+    );
+    expect(screen.getByText(/ninguno de sus integrantes resuelve a esta sociedad/)).toBeInTheDocument();
+    expect(screen.getByText(/sociedad SAP cargada/)).toBeInTheDocument();
+  });
+
+  it('los dos diagnosticos de carga se ven como advertencia, no como un dato', () => {
+    const { container, rerender } = render(
+      <CountryManagersPanel result={{ available: true, diagnosis: 'sin_nodo', data: [] }} />,
+    );
+    expect(container.querySelector('.bo-az__warn')).not.toBeNull();
+
+    rerender(
+      <CountryManagersPanel result={{ available: true, diagnosis: 'sin_miembros', data: [] }} />,
+    );
+    expect(container.querySelector('.bo-az__warn')).not.toBeNull();
   });
 
   it('mientras carga no afirma nada', () => {
     render(<CountryManagersPanel result={null} />);
     expect(screen.getByText('Cargando…')).toBeInTheDocument();
-    expect(screen.queryByText(/no tiene ningún Country Manager/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No se encontró/)).not.toBeInTheDocument();
   });
 
   it('tolera un country manager sin nombre ni correo', () => {
     render(
       <CountryManagersPanel
-        result={{ available: true, data: [cm({ name: null, email: null })] }}
+        result={{ available: true, diagnosis: 'ok', data: [cm({ name: null, email: null })] }}
       />,
     );
     expect(screen.getByText('Sin nombre')).toBeInTheDocument();

@@ -121,6 +121,30 @@ export interface CountryManager {
   businessUnit: string | null;
 }
 
+/**
+ * Por que la lista de Country Managers vino vacia.
+ *
+ * Importa distinguirlos: el endpoint devuelve 200 con lista vacia en los tres casos,
+ * pero solo UNO significa que la sociedad realmente no tiene a nadie. Los otros dos son
+ * problemas de carga que la pantalla no debe presentar como un hecho del negocio.
+ */
+export type CountryManagersDiagnosis =
+  /** Hay resultados: no hay nada que diagnosticar. */
+  | 'ok'
+  /** No se pudo consultar el middleware. */
+  | 'unavailable'
+  /**
+   * No existe ningun nodo `COUNTRY MANAGER%` en la jerarquia comercial. La consulta los
+   * identifica por el NOMBRE del nodo, asi que un renombre los esconde a todos.
+   */
+  | 'sin_nodo'
+  /**
+   * Existe el nodo, pero ninguno de sus integrantes resuelve a esta sociedad. O la
+   * sociedad no tiene CM asignado, o al integrante le falta la fila en `Users` /
+   * `SapCompanyCode` (la consulta usa INNER JOIN).
+   */
+  | 'sin_miembros'
+
 export interface Pagination {
   total: number;
   page: number;

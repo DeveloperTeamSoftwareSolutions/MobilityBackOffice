@@ -9,6 +9,7 @@ import {
   AuthorizerRow,
   AuthorizersPage,
   CountryManager,
+  CountryManagersDiagnosis,
   MatrixFilter,
   MatrixQuery,
   MatrixSummary,
@@ -48,15 +49,33 @@ export class AuthorizersService {
   /**
    * Country Managers de la sociedad — el otro permiso.
    *
-   * `available: false` cuando el middleware no contesto. Se distingue de "no hay"
-   * a proposito: una lista vacia por un error afirmaria que nadie autoriza otra forma
-   * de pago en esa sociedad, que es justo el ticket que la pantalla quiere evitar.
+   * El endpoint devuelve 200 con lista vacia por TRES causas distintas, y solo una es
+   * un hecho del negocio ("esta sociedad no tiene a nadie"). Las otras dos son
+   * problemas de carga: que no exista el nodo `COUNTRY MANAGER%` (la consulta los
+   * identifica por el NOMBRE del nodo, asi que un renombre los esconde a todos) o que
+   * al integrante le falte la fila en `Users` con su `SapCompanyCode`.
+   *
+   * Presentar cualquiera de esas dos como "nadie autoriza otra forma de pago" seria
+   * justo el ticket que la pantalla quiere evitar, asi que cuando la lista viene vacia
+   * se consulta el arbol para separarlas. En el caso normal esa llamada NO se hace.
    */
-  async countryManagers(
-    companyCode: string,
-  ): Promise<{ available: boolean; data: CountryManager[] }> {
+  async countryManagers(companyCode: string): Promise<{
+    available: boolean;
+    diagnosis: CountryManagersDiagnosis;
+    data: CountryManager[];
+  }> {
     const data = await this.client.getCountryManagers(companyCode);
-    return data === null ? { available: false, data: [] } : { available: true, data };
+
+    if (data === null) return { available: false, diagnosis: 'unavailable', data: [] };
+    if (data.length > 0) return { available: true, diagnosis: 'ok', data };
+
+    const hasNode = await this.client.hasCountryManagerNode();
+    // `null` = no se pudo averiguar: se deja en `unavailable` para no afirmar una causa
+    // que no se comprobo.
+    const diagnosis: CountryManagersDiagnosis =
+      hasNode === null ? 'unavailable' : hasNode ? 'sin_miembros' : 'sin_nodo';
+
+    return { available: true, diagnosis, data: [] };
   }
 
   async getMatrix(query: MatrixQuery): Promise<AuthorizersPage> {

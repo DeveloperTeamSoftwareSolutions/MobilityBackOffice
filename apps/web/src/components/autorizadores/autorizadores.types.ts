@@ -84,9 +84,16 @@ export interface CountryManager {
   businessUnit: string | null;
 }
 
+/**
+ * Por que vino vacia la lista. El endpoint devuelve 200 con lista vacia en tres casos
+ * distintos y solo uno es un hecho del negocio; los otros dos son problemas de carga.
+ */
+export type CountryManagersDiagnosis = 'ok' | 'unavailable' | 'sin_nodo' | 'sin_miembros';
+
 export interface CountryManagersResult {
   /** `false` = no se pudo consultar. Distinto de "no hay ninguno". */
   available: boolean;
+  diagnosis: CountryManagersDiagnosis;
   data: CountryManager[];
 }
 

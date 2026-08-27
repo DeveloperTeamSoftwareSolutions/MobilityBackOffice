@@ -1,7 +1,7 @@
 # API — Mobility BackOffice
 
 > Ultima actualizacion: 2026-08-27
-> Version: 2.13.1
+> Version: 2.14.0
 
 Toda respuesta incluye `success`. Los errores siguen el formato de Nest:
 `{ message, error, statusCode }`.
@@ -138,7 +138,7 @@ su banda de firma: es informacion de control interno. `Usuario` **no** entra —
 | Metodo | Ruta | Descripcion |
 |---|---|---|
 | GET | `/api/authorizers/companies` | Typeahead de sociedades. Query: `q`, `limit` (max 50). Va primero porque sin sociedad no hay matriz que pedir |
-| GET | `/api/authorizers/country-managers` | Country Managers de la sociedad — **el otro permiso**, el que no sale de la matriz. Query: `companyCode` (obligatorio). Devuelve `available`: `false` = no se pudo consultar, distinto de "no hay ninguno" |
+| GET | `/api/authorizers/country-managers` | Country Managers de la sociedad — **el otro permiso**, el que no sale de la matriz. Query: `companyCode` (obligatorio). Devuelve `available` y `diagnosis` (ver abajo) |
 | GET | `/api/authorizers` | La matriz, **una fila por autorizador**. Query: `companyCode` (obligatorio, max 8), `page`, `limit` (max 200, default 25), `search`, `sortBy`, `sortDir`, `filter`, `activeOnly`. Devuelve `data`, `pagination` y `summary` |
 
 `sortBy` acepta: `userEmail`, `userId`, `minimumPercentage`, `maximumPercentage`,
@@ -156,6 +156,23 @@ La vista devuelve 1 fila por (sociedad, correo, CEBE) — un gerente con 12 CEBE
 filas. La pregunta es "quien esta en la matriz", asi que el grano de la respuesta es la
 PERSONA. BackOffice agrupa, y por eso **pagina despues de agrupar**: paginar en el
 Middleware partiria a un gerente entre dos paginas.
+
+### `diagnosis`: por que vino vacia la lista de Country Managers
+
+El endpoint del middleware responde **200 con lista vacia por tres causas distintas** y
+solo una es un hecho del negocio. Presentar las otras dos como "nadie autoriza otra
+forma de pago" seria afirmar algo falso, asi que se separan:
+
+| `diagnosis` | Significa |
+|---|---|
+| `ok` | Hay resultados |
+| `unavailable` | No se pudo consultar (tambien `available: false`) |
+| `sin_nodo` | No existe ningun nodo `COUNTRY MANAGER%` en la jerarquia. **Los identifica por el NOMBRE del nodo**, asi que un renombre los esconde a todos |
+| `sin_miembros` | Existe el nodo, pero ninguno de sus integrantes resuelve a esta sociedad (o le falta la fila en `Users` con su `SapCompanyCode`) |
+
+Para distinguir los dos ultimos, BackOffice consulta
+`/mobility/commercial-team-hierarchy/tree` — **solo cuando la lista vino vacia**. En el
+caso normal esa llamada no se hace.
 
 ### La banda viene interpretada, y los crudos tambien
 

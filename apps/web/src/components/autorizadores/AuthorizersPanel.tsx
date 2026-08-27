@@ -91,7 +91,10 @@ export function AuthorizersPanel() {
     setCountryManagers(null);
     getCountryManagers(company.code)
       .then((res) => active && setCountryManagers(res))
-      .catch(() => active && setCountryManagers({ available: false, data: [] }));
+      .catch(
+        () =>
+          active && setCountryManagers({ available: false, diagnosis: 'unavailable', data: [] }),
+      );
     return () => {
       active = false;
     };

@@ -38,11 +38,13 @@ function makeService(
   rows: AuthorizerRow[],
   names: Map<string, string> = new Map(),
   countryManagers: unknown[] | null = [],
+  hasNode: boolean | null = false,
 ) {
   const client = {
     getMatrix: jest.fn().mockResolvedValue(rows),
     getProfitCenterNames: jest.fn().mockResolvedValue(names),
     getCountryManagers: jest.fn().mockResolvedValue(countryManagers),
+    hasCountryManagerNode: jest.fn().mockResolvedValue(hasNode),
   };
   const regions = { searchCompanies: jest.fn().mockResolvedValue([]) };
   return {
@@ -336,7 +338,17 @@ describe('AuthorizersService — country managers', () => {
 
     const res = await service.countryManagers('2100');
     expect(res.available).toBe(true);
+    expect(res.diagnosis).toBe('ok');
     expect(res.data).toHaveLength(1);
+  });
+
+  it('con resultados NO consulta el arbol: es una llamada de mas', async () => {
+    const { service, client } = makeService([], new Map(), [
+      { companyCode: '2100', email: 'cm@duwy.com', memberName: 'Ana', role: 'CM' },
+    ]);
+
+    await service.countryManagers('2100');
+    expect(client.hasCountryManagerNode).not.toHaveBeenCalled();
   });
 
   it('un fallo del middleware NO se confunde con "no hay ninguno"', async () => {
@@ -346,13 +358,40 @@ describe('AuthorizersService — country managers', () => {
 
     const res = await service.countryManagers('2100');
     expect(res.available).toBe(false);
+    expect(res.diagnosis).toBe('unavailable');
     expect(res.data).toEqual([]);
   });
 
-  it('una sociedad sin country managers devuelve vacio pero disponible', async () => {
-    const { service } = makeService([], new Map(), []);
+  /**
+   * Los tres casos de "200 con lista vacia". Solo UNO es un hecho del negocio; los
+   * otros dos son problemas de carga y la pantalla no debe presentarlos como
+   * "nadie autoriza otra forma de pago".
+   */
+  it('sin nodo COUNTRY MANAGER en la jerarquia: los esconde a todos', async () => {
+    const { service } = makeService([], new Map(), [], false);
 
     const res = await service.countryManagers('2100');
-    expect(res).toEqual({ available: true, data: [] });
+    expect(res).toEqual({ available: true, diagnosis: 'sin_nodo', data: [] });
+  });
+
+  it('con nodo pero sin miembros de esta sociedad', async () => {
+    const { service } = makeService([], new Map(), [], true);
+
+    const res = await service.countryManagers('2100');
+    expect(res).toEqual({ available: true, diagnosis: 'sin_miembros', data: [] });
+  });
+
+  it('si no se pudo mirar el arbol, no se afirma ninguna causa', async () => {
+    const { service } = makeService([], new Map(), [], null);
+
+    const res = await service.countryManagers('2100');
+    expect(res.diagnosis).toBe('unavailable');
+  });
+
+  it('el arbol se consulta SOLO cuando la lista vino vacia', async () => {
+    const { service, client } = makeService([], new Map(), [], true);
+
+    await service.countryManagers('2100');
+    expect(client.hasCountryManagerNode).toHaveBeenCalledTimes(1);
   });
 });

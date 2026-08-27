@@ -2,6 +2,8 @@
 export type BackOfficeRole =
   | 'SuperAdmin'
   | 'Soporte'
+  /** Todo el back-office menos la consola de soporte. */
+  | 'Usuario'
   | 'Administrador'
   | 'Marketing';
 

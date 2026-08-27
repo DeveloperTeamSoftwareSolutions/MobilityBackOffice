@@ -8,6 +8,14 @@ export enum BackOfficeRole {
   SuperAdmin = 'SuperAdmin',
   /** Consola de soporte: auditar y corregir ordenes/cotizaciones (DevelopersTeam). */
   Soporte = 'Soporte',
+  /**
+   * Todo el back-office MENOS la consola de soporte.
+   *
+   * No es "SuperAdmin sin la consola": es el rol para quien trabaja con las
+   * herramientas del dia a dia (Regiones, Marketing) sin acceso a la consola, que
+   * altera documentos del flujo y queda restringida al DevelopersTeam.
+   */
+  Usuario = 'Usuario',
   /** Regiones comerciales y configuracion. */
   Administrador = 'Administrador',
   /** Templates de WhatsApp y carga de documentacion del RAG. */

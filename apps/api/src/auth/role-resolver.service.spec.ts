@@ -142,3 +142,42 @@ describe('RoleResolver — rol de Soporte (consola de soporte)', () => {
     ).toBe(BackOfficeRole.SuperAdmin);
   });
 });
+
+describe('RoleResolver — rol Usuario', () => {
+  const resolver = new RoleResolver();
+
+  it('mapea MOBILITYBO_USER a Usuario', () => {
+    expect(resolver.resolve({ roleKeys: ['MOBILITYBO_USER'] })).toBe(
+      BackOfficeRole.Usuario,
+    );
+  });
+
+  it('Usuario gana sobre Administrador y Marketing, porque los contiene', () => {
+    // Si ganara uno de ellos, el usuario perderia la otra mitad del back-office.
+    expect(
+      resolver.resolve({
+        roleKeys: ['MOBILITYBO_ADMIN', 'MOBILITYBO_MARKETING', 'MOBILITYBO_USER'],
+      }),
+    ).toBe(BackOfficeRole.Usuario);
+  });
+
+  it('Soporte gana sobre Usuario: se asigna deliberadamente', () => {
+    // Consecuencia conocida: quien tenga los dos pierde el resto del back-office.
+    // Quien necesite ambas cosas va con SUPERADMIN. Ver docs/ROLES_Y_PERMISOS.md.
+    expect(
+      resolver.resolve({ roleKeys: ['MOBILITYBO_USER', 'MOBILITYBO_SUPPORT'] }),
+    ).toBe(BackOfficeRole.Soporte);
+  });
+
+  it('SuperAdmin gana sobre Usuario', () => {
+    expect(
+      resolver.resolve({ roleKeys: ['MOBILITYBO_USER', 'MOBILITYBO_SUPERADMIN'] }),
+    ).toBe(BackOfficeRole.SuperAdmin);
+  });
+
+  it('el RoleKey de Usuario NO es MOBILITYBO_USUARIO', () => {
+    // La clave que registra el SQL 007 es MOBILITYBO_USER. Un typo aca devuelve null
+    // y el login responde 403 sin explicar por que.
+    expect(resolver.resolve({ roleKeys: ['MOBILITYBO_USUARIO'] })).toBeNull();
+  });
+});

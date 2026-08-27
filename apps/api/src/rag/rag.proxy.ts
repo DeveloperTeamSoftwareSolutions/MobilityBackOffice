@@ -12,6 +12,7 @@ export const RAG_COOKIE = 'bo_rag_token';
 /** Roles que pueden acceder al RAG. SuperAdmin pasa siempre. */
 const ALLOWED_ROLES: readonly string[] = [
   BackOfficeRole.Marketing,
+  BackOfficeRole.Usuario,
   BackOfficeRole.SuperAdmin,
 ];
 

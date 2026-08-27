@@ -33,8 +33,10 @@ Documento **vivo**: marcar la casilla y anotar la fecha al aplicar cada script e
 | 004 | `004_ViewProfitCentersMobility.sql` | Versiona `dbo.VIEW_ProfitCentersMobility` (se consumia sin estar en ningun repo) | [x] verificado 2026-07-20 (ya existia; **el script NO la modifico**) | [x] existe en PROD (dump 2026-08-05) |
 | 005 | `005_ViewV2CompaniesMobility.sql` | Crea `dbo.VIEW_V2_CompaniesMobility` (wrapper cross-DB sobre `[SAPServices].[dbo].[Companies]`). La consume el Middleware para el typeahead de sociedades del alta de CEBE | [x] ya existia en QATEST | [ ] **FALTA en PROD — aplicar** |
 | 006 | `006_AddSupportRole.sql` | Rol `MOBILITYBO_SUPPORT` + permisos `SUPPORT_VIEW` / `SUPPORT_OVERRIDE` + mapeo (tambien a SUPERADMIN). Habilita la consola de soporte (v2.1.0) | [ ] **pendiente** | [ ] **pendiente** |
+| 007 | `007_AddUserRole.sql` | Rol `MOBILITYBO_USER` + permiso `USER_ACCESS` + herencia de los permisos de Administrador y Marketing (excluye los de soporte). Habilita el rol Usuario: todo el back-office menos la consola de soporte (v2.11.0) | [ ] **pendiente** | [ ] **pendiente** |
 
-Orden de ejecucion: **001 → 002 → 003 → 004 → 005 → 006**. El 003 requiere que el 002 ya exista.
+Orden de ejecucion: **001 → 002 → 003 → 004 → 005 → 006 → 007**. El 003 requiere que el 002 ya exista.
+El 006 y el 007 requieren el 001 (sin la Application, el rol no tiene donde colgarse).
 El 005 requiere que la base `[SAPServices]` exista en la instancia (existe en ambos entornos).
 
 Los scripts 002 y 003 son los `004_` y `006_` del repo MobilityManager, renumerados.

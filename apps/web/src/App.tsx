@@ -73,6 +73,21 @@ export function App(): JSX.Element {
             />
 
             <Route
+              path="matriz-autorizadores"
+              element={
+                <RoleGuard
+                  allow={['SuperAdmin']}
+                  fallback={<Navigate to="/" replace />}
+                >
+                  <ComingSoon
+                    titulo="Matriz de autorizadores"
+                    descripcion="Consultá quién autoriza y con qué límites, sin tener que ir a la base de datos."
+                  />
+                </RoleGuard>
+              }
+            />
+
+            <Route
               path="soporte"
               element={
                 <RoleGuard

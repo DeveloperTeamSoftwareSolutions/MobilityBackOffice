@@ -4,11 +4,16 @@ import {
   IconChatSquare,
   IconFileText,
   IconSupport,
+  IconShieldCheck,
 } from '../components/layout/icons';
 import type { BackOfficeRole } from '../types';
 import { roleAllows } from '../auth/roleAccess';
 
-export type SectionGroup = 'Administración' | 'Marketing' | 'Soporte';
+export type SectionGroup =
+  | 'Administración'
+  | 'Marketing'
+  | 'Soporte'
+  | 'Autorizaciones';
 
 export interface NavSection {
   key: string;
@@ -73,10 +78,27 @@ export const NAV_SECTIONS: NavSection[] = [
     status: 'ready',
     icon: <IconSupport />,
   },
+  {
+    key: 'autorizadores',
+    label: 'Matriz de autorizadores',
+    description:
+      'Consultá quién autoriza y con qué límites, sin tener que ir a la base de datos.',
+    path: '/matriz-autorizadores',
+    group: 'Autorizaciones',
+    // Exclusiva de SuperAdmin: la lista explícita también deja afuera a `Usuario`.
+    roles: ['SuperAdmin'],
+    status: 'soon',
+    icon: <IconShieldCheck />,
+  },
 ];
 
 /** Orden de los grupos en el sidebar y el inicio. */
-export const SECTION_GROUPS: SectionGroup[] = ['Administración', 'Marketing', 'Soporte'];
+export const SECTION_GROUPS: SectionGroup[] = [
+  'Administración',
+  'Marketing',
+  'Soporte',
+  'Autorizaciones',
+];
 
 /** Secciones visibles para un rol. */
 export function visibleSections(role: BackOfficeRole | null): NavSection[] {

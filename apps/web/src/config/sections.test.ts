@@ -11,7 +11,7 @@ import type { BackOfficeRole } from '../types';
  * ella sin volver a mirar el código. Si el código cambia y la tabla no, esto falla.
  */
 const MATRIZ: Record<string, string[]> = {
-  SuperAdmin: ['regiones', 'templates', 'rag', 'soporte'],
+  SuperAdmin: ['regiones', 'templates', 'rag', 'soporte', 'autorizadores'],
   Soporte: ['soporte'],
   Usuario: ['regiones', 'templates', 'rag'],
   Administrador: ['regiones'],
@@ -38,15 +38,21 @@ describe('visibleSections — la matriz documentada', () => {
     expect(cubiertas).toEqual(declaradas);
   });
 
-  it('Usuario ve todo lo que ve SuperAdmin salvo la consola de soporte', () => {
+  it('Usuario ve lo de SuperAdmin salvo soporte y lo exclusivo de SuperAdmin', () => {
     // La regla del rol, verificada contra las secciones reales y no contra una lista.
     const superAdmin = visibleSections('SuperAdmin').map((s) => s.key);
     const usuario = visibleSections('Usuario').map((s) => s.key);
     const soporte = NAV_SECTIONS.filter((s) => s.roles.includes('Soporte')).map((s) => s.key);
+    const soloSuperAdmin = NAV_SECTIONS.filter((s) =>
+      s.roles.includes('SuperAdmin'),
+    ).map((s) => s.key);
 
     expect(usuario.sort()).toEqual(
-      superAdmin.filter((k) => !soporte.includes(k)).sort(),
+      superAdmin
+        .filter((k) => !soporte.includes(k) && !soloSuperAdmin.includes(k))
+        .sort(),
     );
     expect(soporte.length).toBeGreaterThan(0);
+    expect(soloSuperAdmin.length).toBeGreaterThan(0);
   });
 });

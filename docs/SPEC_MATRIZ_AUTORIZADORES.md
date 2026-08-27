@@ -1,6 +1,6 @@
 # Matriz de autorizadores — especificacion
 
-> Ultima actualizacion: 2026-08-27 · Version: 2.13.0
+> Ultima actualizacion: 2026-08-27 · Version: 2.13.1
 >
 > Quien puede autorizar en cada sociedad y con que limites. Seccion de **consulta**:
 > reemplaza tener que entrar a la base para responder esa pregunta.
@@ -22,7 +22,7 @@ La seccion no solo lista: **marca las filas que no sirven**. Ver §5.
 
 `[SAPServices].[dbo].[AuthorizerLimits]` + `[AuthorizerProfitCenters]`, replicadas de
 SAP, consultadas por el Middleware a traves de
-`VIEW_AuthorizerLimitsProfitCentersMobility`.
+`VIEW_V2_AuthorizerLimitsProfitCentersMobility` (la v1 esta deprecada, ver mas abajo).
 
 **Es de solo lectura y no se negocia.** Las tablas las sincroniza SAP: una fila cargada a
 mano la pisa la proxima sincronizacion. Si hay que cambiar la matriz, es un pedido a SAP,
@@ -30,22 +30,34 @@ no un desarrollo. Los tres endpoints del Middleware exponen unicamente `GET`.
 
 ### Cual de los tres endpoints
 
-El Middleware expone tres, y el nombre de la tarea apunta al primero:
+El Middleware expone tres, y el nombre de la tarea apunta al primero (los paths se
+muestran en su forma v1, que es como estan nombrados en el roadmap; se consume la v2):
 
 | Endpoint | Que devuelve | Filas (QATEST, 2026-08-27) |
 |---|---|---|
-| `/mobility/authorizer-limits` | Bandas por (sociedad, correo). Sin CEBEs | 82 |
-| `/mobility/authorizer-profit-centers` | CEBEs por persona, con vigencia. Sin banda | 221 |
-| **`/mobility/authorizer-limits-profit-centers`** | **El join — la matriz** | **991** |
+| `authorizer-limits` | Bandas por (sociedad, correo). Sin CEBEs | 82 |
+| `authorizer-profit-centers` | CEBEs por persona, con vigencia. Sin banda | 221 |
+| **`authorizer-limits-profit-centers`** | **El join — la matriz** | **991** |
 
 Se usa el **tercero**. Es el que el Middleware consulta cuando decide si alguien puede
 autorizar (`approverLimits.js`, `businessOrderAuthorizations.repository.js`), asi que es
 el unico que garantiza que la pantalla diga lo mismo que el motor. Reconstruir la matriz
 cruzando los otros dos a mano es trabajo repetido y una fuente de deriva.
 
-Los tres tienen gemelo `v2` (`VIEW_V2_*`). **Se apunta a v1 a proposito**: es el que ya
-corre en produccion. Cuando las vistas V2 esten aplicadas en QATEST y PROD, alcanza con
-cambiar `MATRIX_PATH` en `apps/api/src/authorizers/authorizers.client.ts`.
+### Se usa v2, no v1
+
+**Las tres vistas `authorizer-*` v1 estan marcadas PARA DEPRECAR** en el relevamiento de
+Mobility-PROD (`RESUMEN DE VISTAS OK Y PARA DEPRECAR.xlsx`), asi que se consume
+`/v2/mobility/authorizer-limits-profit-centers` sobre
+`VIEW_V2_AuthorizerLimitsProfitCentersMobility`. Mismas columnas, mismo contrato.
+
+Lo mismo con el maestro de CEBEs: `/v2/mobility/profit-centers`.
+
+> Las **tablas** de origen (`AuthorizerLimits`, `AuthorizerProfitCenters`) **no** estan
+> deprecadas: figuran sin marca en el relevamiento de SAPServices. Lo que muere es el
+> wrapper v1, no el dato.
+
+Ver `docs/VISTAS_Y_TABLAS_DEPRECADAS.md`.
 
 ---
 
@@ -166,7 +178,7 @@ falsa que la seccion quiere eliminar.
 | `validUntil` viene `9999-12-31`, no `null` | Mostrar esa fecha literal confunde. Se renderiza **"Sin vencimiento"** |
 | `approvalLevel` viene vacio en todas las filas relevadas | **No se usa como columna** y se saco de la whitelist de sort. Sigue en el DTO por si SAP empieza a cargarlo |
 | Los CEBEs se asignan por persona, sin sociedad | El LEFT JOIN une solo por correo. Por eso 82 limites x 221 asignaciones dan 991 filas, y por eso **no se puede** dar un CEBE en una sociedad y no en otra |
-| La matriz trae codigos, no nombres | El nombre del CEBE se cruza con `/mobility/profit-centers` (~66 filas, una llamada). Si esa llamada falla, la pantalla sigue con los codigos pelados: es un catalogo de apoyo, no la matriz |
+| La matriz trae codigos, no nombres | El nombre del CEBE se cruza con `/v2/mobility/profit-centers` (~66 filas, una llamada). Si esa llamada falla, la pantalla sigue con los codigos pelados: es un catalogo de apoyo, no la matriz |
 | No hay nombre de persona | Los endpoints de la matriz traen correo y `userId`. Se muestra el correo. (El de Country Managers si trae `memberName`) |
 | `activeOnly` no filtra al comodin | El filtro corre sobre `ValidFrom`/`ValidUntil`, que vienen NULL en la fila del comodin, asi que pasa igual. No es un bug: es el grano de la vista |
 
@@ -212,7 +224,7 @@ sumarlo; por eso hubo que excluir tambien lo que pide `SuperAdmin` explicitament
 
 | Archivo | Que hace |
 |---|---|
-| `authorizers.client.ts` | Middleware: matriz, maestro de CEBEs, Country Managers |
+| `authorizers.client.ts` | Middleware (**v2**): matriz, maestro de CEBEs, Country Managers |
 | `authorizers.band.ts` | Replica de `effectiveBand()` — ver la deuda de §5 |
 | `authorizers.service.ts` | Agrupa por persona, resume, filtra, ordena y pagina |
 | `authorizers.controller.ts` | `@Roles(SuperAdmin)`, whitelist de sort y filtro |
@@ -247,11 +259,11 @@ sumarlo; por eso hubo que excluir tambien lo que pide `SuperAdmin` explicitament
 ### Sin abrir la app
 
 ```bash
-# la matriz de una sociedad — es el endpoint de la pantalla
-curl "http://localhost:6002/api/mobility/authorizer-limits-profit-centers?companyCode=2100&limit=5"
+# la matriz de una sociedad — es el endpoint de la pantalla (v2: la v1 esta deprecada)
+curl "http://localhost:6002/api/v2/mobility/authorizer-limits-profit-centers?companyCode=2100&limit=5"
 
 # la restriccion: sin companyCode responde 400
-curl "http://localhost:6002/api/mobility/authorizer-limits-profit-centers"
+curl "http://localhost:6002/api/v2/mobility/authorizer-limits-profit-centers"
 
 # el selector de sociedades
 curl "http://localhost:6002/api/v2/mobility/companies?limit=20"
@@ -268,5 +280,6 @@ curl "http://localhost:6002/api/mobility/commercial-team-hierarchy/country-manag
 - **Vista de todas las sociedades juntas.** Ver §3.
 - **Nombre de la persona.** Se muestra el correo; cruzar contra `Users` quedaria como
   otra fuente mas, con los correos sin match quedando igual sin nombre.
-- **Migracion a v2.** Ver §2.
+- **Migrar los otros dos `authorizer-*`.** No los consume nadie de BackOffice; se
+  deprecan igual.
 - **Los tres hallazgos de §10** — son del Middleware.

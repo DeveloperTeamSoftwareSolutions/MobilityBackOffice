@@ -11,7 +11,7 @@ function make(cfg: Record<string, string | undefined>) {
 }
 
 const BASE = { 'middleware.url': 'http://mw:6002/api/' };
-const URL = 'http://mw:6002/api/mobility/profit-centers';
+const URL = 'http://mw:6002/api/v2/mobility/profit-centers';
 
 /** Respuesta del middleware: `data` en camelCase + `pagination` estándar. */
 function page(items: { profitCenterCode: string; profitCenterName: string | null }[], total = items.length) {
@@ -41,7 +41,7 @@ describe('mapProfitCenter', () => {
 });
 
 describe('RegionsClient.searchProfitCenters', () => {
-  it('pega a /mobility/profit-centers con search, limit y orden por código', async () => {
+  it('pega a /v2/mobility/profit-centers con search, limit y orden por código', async () => {
     const { client, http } = make(BASE);
     (http.get as jest.Mock).mockReturnValue(page([]));
 

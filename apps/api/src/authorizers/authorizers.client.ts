@@ -13,12 +13,12 @@ import { AuthorizerRow, CountryManager } from './authorizers.types';
  * sin CEBEs y CEBEs sin bandas. Este es el join, y es el que consume la logica real de
  * aprobacion del middleware (`approverLimits.js`, `approvalNotifierService.js`).
  *
- * Se apunta a **v1** a proposito: es el que ya corre en produccion, asi que el dato
- * existe seguro. El `API_V2_ROADMAP.md` del middleware lo lista para migrar; cuando las
- * vistas `VIEW_V2_*` esten aplicadas en QATEST y PROD, alcanza con cambiar esta
- * constante.
+ * Se apunta a **v2**: la vista v1 (`VIEW_AuthorizerLimitsProfitCentersMobility`) esta
+ * marcada PARA DEPRECAR en el relevamiento de Mobility-PROD, junto con las otras dos
+ * `authorizer-*`. `VIEW_V2_AuthorizerLimitsProfitCentersMobility` queda como vigente y
+ * expone las mismas columnas.
  */
-const MATRIX_PATH = '/mobility/authorizer-limits-profit-centers';
+const MATRIX_PATH = '/v2/mobility/authorizer-limits-profit-centers';
 
 /**
  * Tope de filas que se le piden al middleware de una vez.
@@ -33,8 +33,10 @@ const FETCH_LIMIT = 50000;
 /**
  * Maestro de CEBEs. La matriz devuelve codigos y no nombres, asi que sin esto la
  * pantalla es un tablero de numeros. Son ~66 filas: entran en una sola llamada.
+ *
+ * v2: `VIEW_ProfitCentersMobility` (v1) esta marcada para deprecar.
  */
-const PROFIT_CENTERS_PATH = '/mobility/profit-centers';
+const PROFIT_CENTERS_PATH = '/v2/mobility/profit-centers';
 
 /**
  * Country Managers de la sociedad — el OTRO permiso, el que no sale de la matriz.

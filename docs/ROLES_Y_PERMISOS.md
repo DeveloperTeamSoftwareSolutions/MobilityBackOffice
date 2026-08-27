@@ -1,6 +1,6 @@
 # Roles y Permisos — Mobility BackOffice
 
-> Última actualización: 2026-08-27 · Versión: 2.12.0
+> Última actualización: 2026-08-27 · Versión: 2.13.0
 >
 > Qué puede hacer cada rol, cómo se decide, y cómo se registra en ITManager.
 
@@ -70,7 +70,7 @@ y (cuando exista) los templates de WhatsApp.
 | Documentación del RAG | ✓ | — | ✓ | — | ✓ |
 | Templates de WhatsApp *(próximamente)* | ✓ | — | ✓ | — | ✓ |
 | **Consola de soporte** | ✓ | ✓ | **—** | — | — |
-| **Matriz de autorizadores** *(próximamente)* | ✓ | — | **—** | **—** | **—** |
+| **Matriz de autorizadores** | ✓ | — | **—** | **—** | **—** |
 | *Cualquier sección futura no-soporte* | ✓ | — | ✓ | — | — |
 
 "Inicio" es fijo y siempre visible; muestra solo las tarjetas de las secciones que el rol
@@ -85,6 +85,7 @@ puede abrir.
 | `/api/regions/*` | Administrador, Usuario, SuperAdmin |
 | `/rag/*` (proxy) | Marketing, Usuario, SuperAdmin |
 | `/api/support/*` | **Soporte, SuperAdmin** |
+| `/api/authorizers/*` | **Solo SuperAdmin** |
 | `/api/regions/sync` | Ninguno — se autentica por API key (máquina a máquina) |
 
 > **La UI oculta; el backend prohíbe.** Esconder una sección es comodidad, no seguridad:

@@ -20,5 +20,8 @@ import { ApiKeyGuard } from './api-key.guard';
   imports: [AuthModule, HttpModule],
   controllers: [RegionsController, RegionsSyncController],
   providers: [RegionsService, RegionsRepository, RegionsClient, ApiKeyGuard],
+  // `AuthorizersModule` reusa el maestro de sociedades (`searchCompanies`) en vez de
+  // tener un segundo cliente del mismo catalogo.
+  exports: [RegionsClient],
 })
 export class RegionsModule {}

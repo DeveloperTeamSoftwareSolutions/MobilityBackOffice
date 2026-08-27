@@ -1,7 +1,7 @@
 # APIs y Endpoints Externos — Mobility BackOffice
 
-> Ultima actualizacion: 2026-08-25
-> Version: 2.4.0
+> Ultima actualizacion: 2026-08-27
+> Version: 2.13.0
 
 ## Integraciones activas
 
@@ -50,6 +50,9 @@ MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
   | GET | `/mobility/document-timeline` | Bitacora unificada de una orden/cotizacion (consola de soporte) | `BusinessOrders`/`BusinessQuotes` + `Auditories`, pagos, credito y resoluciones | `src/support/support.client.ts` |
   | GET | `/mobility/support/documents` | Listado de documentos SIN scope de vendedor (consola de soporte) | `BusinessOrders` / `BusinessQuotes` | idem |
   | GET | `/mobility/support/statuses` | Estados presentes con su conteo, para el filtro | idem | idem |
+  | GET | `/mobility/authorizer-limits-profit-centers` | **La matriz de autorizadores** de una sociedad (banda + CEBEs). `companyCode` obligatorio | `dbo.VIEW_AuthorizerLimitsProfitCentersMobility` sobre `[SAPServices].[dbo].[AuthorizerLimits]` + `[AuthorizerProfitCenters]` | `src/authorizers/authorizers.client.ts` |
+  | GET | `/mobility/commercial-team-hierarchy/country-manager` | Country Managers de la sociedad — autorizan "otra forma de pago", que NO pasa por la matriz | `dbo.CommercialTeamHierarchy` + `Users` | idem |
+  | GET | `/mobility/profit-centers` | Nombre del CEBE para la matriz (la vista solo trae el codigo) | `dbo.VIEW_ProfitCentersMobility` | idem |
 - **Cross-database y collations**: el join a `[SAPServices].[dbo].[Companies]` y el manejo de
   collations ocurren **dentro del Middleware** (via `VIEW_V2_CompaniesMobility`). BackOffice ya
   no depende de eso: es una preocupacion del Middleware, no de esta app.

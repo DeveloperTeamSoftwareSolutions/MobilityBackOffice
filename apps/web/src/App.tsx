@@ -9,6 +9,7 @@ import { HomePage } from './pages/HomePage';
 import { RegionesPage } from './pages/RegionesPage';
 import { RagPage } from './pages/RagPage';
 import { SoportePage } from './pages/SoportePage';
+import { AutorizadoresPage } from './pages/AutorizadoresPage';
 
 /**
  * Router de la aplicación. Punto único donde se declaran los módulos.
@@ -79,10 +80,7 @@ export function App(): JSX.Element {
                   allow={['SuperAdmin']}
                   fallback={<Navigate to="/" replace />}
                 >
-                  <ComingSoon
-                    titulo="Matriz de autorizadores"
-                    descripcion="Consultá quién autoriza y con qué límites, sin tener que ir a la base de datos."
-                  />
+                  <AutorizadoresPage />
                 </RoleGuard>
               }
             />

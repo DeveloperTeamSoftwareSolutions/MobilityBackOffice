@@ -87,7 +87,7 @@ export const NAV_SECTIONS: NavSection[] = [
     group: 'Autorizaciones',
     // Exclusiva de SuperAdmin: la lista explícita también deja afuera a `Usuario`.
     roles: ['SuperAdmin'],
-    status: 'soon',
+    status: 'ready',
     icon: <IconShieldCheck />,
   },
 ];

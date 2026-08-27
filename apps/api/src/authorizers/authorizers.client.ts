@@ -1,0 +1,222 @@
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
+import { middlewareBase, middlewareHeaders } from '../common/middleware-request';
+import { AuthorizerRow, CountryManager } from './authorizers.types';
+
+/**
+ * Matriz de autorizadores del middleware.
+ *
+ * DE LOS TRES ENDPOINTS `authorizer-*` ESTE ES EL QUE SIRVE. Los otros dos
+ * (`/authorizer-limits`, `/authorizer-profit-centers`) son las mitades sueltas: bandas
+ * sin CEBEs y CEBEs sin bandas. Este es el join, y es el que consume la logica real de
+ * aprobacion del middleware (`approverLimits.js`, `approvalNotifierService.js`).
+ *
+ * Se apunta a **v1** a proposito: es el que ya corre en produccion, asi que el dato
+ * existe seguro. El `API_V2_ROADMAP.md` del middleware lo lista para migrar; cuando las
+ * vistas `VIEW_V2_*` esten aplicadas en QATEST y PROD, alcanza con cambiar esta
+ * constante.
+ */
+const MATRIX_PATH = '/mobility/authorizer-limits-profit-centers';
+
+/**
+ * Tope de filas que se le piden al middleware de una vez.
+ *
+ * El grano de la fuente es (autorizador x CEBE), y la UI agrupa por autorizador, asi que
+ * hay que traer la sociedad ENTERA antes de poder paginar: paginar la fuente partiria a
+ * un gerente entre dos paginas. El endpoint clampea a 200 en modo normal y a 50.000 con
+ * `export=1`, que es el modo que se usa aca.
+ */
+const FETCH_LIMIT = 50000;
+
+/**
+ * Maestro de CEBEs. La matriz devuelve codigos y no nombres, asi que sin esto la
+ * pantalla es un tablero de numeros. Son ~66 filas: entran en una sola llamada.
+ */
+const PROFIT_CENTERS_PATH = '/mobility/profit-centers';
+
+/**
+ * Country Managers de la sociedad — el OTRO permiso, el que no sale de la matriz.
+ * Ver `CountryManager` en los tipos. Trae nombre y correo ya resueltos.
+ */
+const COUNTRY_MANAGERS_PATH = '/mobility/commercial-team-hierarchy/country-manager';
+
+/** Fila tal como la publica el middleware (camelCase). */
+interface MwAuthorizerRow {
+  companyCode?: string | null;
+  authorizerLimitGuid?: string | null;
+  userEmail?: string | null;
+  userId?: string | null;
+  minimumPercentage?: number | null;
+  maximumPercentage?: number | null;
+  approvalLevel?: string | null;
+  profitCenter?: string | null;
+  validFrom?: string | null;
+  validUntil?: string | null;
+}
+
+/** Fila del maestro de CEBEs. */
+interface MwProfitCenter {
+  profitCenterCode?: string | null;
+  profitCenterName?: string | null;
+}
+
+/** Country Manager tal como lo publica el middleware. */
+interface MwCountryManager {
+  companyCode?: string | null;
+  email?: string | null;
+  memberName?: string | null;
+  role?: string | null;
+  sapUserId?: string | null;
+  country?: string | null;
+  businessUnit?: string | null;
+}
+
+interface MwResponse {
+  success?: boolean;
+  data?: MwAuthorizerRow[];
+  pagination?: { total?: number };
+}
+
+/** Normaliza a `null` lo que viene vacio, y recorta lo que viene con espacios. */
+function text(value: string | null | undefined): string | null {
+  const trimmed = (value ?? '').trim();
+  return trimmed === '' ? null : trimmed;
+}
+
+function mapRow(row: MwAuthorizerRow): AuthorizerRow | null {
+  const userEmail = text(row.userEmail);
+  // Sin email la fila no identifica a nadie: no hay forma de agruparla ni de mostrarla.
+  if (!userEmail) return null;
+
+  return {
+    companyCode: text(row.companyCode) ?? '',
+    authorizerLimitGuid: text(row.authorizerLimitGuid),
+    userEmail,
+    userId: text(row.userId),
+    minimumPercentage: row.minimumPercentage != null ? Number(row.minimumPercentage) : null,
+    maximumPercentage: row.maximumPercentage != null ? Number(row.maximumPercentage) : null,
+    approvalLevel: text(row.approvalLevel),
+    profitCenter: text(row.profitCenter),
+    validFrom: text(row.validFrom),
+    validUntil: text(row.validUntil),
+  };
+}
+
+@Injectable()
+export class AuthorizersClient {
+  constructor(
+    private readonly http: HttpService,
+    private readonly config: ConfigService,
+  ) {}
+
+  private base(): string {
+    return middlewareBase(this.config);
+  }
+
+  private headers(): Record<string, string> {
+    return middlewareHeaders(this.config);
+  }
+
+  /**
+   * Todas las filas de la matriz de una sociedad, sin agrupar.
+   *
+   * @param companyCode Sociedad SAP. El endpoint lo exige: no hay "toda la matriz".
+   * @param activeOnly  Solo asignaciones de CEBE vigentes hoy. OJO: el middleware
+   *                    aplica el filtro sobre `ValidFrom`/`ValidUntil`, que vienen NULL
+   *                    para un autorizador sin ningun CEBE (LEFT JOIN), asi que esos
+   *                    pasan igual. No es un bug del filtro, es el grano de la vista.
+   */
+  async getMatrix(companyCode: string, activeOnly: boolean): Promise<AuthorizerRow[]> {
+    if (!this.base()) {
+      throw new ServiceUnavailableException('El middleware no está configurado');
+    }
+
+    try {
+      const res = await firstValueFrom(
+        this.http.get<MwResponse>(`${this.base()}${MATRIX_PATH}`, {
+          params: {
+            companyCode,
+            page: 1,
+            limit: FETCH_LIMIT,
+            export: '1',
+            activeOnly: activeOnly ? '1' : undefined,
+            sortBy: 'UserEmail',
+            sortDir: 'ASC',
+          },
+          headers: this.headers(),
+          timeout: 30000,
+        }),
+      );
+
+      return (res.data?.data ?? []).map(mapRow).filter((r): r is AuthorizerRow => r !== null);
+    } catch {
+      throw new ServiceUnavailableException('La matriz de autorizadores no está disponible');
+    }
+  }
+
+  /**
+   * Nombres del maestro de CEBEs, indexados por codigo.
+   *
+   * Es un CATALOGO DE APOYO: si falla, la pantalla sigue sirviendo con los codigos
+   * pelados. Por eso devuelve un mapa vacio en vez de propagar el error — quedarse sin
+   * los nombres es cosmetico, quedarse sin la matriz no.
+   */
+  async getProfitCenterNames(): Promise<Map<string, string>> {
+    const names = new Map<string, string>();
+    if (!this.base()) return names;
+
+    try {
+      const res = await firstValueFrom(
+        this.http.get<{ data?: MwProfitCenter[] }>(`${this.base()}${PROFIT_CENTERS_PATH}`, {
+          params: { page: 1, limit: FETCH_LIMIT, export: '1' },
+          headers: this.headers(),
+          timeout: 20000,
+        }),
+      );
+
+      for (const item of res.data?.data ?? []) {
+        const code = text(item.profitCenterCode);
+        const name = text(item.profitCenterName);
+        if (code && name) names.set(code, name);
+      }
+    } catch {
+      // Catalogo de apoyo: sin nombres la pantalla sigue siendo util.
+    }
+    return names;
+  }
+
+  /**
+   * Country Managers de la sociedad.
+   *
+   * Igual que los nombres: si falla NO tumba la matriz, pero a diferencia de aquellos
+   * su ausencia SI cambia lo que la pantalla afirma, asi que el service lo marca para
+   * que la UI avise en vez de mostrar una lista vacia como si no hubiera ninguno.
+   */
+  async getCountryManagers(companyCode: string): Promise<CountryManager[] | null> {
+    if (!this.base()) return null;
+
+    try {
+      const res = await firstValueFrom(
+        this.http.get<{ data?: MwCountryManager[] }>(`${this.base()}${COUNTRY_MANAGERS_PATH}`, {
+          params: { companyCode },
+          headers: this.headers(),
+          timeout: 20000,
+        }),
+      );
+
+      return (res.data?.data ?? []).map((item) => ({
+        companyCode: text(item.companyCode),
+        email: text(item.email),
+        name: text(item.memberName),
+        role: text(item.role),
+        sapUserId: text(item.sapUserId),
+        country: text(item.country),
+        businessUnit: text(item.businessUnit),
+      }));
+    } catch {
+      return null;
+    }
+  }
+}

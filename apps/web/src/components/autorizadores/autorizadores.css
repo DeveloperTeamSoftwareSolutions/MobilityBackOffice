@@ -463,3 +463,123 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* ---- Nodos de la jerarquía comercial ---- */
+
+.bo-az__cmcaveat {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--bo-warning);
+  border-radius: var(--bo-radius-sm);
+  background: rgba(180, 83, 9, 0.06);
+  font-size: 13px;
+  color: var(--bo-text);
+}
+
+.bo-az__cmnode {
+  margin-bottom: 20px;
+}
+
+.bo-az__cmnodename {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--bo-text-muted);
+}
+
+.bo-az__cmnodecountry {
+  padding: 1px 8px;
+  border: 1px solid var(--bo-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.bo-az__cmtop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* El rol es lo que evita leer a un vendedor como country manager: se destaca. */
+.bo-az__cmrole {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--bo-bg);
+  border: 1px solid var(--bo-border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--bo-text-muted);
+  white-space: nowrap;
+}
+
+.bo-az__cmitem--other {
+  border-style: dashed;
+  background: var(--bo-bg);
+}
+
+/* ---- Bloque de procedencia (de dónde sale cada dato) ---- */
+
+.bo-az__origin {
+  margin-top: 20px;
+  padding: 12px 14px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-bg);
+}
+
+.bo-az__originsum {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bo-text);
+  cursor: pointer;
+}
+
+.bo-az__origintable {
+  width: 100%;
+  margin-top: 12px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.bo-az__origintable th,
+.bo-az__origintable td {
+  padding: 7px 10px 7px 0;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--bo-border);
+}
+
+.bo-az__origintable th {
+  width: 34%;
+  font-weight: 600;
+  color: var(--bo-text);
+  white-space: nowrap;
+}
+
+.bo-az__origintable td {
+  color: var(--bo-text-muted);
+}
+
+.bo-az__origintable code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bo-surface);
+  border: 1px solid var(--bo-border);
+  font-size: 12px;
+  color: var(--bo-text);
+}
+
+.bo-az__originnote {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--bo-text-muted);
+}

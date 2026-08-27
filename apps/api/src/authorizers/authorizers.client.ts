@@ -3,7 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { middlewareBase, middlewareHeaders } from '../common/middleware-request';
-import { AuthorizerRow, CountryManager } from './authorizers.types';
+import { AuthorizerRow } from './authorizers.types';
 
 /**
  * Matriz de autorizadores del middleware.
@@ -39,8 +39,12 @@ const FETCH_LIMIT = 50000;
 const PROFIT_CENTERS_PATH = '/v2/mobility/profit-centers';
 
 /**
- * Country Managers de la sociedad — el OTRO permiso, el que no sale de la matriz.
- * Ver `CountryManager` en los tipos. Trae nombre y correo ya resueltos.
+ * Integrantes de los nodos `COUNTRY MANAGER%` que pertenecen a una sociedad.
+ *
+ * OJO: devuelve los INTEGRANTES del nodo, no "los country managers". El nodo es un
+ * puesto del organigrama y su equipo cuelga de ahi. Ver `CountryManagerNodeMember`.
+ * Es el unico de los dos endpoints que joinea a `Users`, asi que es el unico que trae
+ * correo y sociedad.
  */
 const COUNTRY_MANAGERS_PATH = '/mobility/commercial-team-hierarchy/country-manager';
 
@@ -58,6 +62,10 @@ const HIERARCHY_TREE_PATH = '/mobility/commercial-team-hierarchy/tree';
  * unico efecto es un mensaje de vacio menos preciso, nunca un dato incorrecto.
  */
 const COUNTRY_MANAGER_NODE_PREFIX = 'COUNTRY MANAGER';
+
+/** Detalle de un nodo con sus integrantes directos. */
+const HIERARCHY_NODE_PATH = (guid: string) =>
+  `/mobility/commercial-team-hierarchy/${encodeURIComponent(guid)}`;
 
 /** Fila tal como la publica el middleware (camelCase). */
 interface MwAuthorizerRow {
@@ -79,8 +87,12 @@ interface MwProfitCenter {
   profitCenterName?: string | null;
 }
 
-/** Country Manager tal como lo publica el middleware. */
+/** Integrante de un nodo COUNTRY MANAGER, filtrado por sociedad (con join a Users). */
 interface MwCountryManager {
+  nodeGuid?: string | null;
+  nodeName?: string | null;
+  memberGuid?: string | null;
+  guidUsers?: string | null;
   companyCode?: string | null;
   email?: string | null;
   memberName?: string | null;
@@ -88,6 +100,38 @@ interface MwCountryManager {
   sapUserId?: string | null;
   country?: string | null;
   businessUnit?: string | null;
+}
+
+/** Integrante tal como lo publica el detalle del nodo (SIN join a Users). */
+interface MwNodeMember {
+  guid?: string | null;
+  guidUsers?: string | null;
+  memberName?: string | null;
+  role?: string | null;
+  sapUserId?: string | null;
+}
+
+/** Fila del endpoint filtrado por sociedad: trae correo y sociedad. */
+export interface CompanyNodeMemberRow {
+  nodeGuid: string | null;
+  nodeName: string | null;
+  country: string | null;
+  memberGuid: string | null;
+  guidUsers: string | null;
+  name: string | null;
+  role: string | null;
+  sapUserId: string | null;
+  email: string | null;
+  companyCode: string | null;
+}
+
+/** Fila del detalle del nodo: sin correo ni sociedad. */
+export interface NodeMemberRow {
+  memberGuid: string | null;
+  guidUsers: string | null;
+  name: string | null;
+  role: string | null;
+  sapUserId: string | null;
 }
 
 interface MwResponse {
@@ -211,7 +255,7 @@ export class AuthorizersClient {
    * su ausencia SI cambia lo que la pantalla afirma, asi que el service lo marca para
    * que la UI avise en vez de mostrar una lista vacia como si no hubiera ninguno.
    */
-  async getCountryManagers(companyCode: string): Promise<CountryManager[] | null> {
+  async getCountryManagers(companyCode: string): Promise<CompanyNodeMemberRow[] | null> {
     if (!this.base()) return null;
 
     try {
@@ -224,13 +268,50 @@ export class AuthorizersClient {
       );
 
       return (res.data?.data ?? []).map((item) => ({
-        companyCode: text(item.companyCode),
-        email: text(item.email),
+        nodeGuid: text(item.nodeGuid),
+        nodeName: text(item.nodeName),
+        country: text(item.country),
+        memberGuid: text(item.memberGuid),
+        guidUsers: text(item.guidUsers),
         name: text(item.memberName),
         role: text(item.role),
         sapUserId: text(item.sapUserId),
-        country: text(item.country),
-        businessUnit: text(item.businessUnit),
+        email: text(item.email),
+        companyCode: text(item.companyCode),
+      }));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * TODOS los integrantes de un nodo, sin filtrar por sociedad.
+   *
+   * Hace falta porque el endpoint filtrado puede dejar afuera justo a quien ocupa el
+   * puesto: en QATEST el gerente de "COUNTRY MANAGER BAN" figura bajo la sociedad 2200
+   * mientras sus vendedores estan en la 2100, asi que consultando solo la 2100 se ve al
+   * equipo y no al jefe.
+   *
+   * Este endpoint NO joinea a `Users`: no trae correo ni sociedad. Por eso se usa para
+   * COMPLETAR la lista, nunca para reemplazarla.
+   */
+  async getNodeMembers(nodeGuid: string): Promise<NodeMemberRow[] | null> {
+    if (!this.base()) return null;
+
+    try {
+      const res = await firstValueFrom(
+        this.http.get<{ data?: { members?: MwNodeMember[] } }>(
+          `${this.base()}${HIERARCHY_NODE_PATH(nodeGuid)}`,
+          { headers: this.headers(), timeout: 20000 },
+        ),
+      );
+
+      return (res.data?.data?.members ?? []).map((m) => ({
+        memberGuid: text(m.guid),
+        guidUsers: text(m.guidUsers),
+        name: text(m.memberName),
+        role: text(m.role),
+        sapUserId: text(m.sapUserId),
       }));
     } catch {
       return null;

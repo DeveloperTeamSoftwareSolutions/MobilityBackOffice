@@ -53,6 +53,6 @@ export async function getCountryManagers(companyCode: string): Promise<CountryMa
   return {
     available: res.data.available,
     diagnosis: res.data.diagnosis,
-    data: res.data.data,
+    nodes: res.data.nodes,
   };
 }

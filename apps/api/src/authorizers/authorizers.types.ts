@@ -104,21 +104,48 @@ export interface MatrixSummary {
 }
 
 /**
- * Country Manager de una sociedad.
+ * Integrante de un nodo `COUNTRY MANAGER%` de la jerarquia comercial.
  *
- * NO sale de la matriz y no tiene banda: es OTRO permiso. Autorizar "otra forma de
- * pago" no pasa por `AuthorizerLimits` sino por el Country Manager de la sociedad, asi
- * que hay gente que autoriza todos los dias sin una sola fila en la matriz. Una
- * pantalla titulada "quien autoriza" que los omita miente por omision.
+ * OJO CON EL NOMBRE. El nodo es un PUESTO del organigrama, no una persona: sus
+ * integrantes son el equipo que cuelga de ahi. En QATEST el nodo
+ * "COUNTRY MANAGER BAN" tiene tres integrantes y DOS son `Role: "Vendedor"` — reportan
+ * al country manager, no lo son.
+ *
+ * Por eso el tipo NO se llama `CountryManager`: la lista son los integrantes del nodo,
+ * y quien ocupa realmente el puesto se distingue por su `role`. Duwest no publica un
+ * flag que lo diga, asi que la app **no filtra ni adivina**: muestra el rol de cada uno
+ * y deja la lectura al usuario.
+ *
+ * El permiso importa igual: autorizar "otra forma de pago" no pasa por
+ * `AuthorizerLimits` sino por el country manager, asi que hay gente que autoriza sin
+ * una sola fila en la matriz.
  */
-export interface CountryManager {
-  companyCode: string | null;
-  email: string | null;
+export interface CountryManagerNodeMember {
   name: string | null;
+  /** `CommercialTeamMembers.Role`. Texto libre cargado por Duwest. */
   role: string | null;
   sapUserId: string | null;
+  /** Solo lo trae el endpoint filtrado por sociedad, que es el que joinea a `Users`. */
+  email: string | null;
+  /** `Users.SapCompanyCode`. `null` cuando la persona no vino por ese filtro. */
+  companyCode: string | null;
+  /**
+   * `true` = su `Users.SapCompanyCode` es la sociedad consultada.
+   *
+   * `false` = esta en el mismo nodo pero pertenece a OTRA sociedad. Se muestra igual,
+   * porque si no el gerente del nodo queda invisible en la sociedad de su propio
+   * equipo: en QATEST el de "COUNTRY MANAGER BAN" figura bajo la 2200 mientras sus
+   * vendedores estan en la 2100.
+   */
+  inCompany: boolean;
+}
+
+/** Un nodo `COUNTRY MANAGER%` con sus integrantes. */
+export interface CountryManagerNode {
+  nodeGuid: string | null;
+  nodeName: string | null;
   country: string | null;
-  businessUnit: string | null;
+  members: CountryManagerNodeMember[];
 }
 
 /**
@@ -150,6 +177,13 @@ export interface Pagination {
   page: number;
   limit: number;
   totalPages: number;
+}
+
+/** Resultado del panel de Country Managers. */
+export interface CountryManagersResult {
+  available: boolean;
+  diagnosis: CountryManagersDiagnosis;
+  nodes: CountryManagerNode[];
 }
 
 export interface AuthorizersPage {

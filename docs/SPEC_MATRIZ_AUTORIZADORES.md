@@ -1,6 +1,6 @@
 # Matriz de autorizadores — especificacion
 
-> Ultima actualizacion: 2026-08-27 · Version: 2.14.0
+> Ultima actualizacion: 2026-08-27 · Version: 2.15.0
 >
 > Quien puede autorizar en cada sociedad y con que limites. Seccion de **consulta**:
 > reemplaza tener que entrar a la base para responder esa pregunta.

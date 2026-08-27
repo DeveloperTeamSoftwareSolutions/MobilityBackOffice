@@ -73,19 +73,35 @@ export interface AuthorizersPage {
   summary: MatrixSummary;
 }
 
-/** Country Manager: el OTRO permiso, el que no sale de la matriz. */
-export interface CountryManager {
-  companyCode: string | null;
-  email: string | null;
+/**
+ * Integrante de un nodo “COUNTRY MANAGER” de la jerarquía comercial.
+ *
+ * OJO CON EL NOMBRE: el nodo es un PUESTO del organigrama y su equipo cuelga de ahí, así
+ * que sus integrantes NO son todos country managers. En QATEST el nodo
+ * “COUNTRY MANAGER BAN” tiene dos integrantes con `Role: "Vendedor"`.
+ *
+ * La app no filtra por rol: muestra el `role` de cada uno y deja la lectura al usuario.
+ */
+export interface CountryManagerNodeMember {
   name: string | null;
+  /** `CommercialTeamMembers.Role`. Texto libre cargado por Duwest. */
   role: string | null;
   sapUserId: string | null;
+  email: string | null;
+  companyCode: string | null;
+  /** `false` = está en el nodo pero pertenece a otra sociedad. Se muestra marcado. */
+  inCompany: boolean;
+}
+
+export interface CountryManagerNode {
+  nodeGuid: string | null;
+  nodeName: string | null;
   country: string | null;
-  businessUnit: string | null;
+  members: CountryManagerNodeMember[];
 }
 
 /**
- * Por que vino vacia la lista. El endpoint devuelve 200 con lista vacia en tres casos
+ * Por qué vino vacía la lista. El endpoint devuelve 200 con lista vacía en tres casos
  * distintos y solo uno es un hecho del negocio; los otros dos son problemas de carga.
  */
 export type CountryManagersDiagnosis = 'ok' | 'unavailable' | 'sin_nodo' | 'sin_miembros';
@@ -94,7 +110,7 @@ export interface CountryManagersResult {
   /** `false` = no se pudo consultar. Distinto de "no hay ninguno". */
   available: boolean;
   diagnosis: CountryManagersDiagnosis;
-  data: CountryManager[];
+  nodes: CountryManagerNode[];
 }
 
 export interface AvailableCompany {

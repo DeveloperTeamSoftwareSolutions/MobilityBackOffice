@@ -1,15 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { RegionsClient } from '../regions/regions.client';
 import { AvailableCompany } from '../regions/regions.types';
-import { AuthorizersClient } from './authorizers.client';
+import {
+  AuthorizersClient,
+  CompanyNodeMemberRow,
+  NodeMemberRow,
+} from './authorizers.client';
 import { effectiveBand, isAssignmentActive } from './authorizers.band';
 import {
   Authorizer,
   AuthorizerProfitCenter,
   AuthorizerRow,
   AuthorizersPage,
-  CountryManager,
+  CountryManagerNode,
+  CountryManagerNodeMember,
   CountryManagersDiagnosis,
+  CountryManagersResult,
   MatrixFilter,
   MatrixQuery,
   MatrixSummary,
@@ -59,23 +65,33 @@ export class AuthorizersService {
    * justo el ticket que la pantalla quiere evitar, asi que cuando la lista viene vacia
    * se consulta el arbol para separarlas. En el caso normal esa llamada NO se hace.
    */
-  async countryManagers(companyCode: string): Promise<{
-    available: boolean;
-    diagnosis: CountryManagersDiagnosis;
-    data: CountryManager[];
-  }> {
-    const data = await this.client.getCountryManagers(companyCode);
+  async countryManagers(companyCode: string): Promise<CountryManagersResult> {
+    const rows = await this.client.getCountryManagers(companyCode);
 
-    if (data === null) return { available: false, diagnosis: 'unavailable', data: [] };
-    if (data.length > 0) return { available: true, diagnosis: 'ok', data };
+    if (rows === null) return { available: false, diagnosis: 'unavailable', nodes: [] };
 
-    const hasNode = await this.client.hasCountryManagerNode();
-    // `null` = no se pudo averiguar: se deja en `unavailable` para no afirmar una causa
-    // que no se comprobo.
-    const diagnosis: CountryManagersDiagnosis =
-      hasNode === null ? 'unavailable' : hasNode ? 'sin_miembros' : 'sin_nodo';
+    if (rows.length === 0) {
+      // Vacio: hay que averiguar POR QUE antes de decir "no hay ninguno". Ver el tipo
+      // `CountryManagersDiagnosis`.
+      const hasNode = await this.client.hasCountryManagerNode();
+      const diagnosis: CountryManagersDiagnosis =
+        hasNode === null ? 'unavailable' : hasNode ? 'sin_miembros' : 'sin_nodo';
+      return { available: true, diagnosis, nodes: [] };
+    }
 
-    return { available: true, diagnosis, data: [] };
+    // Los nodos que tocan a esta sociedad. Se completan con TODOS sus integrantes
+    // porque el filtro por `Users.SapCompanyCode` puede dejar afuera justo a quien ocupa
+    // el puesto: en QATEST el gerente de "COUNTRY MANAGER BAN" figura bajo la 2200
+    // mientras sus vendedores estan en la 2100.
+    const guids = [...new Set(rows.map((r) => r.nodeGuid).filter((g): g is string => !!g))];
+    const complete = await Promise.all(
+      guids.map((guid) =>
+        this.client.getNodeMembers(guid).then((members) => [guid, members] as const),
+      ),
+    );
+    const byNodeGuid = new Map<string, NodeMemberRow[] | null>(complete);
+
+    return { available: true, diagnosis: 'ok', nodes: buildNodes(rows, byNodeGuid) };
   }
 
   async getMatrix(query: MatrixQuery): Promise<AuthorizersPage> {
@@ -245,6 +261,111 @@ function nullsLast(a: number | null, b: number | null): number {
   if (a == null) return 1;
   if (b == null) return -1;
   return a - b;
+}
+
+/**
+ * Arma los nodos con sus integrantes, uniendo las dos fuentes.
+ *
+ * - `rows` (endpoint filtrado por sociedad): tiene correo y sociedad, pero solo la gente
+ *   de ESTA sociedad.
+ * - `byNodeGuid` (detalle del nodo): tiene a todos, pero sin correo ni sociedad.
+ *
+ * Se cruza por `guidUsers` (o `memberGuid` como respaldo). Los que solo aparecen en el
+ * detalle quedan con `inCompany: false`: pertenecen a otra sociedad y la pantalla los
+ * muestra marcados, en vez de esconderlos.
+ */
+function buildNodes(
+  rows: CompanyNodeMemberRow[],
+  byNodeGuid: Map<string, NodeMemberRow[] | null>,
+): CountryManagerNode[] {
+  const nodes = new Map<string, { node: CountryManagerNode; seen: Set<string> }>();
+
+  for (const row of rows) {
+    const key = row.nodeGuid ?? row.nodeName ?? '';
+    let entry = nodes.get(key);
+    if (!entry) {
+      entry = {
+        node: {
+          nodeGuid: row.nodeGuid,
+          nodeName: row.nodeName,
+          country: row.country,
+          members: [],
+        },
+        seen: new Set<string>(),
+      };
+      nodes.set(key, entry);
+    }
+
+    entry.node.members.push({
+      name: row.name,
+      role: row.role,
+      sapUserId: row.sapUserId,
+      email: row.email,
+      companyCode: row.companyCode,
+      inCompany: true,
+    });
+
+    const id = memberId(row.guidUsers, row.memberGuid, row.sapUserId);
+    if (id) entry.seen.add(id);
+  }
+
+  for (const { node, seen } of nodes.values()) {
+    const all = node.nodeGuid ? byNodeGuid.get(node.nodeGuid) : null;
+    // `null`/ausente = no se pudo traer el detalle. Se deja el nodo con lo que vino del
+    // filtro: queda incompleto, pero nada de lo mostrado es falso.
+    if (!all) continue;
+
+    for (const m of all) {
+      const id = memberId(m.guidUsers, m.memberGuid, m.sapUserId);
+      if (id && seen.has(id)) continue;
+      node.members.push({
+        name: m.name,
+        role: m.role,
+        sapUserId: m.sapUserId,
+        // El detalle del nodo no joinea a `Users`: no hay correo ni sociedad, y no se
+        // inventan.
+        email: null,
+        companyCode: null,
+        inCompany: false,
+      });
+    }
+  }
+
+  const out = [...nodes.values()].map(({ node }) => node);
+  for (const node of out) node.members.sort(byRoleThenName);
+  return out.sort((a, b) => (a.nodeName ?? '').localeCompare(b.nodeName ?? ''));
+}
+
+/** Identidad estable de un integrante entre las dos fuentes. */
+function memberId(
+  guidUsers: string | null,
+  memberGuid: string | null,
+  sapUserId: string | null,
+): string | null {
+  const raw = guidUsers ?? memberGuid ?? sapUserId;
+  return raw ? raw.trim().toLowerCase() : null;
+}
+
+/**
+ * Orden dentro del nodo: primero quien probablemente ocupa el puesto.
+ *
+ * Es solo ORDEN, no un filtro: la app no decide quien es country manager (Duwest no
+ * publica un flag que lo diga). Pone arriba los roles de conduccion para que el que
+ * mira no tenga que buscarlo entre su equipo.
+ */
+const LEAD_ROLES = ['gerente', 'director', 'country manager'];
+
+function byRoleThenName(a: CountryManagerNodeMember, b: CountryManagerNodeMember): number {
+  const rank = (m: CountryManagerNodeMember) => {
+    const role = (m.role ?? '').trim().toLowerCase();
+    if (LEAD_ROLES.some((r) => role.includes(r))) return 0;
+    // Sin rol cargado: puede ser el titular (en QATEST el de "COUNTRY MANAGER GT" es el
+    // unico integrante y tiene `Role` null), asi que va antes que el equipo.
+    if (!role) return 1;
+    return 2;
+  };
+  const diff = rank(a) - rank(b);
+  return diff !== 0 ? diff : (a.name ?? '').localeCompare(b.name ?? '');
 }
 
 export type { AuthorizerProfitCenter };

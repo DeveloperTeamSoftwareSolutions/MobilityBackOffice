@@ -78,8 +78,9 @@ export class AuthorizersController {
   @Get('country-managers')
   async countryManagers(@Query('companyCode') companyCode?: string) {
     const code = requireCompanyCode(companyCode);
-    const { available, diagnosis, data } = await this.authorizers.countryManagers(code);
-    return { success: true, companyCode: code, available, diagnosis, data, total: data.length };
+    const { available, diagnosis, nodes } = await this.authorizers.countryManagers(code);
+    const total = nodes.reduce((n, node) => n + node.members.length, 0);
+    return { success: true, companyCode: code, available, diagnosis, nodes, total };
   }
 
   // GET /api/authorizers?companyCode=&page=&limit=&search=&sortBy=&sortDir=&filter=&activeOnly=

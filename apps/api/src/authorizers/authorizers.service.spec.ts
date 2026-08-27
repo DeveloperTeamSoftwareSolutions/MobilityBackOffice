@@ -39,12 +39,14 @@ function makeService(
   names: Map<string, string> = new Map(),
   countryManagers: unknown[] | null = [],
   hasNode: boolean | null = false,
+  nodeMembers: unknown[] | null = [],
 ) {
   const client = {
     getMatrix: jest.fn().mockResolvedValue(rows),
     getProfitCenterNames: jest.fn().mockResolvedValue(names),
     getCountryManagers: jest.fn().mockResolvedValue(countryManagers),
     hasCountryManagerNode: jest.fn().mockResolvedValue(hasNode),
+    getNodeMembers: jest.fn().mockResolvedValue(nodeMembers),
   };
   const regions = { searchCompanies: jest.fn().mockResolvedValue([]) };
   return {
@@ -331,54 +333,128 @@ describe('AuthorizersService — nombre del CEBE', () => {
 });
 
 describe('AuthorizersService — country managers', () => {
-  it('los devuelve marcados como disponibles', async () => {
-    const { service } = makeService([], new Map(), [
-      { companyCode: '2100', email: 'cm@duwy.com', memberName: 'Ana', role: 'CM' },
-    ]);
+  /**
+   * EL PUNTO DE ESTE BLOQUE. El endpoint se llama `country-manager` pero devuelve los
+   * INTEGRANTES de un nodo que se llama "COUNTRY MANAGER X" — y ese nodo es un puesto
+   * del organigrama, con su equipo colgando. En QATEST, dos de los tres integrantes de
+   * "COUNTRY MANAGER BAN" son `Role: "Vendedor"`.
+   *
+   * La app NO filtra por rol: no le corresponde decidir quien es country manager cuando
+   * Duwest no publica un flag que lo diga. Lo que si hace es exponer el rol de cada uno
+   * y no esconder a nadie del nodo.
+   */
+  const filaDeSociedad = (over = {}) => ({
+    nodeGuid: 'n1',
+    nodeName: 'COUNTRY MANAGER BAN',
+    country: 'GUATEMALA',
+    memberGuid: 'm1',
+    guidUsers: 'u1',
+    name: 'ALONSO ARROYAVE',
+    role: 'Vendedor',
+    sapUserId: '2100425',
+    email: 'alonso@duwest.com',
+    companyCode: '2100',
+    ...over,
+  });
+
+  it('devuelve los integrantes agrupados por nodo, con su rol', async () => {
+    const { service } = makeService([], new Map(), [filaDeSociedad()], false, []);
 
     const res = await service.countryManagers('2100');
     expect(res.available).toBe(true);
     expect(res.diagnosis).toBe('ok');
-    expect(res.data).toHaveLength(1);
+    expect(res.nodes).toHaveLength(1);
+    expect(res.nodes[0].nodeName).toBe('COUNTRY MANAGER BAN');
+    expect(res.nodes[0].members[0]).toMatchObject({ role: 'Vendedor', inCompany: true });
   });
 
-  it('con resultados NO consulta el arbol: es una llamada de mas', async () => {
-    const { service, client } = makeService([], new Map(), [
-      { companyCode: '2100', email: 'cm@duwy.com', memberName: 'Ana', role: 'CM' },
+  it('NO filtra por rol: un Vendedor del nodo se muestra igual, con su rol a la vista', async () => {
+    const { service } = makeService([], new Map(), [filaDeSociedad()], false, []);
+
+    const res = await service.countryManagers('2100');
+    expect(res.nodes[0].members.map((m) => m.role)).toEqual(['Vendedor']);
+  });
+
+  it('trae al integrante de OTRA sociedad, marcado', async () => {
+    // El caso real: el gerente de "COUNTRY MANAGER BAN" figura bajo la 2200 mientras sus
+    // vendedores estan en la 2100. Sin esto, consultar 2100 muestra al equipo y no al jefe.
+    const { service } = makeService([], new Map(), [filaDeSociedad()], false, [
+      { memberGuid: 'm1', guidUsers: 'u1', name: 'ALONSO ARROYAVE', role: 'Vendedor', sapUserId: '2100425' },
+      { memberGuid: 'm3', guidUsers: 'u3', name: 'JORGE MARTINEZ', role: 'Gerente', sapUserId: '2100144' },
     ]);
 
-    await service.countryManagers('2100');
-    expect(client.hasCountryManagerNode).not.toHaveBeenCalled();
+    const res = await service.countryManagers('2100');
+    expect(res.nodes[0].members).toHaveLength(2);
+
+    const jorge = res.nodes[0].members.find((m) => m.name === 'JORGE MARTINEZ');
+    expect(jorge).toMatchObject({ inCompany: false, email: null, companyCode: null });
+  });
+
+  it('el de conduccion va primero, aunque sea el de otra sociedad', async () => {
+    const { service } = makeService([], new Map(), [filaDeSociedad()], false, [
+      { memberGuid: 'm1', guidUsers: 'u1', name: 'ALONSO ARROYAVE', role: 'Vendedor', sapUserId: '2100425' },
+      { memberGuid: 'm3', guidUsers: 'u3', name: 'JORGE MARTINEZ', role: 'Gerente', sapUserId: '2100144' },
+    ]);
+
+    const res = await service.countryManagers('2100');
+    expect(res.nodes[0].members[0].name).toBe('JORGE MARTINEZ');
+  });
+
+  it('el integrante sin rol va antes que el equipo: puede ser el titular', async () => {
+    // En QATEST el unico integrante de "COUNTRY MANAGER GT" tiene `Role` null y es el CM.
+    const { service } = makeService([], new Map(), [filaDeSociedad()], false, [
+      { memberGuid: 'm1', guidUsers: 'u1', name: 'ALONSO ARROYAVE', role: 'Vendedor', sapUserId: '2100425' },
+      { memberGuid: 'm9', guidUsers: 'u9', name: 'JUAN BARRIOS', role: null, sapUserId: '2100270' },
+    ]);
+
+    const res = await service.countryManagers('2100');
+    expect(res.nodes[0].members[0].name).toBe('JUAN BARRIOS');
+  });
+
+  it('no duplica a quien esta en las dos fuentes', async () => {
+    const { service } = makeService([], new Map(), [filaDeSociedad()], false, [
+      { memberGuid: 'm1', guidUsers: 'u1', name: 'ALONSO ARROYAVE', role: 'Vendedor', sapUserId: '2100425' },
+    ]);
+
+    const res = await service.countryManagers('2100');
+    expect(res.nodes[0].members).toHaveLength(1);
+    expect(res.nodes[0].members[0].inCompany).toBe(true);
+  });
+
+  it('si el detalle del nodo falla, no se pierde lo que si vino', async () => {
+    const { service } = makeService([], new Map(), [filaDeSociedad()], false, null);
+
+    const res = await service.countryManagers('2100');
+    expect(res.nodes[0].members).toHaveLength(1);
+    expect(res.nodes[0].members[0].inCompany).toBe(true);
   });
 
   it('un fallo del middleware NO se confunde con "no hay ninguno"', async () => {
-    // Decir "no hay country managers" cuando en realidad fallo la consulta es
-    // justamente la afirmacion falsa que la pantalla intenta evitar.
     const { service } = makeService([], new Map(), null);
 
     const res = await service.countryManagers('2100');
     expect(res.available).toBe(false);
     expect(res.diagnosis).toBe('unavailable');
-    expect(res.data).toEqual([]);
+    expect(res.nodes).toEqual([]);
   });
 
   /**
-   * Los tres casos de "200 con lista vacia". Solo UNO es un hecho del negocio; los
-   * otros dos son problemas de carga y la pantalla no debe presentarlos como
+   * Los tres casos de "200 con lista vacia". Solo UNO es un hecho del negocio; los otros
+   * dos son problemas de carga y la pantalla no debe presentarlos como
    * "nadie autoriza otra forma de pago".
    */
   it('sin nodo COUNTRY MANAGER en la jerarquia: los esconde a todos', async () => {
     const { service } = makeService([], new Map(), [], false);
 
     const res = await service.countryManagers('2100');
-    expect(res).toEqual({ available: true, diagnosis: 'sin_nodo', data: [] });
+    expect(res).toEqual({ available: true, diagnosis: 'sin_nodo', nodes: [] });
   });
 
   it('con nodo pero sin miembros de esta sociedad', async () => {
     const { service } = makeService([], new Map(), [], true);
 
     const res = await service.countryManagers('2100');
-    expect(res).toEqual({ available: true, diagnosis: 'sin_miembros', data: [] });
+    expect(res).toEqual({ available: true, diagnosis: 'sin_miembros', nodes: [] });
   });
 
   it('si no se pudo mirar el arbol, no se afirma ninguna causa', async () => {
@@ -393,5 +469,19 @@ describe('AuthorizersService — country managers', () => {
 
     await service.countryManagers('2100');
     expect(client.hasCountryManagerNode).toHaveBeenCalledTimes(1);
+  });
+
+  it('con resultados NO consulta el arbol: seria una llamada de mas', async () => {
+    const { service, client } = makeService([], new Map(), [filaDeSociedad()], false, []);
+
+    await service.countryManagers('2100');
+    expect(client.hasCountryManagerNode).not.toHaveBeenCalled();
+  });
+
+  it('el maestro de sociedades sale de Regiones, sin segundo cliente', async () => {
+    const { service, regions } = makeService([]);
+
+    await service.companies('duwy', 10);
+    expect(regions.searchCompanies).toHaveBeenCalledWith('duwy', 10);
   });
 });

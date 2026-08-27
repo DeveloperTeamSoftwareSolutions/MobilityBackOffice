@@ -11,6 +11,7 @@ import { CompanySelect } from './CompanySelect';
 import { MatrixSummaryBar } from './MatrixSummaryBar';
 import { AuthorizersTable } from './AuthorizersTable';
 import { CountryManagersPanel } from './CountryManagersPanel';
+import { MatrixOrigin } from './MatrixOrigin';
 import './autorizadores.css';
 
 const PAGE_SIZE = 25;
@@ -93,7 +94,7 @@ export function AuthorizersPanel() {
       .then((res) => active && setCountryManagers(res))
       .catch(
         () =>
-          active && setCountryManagers({ available: false, diagnosis: 'unavailable', data: [] }),
+          active && setCountryManagers({ available: false, diagnosis: 'unavailable', nodes: [] }),
       );
     return () => {
       active = false;
@@ -230,6 +231,8 @@ export function AuthorizersPanel() {
                 </div>
               </>
             )}
+
+            <MatrixOrigin />
           </div>
         </>
       )}

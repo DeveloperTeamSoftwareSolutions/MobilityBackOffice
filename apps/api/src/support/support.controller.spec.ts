@@ -359,3 +359,69 @@ describe('SupportController — decisiones sobre lineas y plazos de pago', () =>
     });
   });
 });
+
+describe('SupportController — vuelta atras', () => {
+  /**
+   * El destino de una vuelta atras viaja en el BODY, no en la URL: `annul` y
+   * `revert_annulment` no tienen destino, asi que no puede ser un parametro de ruta.
+   *
+   * Esto se rompio una vez: el controller no leia `target` del body y el middleware
+   * respondia "No se puede volver a 'null' en este documento" mientras el modal se
+   * quedaba abierto, como si no hubiera pasado nada. Estas aserciones existen para
+   * que el dato no se vuelva a perder en el camino.
+   */
+  let service: jest.Mocked<Pick<SupportService, 'runAction'>>;
+  let controller: SupportController;
+  const req = { user: { email: 'soporte@qa.local', guid: 'guid-soporte' } };
+
+  beforeEach(() => {
+    service = {
+      runAction: jest.fn().mockResolvedValue({
+        ok: true,
+        action: 'revert_to',
+        target: 'Draft',
+        documentNumber: 'ORD-00005418',
+        statusBefore: 'ReadyForApprove',
+        statusAfter: 'Draft',
+        expected: 'Draft',
+        achieved: true,
+      }),
+    };
+    controller = new SupportController(service as unknown as SupportService);
+  });
+
+  it('reenvia el destino de la vuelta atras al servicio', async () => {
+    await controller.runAction('order', 'g', 'revert_to', {
+      reasonNotes: 'ticket 42',
+      target: 'Draft',
+    }, req);
+    expect(service.runAction).toHaveBeenCalledWith(
+      'order',
+      'g',
+      'revert_to',
+      'ticket 42',
+      { email: 'soporte@qa.local', guid: 'guid-soporte' },
+      'Draft',
+    );
+  });
+
+  it('las acciones sin destino mandan null, no una cadena vacia', async () => {
+    await controller.runAction('order', 'g', 'annul', { reasonNotes: 'ticket 42' }, req);
+    expect(service.runAction.mock.calls[0][5]).toBeNull();
+  });
+
+  it('un destino en blanco tambien es null', async () => {
+    await controller.runAction('order', 'g', 'annul', {
+      reasonNotes: 'ticket 42',
+      target: '   ',
+    }, req);
+    expect(service.runAction.mock.calls[0][5]).toBeNull();
+  });
+
+  it('sigue exigiendo el motivo antes de llamar al servicio', async () => {
+    await expect(
+      controller.runAction('order', 'g', 'revert_to', { reasonNotes: '  ', target: 'Draft' }, req),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(service.runAction).not.toHaveBeenCalled();
+  });
+});

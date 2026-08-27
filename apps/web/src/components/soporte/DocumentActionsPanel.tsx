@@ -112,7 +112,12 @@ export function DocumentActionsPanel({
       </header>
 
       {aviso && <p className="bo-sp__modal-warning">{aviso}</p>}
-      {error && <p className="bo-sp__error">{error}</p>}
+      {/*
+        Con el modal abierto el error va DENTRO del modal, no acá. Si no, quedaba
+        detrás del fondo oscuro: se apretaba "Confirmar", el modal seguía igual y
+        parecía que no había pasado nada, cuando en realidad el pedido fue rechazado.
+      */}
+      {error && !elegida && <p className="bo-sp__error">{error}</p>}
 
       {disponibles.length === 0 ? (
         <p className="bo-sp__event-actor">
@@ -177,6 +182,8 @@ export function DocumentActionsPanel({
                   disabled={ejecutando}
                 />
               </label>
+
+              {error && <p className="bo-sp__error">{error}</p>}
 
               <div className="bo-sp__modal-actions">
                 <button

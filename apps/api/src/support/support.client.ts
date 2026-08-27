@@ -481,12 +481,20 @@ export class SupportClient {
     action: string,
     reasonNotes: string,
     actorEmail: string | null,
+    /**
+     * Estado destino de una vuelta atrás. Va en el body y no en la URL porque no
+     * todas las acciones lo llevan: `annul` y `revert_annulment` no tienen destino.
+     *
+     * Sin él, el middleware busca la acción `revert_to` con `target === null`, no
+     * encuentra ninguna y responde "No se puede volver a 'null' en este documento".
+     */
+    target: string | null = null,
   ): Promise<ActionResult> {
     try {
       const res = await firstValueFrom(
         this.http.post<MwActionResultResponse>(
           `${this.base()}${ACTIONS_PATH(type, guid)}/${encodeURIComponent(action)}`,
-          { reasonNotes, actorEmail },
+          { reasonNotes, actorEmail, target },
           { headers: this.headers(), timeout: 30000 },
         ),
       );

@@ -186,19 +186,24 @@ export class SupportController {
     @Param('type') type: string,
     @Param('guid') guid: string,
     @Param('action') action: string,
-    @Body() body: { reasonNotes?: string },
+    @Body() body: { reasonNotes?: string; target?: string },
     @Req() req: AuthedRequest,
   ) {
     const reasonNotes = (body?.reasonNotes ?? '').trim();
     if (!reasonNotes) {
       throw new BadRequestException('El motivo es obligatorio');
     }
+    // El destino de una vuelta atrás viaja en el body: no todas las acciones lo
+    // llevan. Si no se reenvía, el middleware busca `revert_to` con destino nulo,
+    // no encuentra ninguna y rechaza con "No se puede volver a 'null'".
+    const target = (body?.target ?? '').trim();
     const data = await this.support.runAction(
       this.parseType(type),
       this.parseGuid(guid),
       (action ?? '').trim(),
       reasonNotes,
       actor(req),
+      target || null,
     );
     return { success: true, data };
   }

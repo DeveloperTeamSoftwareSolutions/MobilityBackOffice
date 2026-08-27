@@ -112,6 +112,8 @@ export class SupportService {
     action: string,
     reasonNotes: string,
     actor: Actor,
+    /** Estado destino de una vuelta atrás; `null` en las acciones sin destino. */
+    target: string | null = null,
   ): Promise<ActionResult> {
     const result = await this.client.runAction(
       type,
@@ -119,6 +121,7 @@ export class SupportService {
       action,
       reasonNotes,
       actor.email ?? null,
+      target,
     );
 
     await this.audit.safeRecord({

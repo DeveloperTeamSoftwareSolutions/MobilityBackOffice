@@ -166,6 +166,7 @@ Confirma la premisa de D1: el iframe directo estaba bloqueado, y por partida dob
 | Navegacion autenticada | `/`, `/conversations`, `/contacts`, `/messages`, `/templates`, `/accounts` -> **200** |
 | Reescritura de rutas | **137 rutas absolutas** en `/conversations`, **ninguna escapa** de `/waba` |
 | URLs de CDN | Intactas (`cdn.jsdelivr.net`) |
+| **Por `:5183` (camino real del navegador)** | Sirve `<title>Iniciar Sesion - WhatsApp WABA Admin</title>`, cero rastros de BackOffice |
 
 > El arranque **no modifico** `WhatsAppWABA_QATEST`: su esquema ya estaba al dia con esta
 > version del codigo (`Schema initialized`, sin crear tablas ni columnas).
@@ -178,6 +179,22 @@ Hay dos: **`WhatsAppWABA`** (2.8 GB, ~90k mensajes — la de uso real) y
 Apuntar a la primera **le modificaria el esquema**: `schema.sql` corre en cada arranque y
 le crearia `AiConversations`, `AiMessages`, `AiToolCalls` mas cuatro columnas del bot de
 IA. Son cambios aditivos, pero sobre una base en uso.
+
+### El prefijo va en DOS lugares (esto fallo en la primera pasada)
+
+El proxy vive en `apps/api/src/main.ts`, pero **en desarrollo el navegador entra por
+Vite (`:5183`), no por el API (`:3010`)**. Lo que Vite no tiene declarado en su
+`server.proxy` cae en su fallback SPA y devuelve `index.html`.
+
+Resultado: el iframe muestra **BackOffice dentro de BackOffice**, sin ningun error ni en
+el navegador ni en los logs.
+
+Pasó exactamente eso: el backend estaba bien y probado con `curl` contra `:3010`, pero
+faltaba `/waba` en `apps/web/vite.config.ts` y por `:5183` se auto-embebia. Las pruebas
+no lo detectaron porque no usaban el camino real del navegador.
+
+`devProxy.test.ts` ahora verifica que cada prefijo embebido este declarado en Vite. **Al
+sumar un embebido nuevo, agregarlo a `PREFIJOS_EMBEBIDOS` en ese test.**
 
 ### Los dos `.env` de BackOffice
 

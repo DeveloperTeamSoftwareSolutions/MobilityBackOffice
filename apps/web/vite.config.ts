@@ -29,6 +29,14 @@ export default defineConfig({
         target: 'http://localhost:3010',
         changeOrigin: true,
       },
+      // Idem para el iframe del panel WABA. Todo embebido que se sirva por
+      // reverse-proxy necesita su prefijo ACA ADEMAS de en `main.ts`: en dev el
+      // navegador entra por Vite, no por el API, y lo que Vite no conoce cae en su
+      // fallback SPA.
+      '/waba': {
+        target: 'http://localhost:3010',
+        changeOrigin: true,
+      },
     },
   },
   test: {

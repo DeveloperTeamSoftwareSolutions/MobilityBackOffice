@@ -15,6 +15,7 @@ import { JwtGuard } from './jwt.guard';
 import { LoginDto } from './dto/login.dto';
 import type { BackOfficeJwtPayload } from './token.service';
 import { RAG_COOKIE, RAG_PREFIX } from '../rag/rag.proxy';
+import { WABA_COOKIE, WABA_PREFIX } from '../waba/waba.proxy';
 
 /**
  * Milisegundos que faltan para que expire el token (leyendo el claim `exp`, en
@@ -65,14 +66,25 @@ export class AuthController {
       maxAge: tokenMaxAgeMs(result.token),
     });
 
+    // Misma cookie, otro prefijo: el iframe del panel WABA tampoco puede mandar
+    // Authorization en sus sub-requests.
+    res.cookie(WABA_COOKIE, result.token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: this.config.get<string>('nodeEnv') === 'production',
+      path: WABA_PREFIX,
+      maxAge: tokenMaxAgeMs(result.token),
+    });
+
     return { success: true, ...result };
   }
 
-  // POST /api/auth/logout — limpia la cookie de sesion del RAG.
+  // POST /api/auth/logout — limpia las cookies de sesion de los embebidos.
   @Post('logout')
   @HttpCode(200)
   logout(@Res({ passthrough: true }) res: Response): { success: true } {
     res.clearCookie(RAG_COOKIE, { path: RAG_PREFIX });
+    res.clearCookie(WABA_COOKIE, { path: WABA_PREFIX });
     return { success: true };
   }
 

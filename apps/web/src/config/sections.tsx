@@ -5,6 +5,7 @@ import {
   IconFileText,
   IconSupport,
   IconShieldCheck,
+  IconWhatsApp,
 } from '../components/layout/icons';
 import type { BackOfficeRole } from '../types';
 import { roleAllows } from '../auth/roleAccess';
@@ -50,12 +51,23 @@ export const NAV_SECTIONS: NavSection[] = [
     key: 'templates',
     label: 'Templates de WhatsApp',
     description:
-      'Creación y gestión de plantillas de WhatsApp para el equipo de marketing.',
+      'Armá plantillas de saludos y mensajes para fechas especiales.',
     path: '/templates-whatsapp',
     group: 'Marketing',
     roles: ['Marketing'],
     status: 'soon',
     icon: <IconChatSquare />,
+  },
+  {
+    key: 'waba',
+    label: 'Panel de WhatsApp',
+    description:
+      'Consultá las conversaciones de Duwy Chat con cada usuario, sus contactos y el estado de los mensajes.',
+    path: '/panel-whatsapp',
+    group: 'Marketing',
+    roles: ['Marketing'],
+    status: 'ready',
+    icon: <IconWhatsApp />,
   },
   {
     key: 'rag',

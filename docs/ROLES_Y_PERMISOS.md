@@ -1,6 +1,6 @@
 # Roles y Permisos — Mobility BackOffice
 
-> Última actualización: 2026-08-27 · Versión: 2.13.0
+> Última actualización: 2026-08-28 · Versión: 2.16.0
 >
 > Qué puede hacer cada rol, cómo se decide, y cómo se registra en ITManager.
 
@@ -29,7 +29,7 @@ Y la regla que más sorprende:
 | `MOBILITYBO_SUPPORT` | **Soporte** | 2 | **Solo** la consola de soporte |
 | `MOBILITYBO_USER` | **Usuario** | 3 | Todo **menos** la consola de soporte y lo exclusivo de SuperAdmin |
 | `MOBILITYBO_ADMIN` | **Administrador** | 4 | Regiones comerciales |
-| `MOBILITYBO_MARKETING` | **Marketing** | 5 | Documentación del RAG, Templates de WhatsApp |
+| `MOBILITYBO_MARKETING` | **Marketing** | 5 | Documentación del RAG, Panel de WhatsApp, Templates de WhatsApp |
 
 ### Qué implica cada uno
 
@@ -47,7 +47,8 @@ Ver `docs/SPEC_CONSOLA_SOPORTE.md`.
 
 **Usuario** — el rol del día a día. **Todo el back-office menos la consola de soporte y
 menos lo que sea exclusivo de SuperAdmin.**
-Hoy eso significa Regiones comerciales + Documentación del RAG + Templates de WhatsApp, y
+Hoy eso significa Regiones comerciales + Documentación del RAG + Panel de WhatsApp +
+Templates de WhatsApp, y
 **cualquier sección que se agregue en el futuro** salvo que sea de soporte o que se
 declare como exclusiva de SuperAdmin (`roles: ['SuperAdmin']`).
 No es "SuperAdmin sin la consola": SuperAdmin además entra a la consola y a la matriz
@@ -69,12 +70,18 @@ y (cuando exista) los templates de WhatsApp.
 | Regiones comerciales | ✓ | — | ✓ | ✓ | — |
 | Documentación del RAG | ✓ | — | ✓ | — | ✓ |
 | Templates de WhatsApp *(próximamente)* | ✓ | — | ✓ | — | ✓ |
+| **Panel de WhatsApp (WABA)** | ✓ | — | ✓ | — | ✓ |
 | **Consola de soporte** | ✓ | ✓ | **—** | — | — |
 | **Matriz de autorizadores** | ✓ | — | **—** | **—** | **—** |
 | *Cualquier sección futura no-soporte* | ✓ | — | ✓ | — | — |
 
 "Inicio" es fijo y siempre visible; muestra solo las tarjetas de las secciones que el rol
 puede abrir.
+
+> **El panel de WhatsApp tiene DOS autorizaciones encadenadas.** El rol de BackOffice
+> decide quién puede abrir el panel (es lo que muestra esta tabla); adentro, WABA pide
+> **sus propias credenciales** y aplica **sus propios roles** (`admin`, `editor`, `user`).
+> Tener acceso acá no da acceso allá. Ver `docs/SPEC_WABA_EMBED.md`.
 
 ### Y en el backend
 
@@ -84,6 +91,7 @@ puede abrir.
 | `/api/health` | Público |
 | `/api/regions/*` | Administrador, Usuario, SuperAdmin |
 | `/rag/*` (proxy) | Marketing, Usuario, SuperAdmin |
+| `/waba/*` (proxy) | Marketing, Usuario, SuperAdmin |
 | `/api/support/*` | **Soporte, SuperAdmin** |
 | `/api/authorizers/*` | **Solo SuperAdmin** |
 | `/api/regions/sync` | Ninguno — se autentica por API key (máquina a máquina) |

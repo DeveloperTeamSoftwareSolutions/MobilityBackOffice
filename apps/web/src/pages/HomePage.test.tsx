@@ -57,6 +57,14 @@ describe('HomePage', () => {
     expect(screen.getByText('Próximamente')).toBeInTheDocument();
   });
 
+  it('Marketing ve el panel de WhatsApp, que es otra seccion que Templates', () => {
+    // Son dos cosas distintas: el panel es para CONSULTAR los chats de Duwy Chat;
+    // Templates es para CREAR plantillas de saludos y fechas especiales.
+    renderAs('Marketing');
+    expect(screen.getByRole('link', { name: /Panel de WhatsApp/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Templates de WhatsApp/ })).toBeInTheDocument();
+  });
+
   it('la matriz de autorizadores es exclusiva de SuperAdmin', () => {
     renderAs('SuperAdmin');
     expect(

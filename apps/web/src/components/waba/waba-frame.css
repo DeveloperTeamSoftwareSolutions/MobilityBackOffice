@@ -1,0 +1,61 @@
+/*
+ * El panel WABA se embebe a pantalla completa: el contenedor anula el padding del
+ * <main> para que el iframe llegue a los bordes, igual que el del RAG.
+ */
+.bo-waba-wrap {
+  display: flex;
+  flex-direction: column;
+  margin: -24px;
+  height: calc(100% + 48px);
+}
+
+.bo-waba-frame {
+  display: block;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: var(--bo-surface);
+}
+
+/*
+ * Aviso del doble login. WABA tiene sesión propia y sin este aviso la pantalla de
+ * acceso del panel aparece sin explicación dentro de BackOffice.
+ */
+.bo-waba-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--bo-border);
+  background: var(--bo-bg);
+}
+
+.bo-waba-notice__text {
+  font-size: 13px;
+  color: var(--bo-text-muted);
+}
+
+.bo-waba-notice__text strong {
+  color: var(--bo-text);
+  font-weight: 600;
+}
+
+.bo-waba-notice__close {
+  padding: 5px 12px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-surface);
+  font: inherit;
+  font-size: 12px;
+  color: var(--bo-text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bo-waba-notice__close:hover {
+  border-color: var(--bo-accent);
+  color: var(--bo-accent);
+}

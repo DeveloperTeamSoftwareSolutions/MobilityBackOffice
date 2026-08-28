@@ -8,6 +8,7 @@ import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
 import { RegionesPage } from './pages/RegionesPage';
 import { RagPage } from './pages/RagPage';
+import { WabaPage } from './pages/WabaPage';
 import { SoportePage } from './pages/SoportePage';
 import { AutorizadoresPage } from './pages/AutorizadoresPage';
 
@@ -57,6 +58,18 @@ export function App(): JSX.Element {
                     titulo="Templates de WhatsApp"
                     descripcion="Creación y gestión de plantillas para el equipo de marketing."
                   />
+                </RoleGuard>
+              }
+            />
+
+            <Route
+              path="panel-whatsapp"
+              element={
+                <RoleGuard
+                  allow={['Marketing']}
+                  fallback={<Navigate to="/" replace />}
+                >
+                  <WabaPage />
                 </RoleGuard>
               }
             />

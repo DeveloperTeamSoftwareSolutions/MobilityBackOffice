@@ -40,4 +40,11 @@ export default () => ({
   rag: {
     url: process.env.RAG_URL,
   },
+
+  // Panel WABA (WhatsApp Business Cloud API). Se embebe por reverse-proxy same-origin
+  // igual que el RAG: manda X-Frame-Options SAMEORIGIN y CSP frame-ancestors self, asi
+  // que un iframe directo se bloquea. Sin URL, el proxy /waba no se monta.
+  waba: {
+    url: process.env.WABA_URL,
+  },
 });

@@ -36,4 +36,8 @@ export const envValidationSchema = Joi.object({
   // DuwyEngineRAG — base URL del cargador de documentacion a embeber. Sin ella, el
   // proxy /rag no se monta y la seccion queda deshabilitada.
   RAG_URL: Joi.string().uri().optional(),
+
+  // Panel WABA (WhatsApp Business Cloud) — base URL del panel a embeber. Sin ella,
+  // el proxy /waba no se monta y la seccion queda deshabilitada.
+  WABA_URL: Joi.string().uri().optional(),
 });

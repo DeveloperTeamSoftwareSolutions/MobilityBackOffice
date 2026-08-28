@@ -13,6 +13,11 @@ import {
   createRagAuthGuard,
   RAG_PREFIX,
 } from './rag/rag.proxy';
+import {
+  createWabaProxy,
+  createWabaAuthGuard,
+  WABA_PREFIX,
+} from './waba/waba.proxy';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -38,6 +43,21 @@ async function bootstrap(): Promise<void> {
     Logger.log(`Reverse-proxy RAG montado en ${RAG_PREFIX} -> ${ragUrl}`, 'Bootstrap');
   }
 
+  // Reverse-proxy hacia el panel WABA (/waba/* same-origin para el iframe). Mismo
+  // motivo que el RAG: manda X-Frame-Options SAMEORIGIN y CSP frame-ancestors self.
+  // A diferencia del RAG, WABA tiene login propio: este guard NO lo reemplaza, evita
+  // que BackOffice sea un proxy abierto hacia su pantalla de login.
+  const wabaUrl = config.get<string>('waba.url');
+  if (wabaUrl) {
+    const tokens = app.get(TokenService);
+    app.use(
+      WABA_PREFIX,
+      createWabaAuthGuard((t) => tokens.verify(t)),
+      createWabaProxy(wabaUrl),
+    );
+    Logger.log(`Reverse-proxy WABA montado en ${WABA_PREFIX} -> ${wabaUrl}`, 'Bootstrap');
+  }
+
   // Servir el frontend (build de Vite) para deploy detrás de un solo puerto/ALB:
   // el API sirve apps/web/dist en `/` y sigue atendiendo /api.
   // SOLO se activa si el build existe. En desarrollo no existe -> se usa el dev
@@ -52,6 +72,7 @@ async function bootstrap(): Promise<void> {
         req.method !== 'GET' ||
         req.path.startsWith('/api') ||
         req.path.startsWith(RAG_PREFIX) ||
+        req.path.startsWith(WABA_PREFIX) ||
         req.path.includes('.')
       ) {
         return next();

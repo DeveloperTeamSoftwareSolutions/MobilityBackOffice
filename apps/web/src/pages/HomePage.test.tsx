@@ -57,6 +57,23 @@ describe('HomePage', () => {
     expect(screen.getByText('Próximamente')).toBeInTheDocument();
   });
 
+  it('la matriz de autorizadores es exclusiva de SuperAdmin', () => {
+    renderAs('SuperAdmin');
+    expect(
+      screen.getByRole('link', { name: /Matriz de autorizadores/ }),
+    ).toBeInTheDocument();
+  });
+
+  it.each(['Administrador', 'Marketing', 'Soporte', 'Usuario'] as const)(
+    '%s no ve la matriz de autorizadores',
+    (rol) => {
+      renderAs(rol);
+      expect(
+        screen.queryByRole('link', { name: /Matriz de autorizadores/ }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
   it('las tarjetas apuntan a la ruta de su seccion', () => {
     renderAs('Marketing');
     expect(screen.getByRole('link', { name: /Documentación del RAG/ })).toHaveAttribute(

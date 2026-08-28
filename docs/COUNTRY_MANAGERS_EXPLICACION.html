@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Por que la pantalla mostraba vendedores como Country Managers, de donde sale cada dato y que se cambio.">
+<title>Por qué un vendedor figura como Country Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #f6f8fa;
+    --surface: #ffffff;
+    --surface-sunk: #eef2f6;
+    --line: #dbe3ea;
+    --line-strong: #c2cedb;
+    --ink: #15212e;
+    --ink-soft: #465667;
+    --ink-mute: #6b7a8a;
+    --blue: #2c5282;
+    --blue-soft: #e4ecf6;
+    --amber: #a8620c;
+    --amber-soft: #fbf0e2;
+    --teal: #0d7a70;
+    --shadow: 0 1px 2px rgba(21, 33, 46, .05), 0 6px 20px -12px rgba(21, 33, 46, .18);
+
+    --measure: 66ch;
+    --step-0: 1.0625rem;
+    --step-1: 1.3rem;
+    --step-2: 1.7rem;
+    --step-3: 2.35rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #10161d;
+      --surface: #17202a;
+      --surface-sunk: #1d2833;
+      --line: #2b3846;
+      --line-strong: #3d4d5e;
+      --ink: #e8eef4;
+      --ink-soft: #b3c1cf;
+      --ink-mute: #8b9aab;
+      --blue: #8fb4e0;
+      --blue-soft: #1b2c42;
+      --amber: #e0a460;
+      --amber-soft: #2f2417;
+      --teal: #55c4b8;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px -12px rgba(0, 0, 0, .7);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #10161d;
+    --surface: #17202a;
+    --surface-sunk: #1d2833;
+    --line: #2b3846;
+    --line-strong: #3d4d5e;
+    --ink: #e8eef4;
+    --ink-soft: #b3c1cf;
+    --ink-mute: #8b9aab;
+    --blue: #8fb4e0;
+    --blue-soft: #1b2c42;
+    --amber: #e0a460;
+    --amber-soft: #2f2417;
+    --teal: #55c4b8;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px -12px rgba(0, 0, 0, .7);
+  }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 74ch;
+    margin: 0 auto;
+    padding: clamp(2.5rem, 6vw, 5rem) clamp(1.15rem, 4vw, 2rem) 5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2.75rem;
+  }
+
+  .prose { max-width: var(--measure); }
+
+  h1, h2, h3 {
+    font-family: Newsreader, Georgia, 'Times New Roman', serif;
+    font-weight: 500;
+    text-wrap: balance;
+    margin: 0;
+    line-height: 1.18;
+    letter-spacing: -.01em;
+  }
+  h1 { font-size: var(--step-3); }
+  h2 { font-size: var(--step-2); }
+  h3 { font-size: var(--step-1); }
+  p { margin: 0; }
+
+  .eyebrow {
+    font-size: .74rem;
+    font-weight: 600;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin: 0 0 .85rem;
+  }
+
+  .lede {
+    font-family: Newsreader, Georgia, serif;
+    font-size: var(--step-1);
+    line-height: 1.5;
+    color: var(--ink-soft);
+    margin-top: 1.1rem;
+  }
+
+  section { display: flex; flex-direction: column; gap: 1.1rem; }
+
+  strong { font-weight: 600; color: var(--ink); }
+
+  code, .mono {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: .875em;
+  }
+  code {
+    background: var(--surface-sunk);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: .08em .35em;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid var(--line);
+    margin: 0;
+  }
+
+  /* ---- El organigrama: es el centro del documento ---- */
+
+  .chart {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: clamp(1.1rem, 3vw, 1.75rem);
+    overflow-x: auto;
+  }
+
+  .chart-cap {
+    font-size: .8rem;
+    color: var(--ink-mute);
+    margin-bottom: 1.15rem;
+  }
+
+  .node {
+    min-width: 19rem;
+    border: 1.5px solid var(--blue);
+    border-radius: 8px;
+    background: var(--blue-soft);
+    padding: .7rem .9rem;
+  }
+  .node-name {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: .92rem;
+    font-weight: 500;
+    color: var(--blue);
+    letter-spacing: .01em;
+  }
+  .node-kind {
+    display: block;
+    font-size: .76rem;
+    color: var(--ink-mute);
+    margin-top: .15rem;
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+
+  .members {
+    list-style: none;
+    margin: 0;
+    padding: .85rem 0 0 1.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    border-left: 1.5px solid var(--line-strong);
+    margin-left: 1.15rem;
+  }
+
+  .member {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .55rem;
+    position: relative;
+    padding: .5rem .75rem;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--surface);
+  }
+  .member::before {
+    content: "";
+    position: absolute;
+    left: -1.6rem;
+    top: 1.15rem;
+    width: 1.35rem;
+    border-top: 1.5px solid var(--line-strong);
+  }
+  .member-name {
+    font-weight: 600;
+    font-size: .95rem;
+  }
+  .role {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: .74rem;
+    font-weight: 500;
+    padding: .12rem .5rem;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface-sunk);
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .role--lead {
+    border-color: var(--teal);
+    color: var(--teal);
+    background: transparent;
+  }
+  .verdict {
+    flex-basis: 100%;
+    font-size: .82rem;
+    color: var(--ink-mute);
+  }
+  .verdict b { color: var(--amber); font-weight: 600; }
+  .verdict i { color: var(--teal); font-style: normal; font-weight: 600; }
+
+  /* ---- Tabla de procedencia ---- */
+
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .93rem;
+  }
+  th, td {
+    text-align: left;
+    padding: .78rem 1rem;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  thead th {
+    font-size: .72rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    font-weight: 600;
+    background: var(--surface-sunk);
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td:first-child { font-weight: 600; white-space: nowrap; }
+
+  /* ---- Aviso ---- */
+
+  .callout {
+    border-left: 3px solid var(--amber);
+    background: var(--amber-soft);
+    border-radius: 0 8px 8px 0;
+    padding: 1rem 1.15rem;
+    font-size: .95rem;
+    color: var(--ink-soft);
+  }
+  .callout strong { color: var(--ink); }
+
+  /* ---- Lista de cambios ---- */
+
+  .did {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .7rem;
+  }
+  .did li {
+    padding-left: 1.5rem;
+    position: relative;
+    color: var(--ink-soft);
+    font-size: .97rem;
+  }
+  .did li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: .62em;
+    width: .55rem;
+    height: .55rem;
+    border: 1.5px solid var(--teal);
+    border-radius: 2px;
+  }
+  .did b { color: var(--ink); font-weight: 600; }
+
+  .ask {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--blue);
+    border-radius: 0 10px 10px 0;
+    padding: 1.15rem 1.35rem;
+    box-shadow: var(--shadow);
+  }
+
+  footer {
+    font-size: .82rem;
+    color: var(--ink-mute);
+    border-top: 1px solid var(--line);
+    padding-top: 1.25rem;
+  }
+</style>
+</head>
+<body>
+
+
+<div class="page">
+
+  <header class="prose">
+    <p class="eyebrow">Mobility BackOffice · Matriz de autorizadores</p>
+    <h1>Por qué un vendedor figura como Country Manager</h1>
+    <p class="lede">
+      Porque el nombre del nodo del organigrama no dice qué es cada persona que está adentro.
+      Es un dato bien cargado que se estaba leyendo mal.
+    </p>
+  </header>
+
+  <hr>
+
+  <section>
+    <h2>El lío, en una frase</h2>
+    <p class="prose">
+      El endpoint se llama <code>country-manager</code>, pero devuelve
+      <strong>el equipo del country manager</strong>, no al country manager.
+    </p>
+    <p class="prose">
+      En la jerarquía comercial de Duwest hay nodos, que son <strong>puestos</strong>. Uno se llama
+      <span class="mono">COUNTRY MANAGER BAN</span>. Los integrantes de ese nodo son las personas
+      que trabajan ahí: el jefe y su gente. La consulta trae a todos, sin mirar el rol.
+    </p>
+  </section>
+
+  <div class="chart">
+    <p class="chart-cap">Lo que hay realmente en la base &mdash; sociedad 2100, datos de QATEST</p>
+
+    <div class="node">
+      <span class="node-name">COUNTRY MANAGER BAN</span>
+      <span class="node-kind">Nodo de la jerarquía = un puesto, con su equipo colgando</span>
+    </div>
+
+    <ul class="members">
+      <li class="member">
+        <span class="member-name">Alonso Arroyave</span>
+        <span class="role">Vendedor</span>
+        <span class="verdict">Es vendedor. <b>Se mostraba como Country Manager.</b></span>
+      </li>
+      <li class="member">
+        <span class="member-name">Edgar López</span>
+        <span class="role">Vendedor</span>
+        <span class="verdict">Es vendedor. <b>Se mostraba como Country Manager.</b></span>
+      </li>
+      <li class="member">
+        <span class="member-name">Jorge Martínez</span>
+        <span class="role role--lead">Gerente</span>
+        <span class="verdict"><i>Es el que manda en ese nodo.</i> <b>No aparecía en 2100.</b></span>
+      </li>
+    </ul>
+  </div>
+
+  <section>
+    <p class="prose">
+      Las dos cosas sobre Alonso son ciertas a la vez: <strong>pertenece a ese equipo</strong> y
+      <strong>es vendedor</strong>. Lo que estaba mal era leer &ldquo;está en el nodo&rdquo; como
+      &ldquo;es country manager&rdquo;.
+    </p>
+  </section>
+
+  <section>
+    <h2>De dónde sale cada cosa</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">El dato</th><th scope="col">De dónde sale</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Que esté en la lista</td>
+            <td>El <strong>nombre del nodo</strong> empieza con &ldquo;COUNTRY MANAGER&rdquo;
+              &mdash; <code>CommercialTeamHierarchies.Name</code>. No dice nada de la persona.</td>
+          </tr>
+          <tr>
+            <td>El rol</td>
+            <td><code>CommercialTeamMembers.Role</code>. Texto libre que carga Duwest.
+              <strong>No se usaba para filtrar</strong>: por eso se colaban los vendedores.</td>
+          </tr>
+          <tr>
+            <td>Nombre y correo</td>
+            <td><code>Users</code>, cruzando por el GUID de la persona.</td>
+          </tr>
+          <tr>
+            <td>La sociedad</td>
+            <td><code>Users.SapCompanyCode</code> &mdash; la sociedad <strong>de la persona</strong>,
+              no la del nodo.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>El segundo problema: el jefe estaba en otra sociedad</h2>
+    <p class="prose">
+      Jorge Martínez, el gerente de ese nodo, tiene sociedad <strong>2200</strong> en su ficha de
+      usuario. Su equipo está en la <strong>2100</strong>.
+    </p>
+    <div class="callout prose">
+      Como el filtro es por la sociedad <strong>de cada persona</strong>, al consultar la 2100 se
+      veía al equipo y <strong>no al jefe</strong>. Justo al revés de lo que uno busca.
+    </div>
+  </section>
+
+  <section>
+    <h2>Qué se cambió en la pantalla</h2>
+    <ul class="did">
+      <li>El bloque ya no se llama &ldquo;Country Managers&rdquo;, sino
+        <b>Jerarquía comercial &mdash; nodos Country Manager</b>. No afirma lo que no sabe.</li>
+      <li>El <b>rol de cada persona se muestra siempre</b>, al lado del nombre. Es el dato que evita
+        la lectura equivocada.</li>
+      <li>Un aviso explica que <b>el nodo es un puesto</b> y su equipo cuelga de ahí.</li>
+      <li>Los de otra sociedad <b>ahora aparecen, marcados</b>. Jorge ya se ve en la 2100.</li>
+      <li>Cada sección tiene un desplegable <b>&ldquo;¿De dónde sale esta información?&rdquo;</b>
+        con esta misma tabla, al lado del dato.</li>
+    </ul>
+    <p class="prose">
+      <strong>No se filtra por rol</strong>, y es a propósito: Duwest no publica ningún campo que
+      diga quién ocupa el puesto. Adivinarlo con el texto del rol sería cambiar una afirmación falsa
+      por otra. La pantalla muestra el dato; quien mira decide.
+    </p>
+  </section>
+
+  <section>
+    <h2>Lo que habría que pedir</h2>
+    <div class="ask prose">
+      <p>
+        Que la jerarquía tenga <strong>un campo que marque quién ocupa el puesto</strong> &mdash; o
+        que se acuerde qué valor de <code>Role</code> lo significa.
+      </p>
+      <p style="margin-top:.7rem">
+        Hoy es una <strong>convención de nombre</strong>: si alguien renombra el nodo a
+        &ldquo;Country Mgr&rdquo;, la consulta deja de devolver a todos <strong>sin dar ningún
+        error</strong>. Con un campo, pasa a ser un dato que se puede verificar.
+      </p>
+    </div>
+  </section>
+
+  <footer class="prose">
+    Datos de <span class="mono">Mobility_QATEST</span>, sociedad 2100, verificados el 27 de agosto
+    de 2026. Detalle técnico en <code>docs/SPEC_MATRIZ_AUTORIZADORES.md</code> §7 del repositorio de
+    MobilityBackOffice.
+  </footer>
+
+</div>
+</body>
+</html>

@@ -139,33 +139,71 @@ de BackOffice va por cookie:
 
 ---
 
-## 8. Pendientes de deploy
+## 8. Verificacion end-to-end (2026-08-28)
 
-1. **`WABA_URL` sin configurar.** Sin ella el proxy no se monta y la seccion queda
-   deshabilitada (el iframe da 404). Ver `docs/ENV_VARIABLES.md`.
-2. **WABA todavia no corre en esta maquina.** Al 2026-08-28 el repo esta recien clonado:
-   **sin `.env` y sin `npm install`**. Necesita SQL Server y credenciales de META.
-3. **La integracion no se probo end-to-end** por lo anterior. Lo que si esta verificado:
-   la reescritura de rutas y el guard, con 43 tests. El comportamiento de
-   `X-Frame-Options` se dedujo de la version de helmet, **no se observo en vivo**.
+Probado contra WABA corriendo en `localhost:3020` y la base **`WhatsAppWABA_QATEST`**
+(14.794 mensajes, 119 contactos). Todo lo de esta seccion esta **observado**, no deducido.
 
-### Como verificarlo cuando WABA corra
+### Los headers, medidos
 
-```bash
-# 1. Que headers manda realmente
-curl -sI http://localhost:3000/login | grep -iE "x-frame-options|content-security-policy"
-
-# 2. Con WABA_URL seteada y sesion de BackOffice, el panel responde bajo /waba
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3010/waba/login
-
-# 3. Sin cookie de BackOffice -> 401 (el proxy no es abierto)
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3010/waba/
+```
+X-Frame-Options: SAMEORIGIN
+Content-Security-Policy: ... frame-ancestors 'self'; form-action 'self'
 ```
 
-En el navegador, lo que hay que ver: que **navegar dentro del iframe no lo saque de
-`/waba`** (si aparece BackOffice adentro del iframe, falto un segmento en
-`WABA_ROOTS`), y que el login de WABA **mantenga la sesion** al pasar de pagina (si
-vuelve a pedir credenciales, la cookie no esta volviendo bien).
+Confirma la premisa de D1: el iframe directo estaba bloqueado, y por partida doble.
+
+### Resultados
+
+| Que se probo | Resultado |
+|---|---|
+| Sin sesion de BackOffice | **401** `Sesion de BackOffice requerida` — no es proxy abierto |
+| Con cookie invalida | **401** |
+| Con sesion valida (Marketing) | El panel responde |
+| Redirect de WABA | `/login` llega como **`/waba/login`**: no escapa del prefijo |
+| `Set-Cookie` de WABA | Llega como **`Path=/waba`** (WABA la manda con `Path=/`) |
+| Login del panel **a traves del proxy** | **302 -> `/waba/`**: la sesion de WABA se establece bien |
+| Navegacion autenticada | `/`, `/conversations`, `/contacts`, `/messages`, `/templates`, `/accounts` -> **200** |
+| Reescritura de rutas | **137 rutas absolutas** en `/conversations`, **ninguna escapa** de `/waba` |
+| URLs de CDN | Intactas (`cdn.jsdelivr.net`) |
+
+> El arranque **no modifico** `WhatsAppWABA_QATEST`: su esquema ya estaba al dia con esta
+> version del codigo (`Schema initialized`, sin crear tablas ni columnas).
+
+### OJO con cual base
+
+Hay dos: **`WhatsAppWABA`** (2.8 GB, ~90k mensajes — la de uso real) y
+**`WhatsAppWABA_QATEST`**. Se usa la segunda.
+
+Apuntar a la primera **le modificaria el esquema**: `schema.sql` corre en cada arranque y
+le crearia `AiConversations`, `AiMessages`, `AiToolCalls` mas cuatro columnas del bot de
+IA. Son cambios aditivos, pero sobre una base en uso.
+
+### Los dos `.env` de BackOffice
+
+Hay un `.env` en la raiz **y** otro en `apps/api/`. El API arranca con
+`npm --workspace apps/api`, asi que su cwd es `apps/api` y **lee el de ahi**.
+
+`WABA_URL` va en **`apps/api/.env`**. Puesta en la raiz, el proxy no se monta y **no hay
+ningun error que lo delate**: lo unico que se nota es que falta la linea
+`Reverse-proxy WABA montado` en el log de arranque.
+
+### Como reproducirlo
+
+```bash
+# Los headers que manda WABA
+curl -sI http://localhost:3020/login | grep -iE "x-frame-options|content-security-policy"
+
+# Sin cookie de BackOffice -> 401
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3010/waba/
+
+# Y en el log del API tiene que aparecer:
+#   Reverse-proxy WABA montado en /waba -> http://localhost:3020
+```
+
+Si alguna vez aparece **BackOffice dentro del iframe**, es que a `WABA_ROOTS`
+(`waba-rewrite.ts`) le falta un segmento: una ruta absoluta quedo sin prefijo, el fallback
+SPA la atendio y devolvio `index.html`.
 
 ---
 
@@ -176,4 +214,6 @@ vuelve a pedir credenciales, la cookie no esta volviendo bien).
   serian 13 secciones nuevas.
 - **La seccion "Templates de WhatsApp".** Es una tarea aparte, todavia sin definir. Ver §1.
 - **Embeber el webhook-server** (puerto 3001). No tiene UI: recibe callbacks de META.
+- **Configurar META** (`META_ACCESS_TOKEN` y companía). El panel se ve y se navega sin
+  eso; hace falta para enviar mensajes y sincronizar plantillas desde la Cloud API.
 - **Tocar el repo de WABA.** No se modifico una sola linea.

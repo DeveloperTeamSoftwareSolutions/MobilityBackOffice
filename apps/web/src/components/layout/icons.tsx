@@ -50,3 +50,27 @@ export function IconMenu() {
     </svg>
   );
 }
+
+/**
+ * Consola de soporte. Reloj: la seccion se organiza alrededor de la linea de
+ * tiempo de un documento, asi que el glifo apunta al historico, no a la llave
+ * inglesa (que sugeriria configuracion).
+ */
+export function IconSupport() {
+  return (
+    <svg {...base}>
+      <path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z" />
+      <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z" />
+    </svg>
+  );
+}
+
+/** Información contextual: acompaña a un texto corto y guarda el detalle. */
+export function IconInfo() {
+  return (
+    <svg {...base} width={14} height={14}>
+      <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z" />
+      <path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z" />
+    </svg>
+  );
+}

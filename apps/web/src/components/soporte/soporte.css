@@ -1,0 +1,811 @@
+/* Consola de soporte — prefijo bo-sp */
+
+.bo-sp-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.bo-sp {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  flex: 1;
+}
+
+/* Cabecera */
+.bo-sp__head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bo-sp__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--bo-text);
+}
+.bo-sp__subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--bo-text-muted);
+  max-width: 720px;
+}
+
+/* Búsqueda */
+.bo-sp__search {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bo-sp__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bo-sp__field--grow {
+  flex: 1;
+  min-width: 220px;
+}
+.bo-sp__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bo-text-muted);
+}
+.bo-sp__select,
+.bo-sp__input {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-surface);
+  color: var(--bo-text);
+  font-size: 14px;
+  font-family: var(--bo-font);
+}
+.bo-sp__select:focus,
+.bo-sp__input:focus {
+  outline: none;
+  border-color: var(--bo-accent);
+  box-shadow: 0 0 0 3px var(--bo-focus-ring);
+}
+.bo-sp__button {
+  height: 38px;
+  padding: 0 20px;
+  border: none;
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--bo-font);
+  cursor: pointer;
+}
+.bo-sp__button:hover:not(:disabled) {
+  background: var(--bo-accent-hover);
+}
+.bo-sp__button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bo-sp__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--bo-text-muted);
+  cursor: pointer;
+}
+
+/* Mensajes */
+.bo-sp__error {
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--bo-danger);
+  border-radius: var(--bo-radius-sm);
+  background: rgba(197, 48, 48, 0.06);
+  color: var(--bo-danger);
+  font-size: 13px;
+}
+.bo-sp__empty {
+  margin: 0;
+  padding: 24px;
+  border: 1px dashed var(--bo-border);
+  border-radius: var(--bo-radius);
+  color: var(--bo-text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Ficha del documento */
+.bo-sp__card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius);
+  background: var(--bo-surface);
+  box-shadow: var(--bo-shadow);
+}
+.bo-sp__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bo-sp__doc-number {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--bo-text);
+}
+.bo-sp__status {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(13, 148, 136, 0.1);
+  color: var(--bo-accent-hover);
+  font-size: 12px;
+  font-weight: 600;
+}
+.bo-sp__status--cancelled {
+  background: rgba(197, 48, 48, 0.08);
+  color: var(--bo-danger);
+}
+/* Algo esperando una decision: ni cerrado ni rechazado. */
+.bo-sp__status--pending {
+  background: rgba(180, 83, 9, 0.1);
+  color: var(--bo-warning);
+}
+
+.bo-sp__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 0;
+}
+.bo-sp__fact dt {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bo-text-muted);
+  margin-bottom: 2px;
+}
+.bo-sp__fact dd {
+  margin: 0;
+  font-size: 14px;
+  color: var(--bo-text);
+}
+
+.bo-sp__cancel-note {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--bo-radius-sm);
+  background: rgba(197, 48, 48, 0.06);
+  color: var(--bo-danger);
+  font-size: 13px;
+}
+
+/* Línea de tiempo */
+.bo-sp__timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0 0 0 8px;
+  list-style: none;
+}
+/*
+  El `gap` es chico porque el body agrega 8px de `padding-left` propio (lo necesita
+  para que el resaltado del hover no quede pegado al texto). Entre los dos dan la
+  separacion real de 12px contra el marcador.
+*/
+.bo-sp__event {
+  position: relative;
+  display: flex;
+  gap: 4px;
+}
+/* Riel vertical: no se dibuja en el último hito. */
+.bo-sp__event::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 20px;
+  bottom: 0;
+  width: 2px;
+  background: var(--bo-border);
+}
+.bo-sp__event:last-child::before {
+  display: none;
+}
+
+.bo-sp__event-marker {
+  flex: 0 0 12px;
+  width: 12px;
+  height: 12px;
+  /* Alineado con la primera linea del cuerpo, que arranca 4px mas abajo. */
+  margin-top: 7px;
+  border-radius: 50%;
+  background: var(--bo-text-muted);
+  z-index: 1;
+}
+.bo-sp__event--created .bo-sp__event-marker,
+.bo-sp__event--sent .bo-sp__event-marker {
+  background: var(--bo-primary);
+}
+.bo-sp__event--status .bo-sp__event-marker,
+.bo-sp__event--resolution .bo-sp__event-marker,
+.bo-sp__event--milestone .bo-sp__event-marker {
+  background: var(--bo-accent);
+}
+/* Los mensajes del hilo son contexto, no hitos del flujo: marcador hueco. */
+.bo-sp__event--message .bo-sp__event-marker {
+  background: var(--bo-surface);
+  border: 2px solid var(--bo-border);
+}
+.bo-sp__event--credit .bo-sp__event-marker,
+.bo-sp__event--payment .bo-sp__event-marker {
+  background: var(--bo-warning);
+}
+.bo-sp__event--cancelled .bo-sp__event-marker {
+  background: var(--bo-danger);
+}
+
+/*
+  Aire vertical y una linea divisoria por hito.
+  Comprimir las cinco lineas a una dejo la lista tan apretada que no se sabia que
+  dato iba con que hito: la separacion horizontal era mucha y la vertical ninguna.
+  El divisor le da al ojo un carril para cruzar de punta a punta, y el `padding`
+  devuelve el aire que se habia perdido. Va en el body y no en el `li` para no
+  cortar el riel de la izquierda.
+*/
+.bo-sp__event-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px 14px 8px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--bo-border);
+}
+.bo-sp__event:last-child .bo-sp__event-body {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+/*
+  Un hito = una fila. El título se queda con el espacio sobrante y el resto se
+  acomoda a su derecha; en pantallas angostas la fila se parte sola en vez de
+  desbordar.
+*/
+.bo-sp__event-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+/* Quien / de donde / cuando: un solo bloque pegado al margen derecho. */
+.bo-sp__event-meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-left: auto;
+}
+/* Al pasar el mouse se resalta la fila entera: sirve para seguirla hasta la fecha. */
+.bo-sp__event:hover .bo-sp__event-body {
+  background: var(--bo-bg);
+  border-radius: var(--bo-radius-sm);
+}
+/*
+  El ancho fijo del tipo alinea los títulos en una columna, que es lo que hace
+  legible una lista larga: el ojo baja recto en vez de zigzaguear.
+*/
+.bo-sp__event-kind {
+  flex: 0 0 108px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--bo-text-muted);
+}
+.bo-sp__event-time {
+  font-size: 12px;
+  color: var(--bo-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bo-sp__event-title {
+  flex: 1 1 240px;
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bo-text);
+}
+/* El detalle es el único que baja de renglón, y solo cuando existe. */
+.bo-sp__event-detail {
+  margin: 0 0 0 118px;
+  font-size: 13px;
+  color: var(--bo-text);
+}
+/*
+  `event-actor` lo usan tambien los otros paneles para sus notas al pie, que son
+  parrafos largos. Por eso el actor de la linea de tiempo tiene su propia clase:
+  truncar a 260px alli es correcto, en un parrafo seria un bug.
+*/
+.bo-sp__event-actor {
+  margin: 0;
+  font-size: 12px;
+  color: var(--bo-text-muted);
+}
+/*
+  El actor se muestra COMPLETO. Truncarlo a 260px cortaba las direcciones largas
+  justo en el dato que soporte necesita leer entero. Si no entra, el mail parte por
+  caracteres y el rol baja solo.
+*/
+.bo-sp__event-who {
+  margin: 0;
+  font-size: 12px;
+  color: var(--bo-text-muted);
+  overflow-wrap: anywhere;
+}
+/*
+  El rol es un `span` aparte y no texto pegado al mail: asi el salto de linea cae
+  entre los dos y nunca en medio de la direccion. El separador es CSS para que no
+  quede un "·" suelto al principio de un renglon.
+*/
+.bo-sp__event-role {
+  white-space: nowrap;
+}
+.bo-sp__event-role::before {
+  content: ' · ';
+}
+.bo-sp__event-source {
+  margin: 0;
+  font-size: 11px;
+  color: var(--bo-text-muted);
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+/*
+  Los dos toggles van uno al lado del otro. Apilados se comian dos renglones enteros
+  arriba de la ficha para ofrecer dos casillas que caben de sobra en uno.
+*/
+.bo-sp__toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 20px;
+}
+
+/* Volver al listado */
+.bo-sp__back {
+  align-self: flex-start;
+  padding: 6px 0;
+  border: none;
+  background: transparent;
+  color: var(--bo-accent);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--bo-font);
+  cursor: pointer;
+}
+.bo-sp__back:hover {
+  color: var(--bo-accent-hover);
+}
+
+/* Tabla de documentos */
+.bo-sp__table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius);
+  background: var(--bo-surface);
+  box-shadow: var(--bo-shadow);
+}
+.bo-sp__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.bo-sp__table th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bo-text-muted);
+  border-bottom: 1px solid var(--bo-border);
+  white-space: nowrap;
+}
+.bo-sp__th-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.bo-sp__th-button:hover {
+  color: var(--bo-text);
+}
+.bo-sp__sort-arrow {
+  font-size: 9px;
+  color: var(--bo-accent);
+}
+.bo-sp__table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--bo-border);
+  color: var(--bo-text);
+  vertical-align: top;
+}
+.bo-sp__table tr:last-child td {
+  border-bottom: none;
+}
+.bo-sp__row {
+  cursor: pointer;
+}
+.bo-sp__row:hover td {
+  background: rgba(13, 148, 136, 0.04);
+}
+.bo-sp__row:focus-visible {
+  outline: 2px solid var(--bo-accent);
+  outline-offset: -2px;
+}
+.bo-sp__cell--strong {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.bo-sp__cell--muted {
+  color: var(--bo-text-muted);
+}
+.bo-sp__cell--number {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/*
+  El encabezado de una columna numerica tiene que alinearse con sus valores. Sin
+  esto el titulo quedaba pegado a la izquierda y el numero a la derecha, y la
+  columna se leia partida en dos. `inline-flex` en el boton de orden ignora el
+  `text-align` del `th`, asi que ademas hay que empujarlo con `margin-left: auto`.
+*/
+/*
+  Va calificado con `.bo-sp__table th` a proposito. Como clase suelta pesa (0,1,0) y
+  `.bo-sp__table th` pesa (0,1,1): el `text-align: left` del encabezado general
+  ganaba por especificidad aunque esta regla estuviera mas abajo, y la alineacion no
+  se aplicaba nunca.
+*/
+.bo-sp__table th.bo-sp__th--number {
+  text-align: right;
+}
+.bo-sp__table th.bo-sp__th--number .bo-sp__th-button {
+  margin-left: auto;
+}
+.bo-sp__cell-sub {
+  display: block;
+  font-size: 11px;
+  color: var(--bo-text-muted);
+}
+
+/* Paginador */
+.bo-sp__pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bo-sp__pager-info {
+  font-size: 12px;
+  color: var(--bo-text-muted);
+}
+.bo-sp__pager-buttons {
+  display: flex;
+  gap: 8px;
+}
+.bo-sp__pager-button {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-surface);
+  color: var(--bo-text);
+  font-size: 13px;
+  font-family: var(--bo-font);
+  cursor: pointer;
+}
+.bo-sp__pager-button:hover:not(:disabled) {
+  border-color: var(--bo-accent);
+  color: var(--bo-accent);
+}
+.bo-sp__pager-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Barra de la vista de detalle */
+.bo-sp__detail-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Modal de override */
+.bo-sp__modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.55);
+}
+.bo-sp__modal {
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: var(--bo-radius);
+  background: var(--bo-surface);
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
+}
+.bo-sp__modal-title {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--bo-text);
+}
+.bo-sp__modal-doc {
+  margin: 0 0 20px;
+  font-size: 13px;
+  color: var(--bo-text-muted);
+}
+.bo-sp__modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.bo-sp__textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-surface);
+  color: var(--bo-text);
+  font-size: 14px;
+  font-family: var(--bo-font);
+  resize: vertical;
+}
+.bo-sp__textarea:focus {
+  outline: none;
+  border-color: var(--bo-accent);
+  box-shadow: 0 0 0 3px var(--bo-focus-ring);
+}
+.bo-sp__modal-warning {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--bo-radius-sm);
+  background: rgba(180, 83, 9, 0.07);
+  color: var(--bo-warning);
+  font-size: 12px;
+}
+.bo-sp__modal-danger {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--bo-danger);
+  border-radius: var(--bo-radius-sm);
+  background: rgba(197, 48, 48, 0.06);
+  color: var(--bo-danger);
+  font-size: 13px;
+}
+.bo-sp__modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.bo-sp__button--danger {
+  background: var(--bo-danger);
+}
+.bo-sp__button--danger:hover:not(:disabled) {
+  background: #9b2c2c;
+}
+
+/* Edición inline del estado de una línea */
+.bo-sp__item-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/*
+  Area de accion del plazo de pago, separada de los datos por una linea. Antes los
+  botones colgaban del ultimo dato y no se distinguia que era informacion del
+  documento y que era algo para apretar.
+*/
+.bo-sp__pay-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 16px;
+  border-top: 1px solid var(--bo-border);
+}
+.bo-sp__pay-form .bo-sp__input {
+  min-width: 220px;
+  flex: 1 1 220px;
+}
+/* Ocupa la fila entera para que el formulario arranque debajo, no al lado. */
+.bo-sp__pay-form-title {
+  flex: 1 0 100%;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bo-text-muted);
+}
+.bo-sp__item-edit .bo-sp__input {
+  min-width: 200px;
+}
+
+/* Cabecera de la línea de tiempo: conteo + selector de orden */
+.bo-sp__timeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bo-sp__timeline-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bo-text-muted);
+}
+.bo-sp__order {
+  display: inline-flex;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  overflow: hidden;
+}
+.bo-sp__order-button {
+  height: 30px;
+  padding: 0 12px;
+  border: none;
+  background: var(--bo-surface);
+  color: var(--bo-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--bo-font);
+  cursor: pointer;
+}
+.bo-sp__order-button + .bo-sp__order-button {
+  border-left: 1px solid var(--bo-border);
+}
+.bo-sp__order-button:hover:not(.bo-sp__order-button--active) {
+  color: var(--bo-text);
+}
+.bo-sp__order-button--active {
+  background: var(--bo-accent);
+  color: #fff;
+}
+
+/* Marca de estado desfasado en el listado */
+.bo-sp__inconsistent {
+  color: var(--bo-warning);
+  font-weight: 600;
+}
+
+/* Acciones con intención — una línea por acción, el detalle en el globo */
+
+/* Sección avanzada plegable */
+.bo-sp__advanced-toggle {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--bo-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--bo-font);
+  cursor: pointer;
+}
+.bo-sp__advanced-toggle:hover {
+  color: var(--bo-text);
+}
+
+/* Acciones: una fila compacta por acción */
+/*
+  Las acciones van en FILA y envuelven. Antes cada una era una franja de ancho
+  completo con su rotulo, su globo y un boton "Aplicar" al final: cuatro acciones
+  ocupaban media pantalla para ofrecer cuatro clics.
+*/
+.bo-sp__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.bo-sp__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* Recuento de las que no aplican: nota al pie en la cabecera, no una opcion mas. */
+.bo-sp__action-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--bo-text-muted);
+}
+.bo-sp__button--sm {
+  height: 30px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+/* Ícono de información con globo en CSS (sin librería) */
+.bo-sp__info {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--bo-text-muted);
+  cursor: help;
+  vertical-align: middle;
+}
+.bo-sp__info:hover,
+.bo-sp__info:focus-visible {
+  color: var(--bo-accent);
+}
+.bo-sp__info::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 50;
+  width: max-content;
+  max-width: 300px;
+  padding: 8px 10px;
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-sidebar-bg);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  /*
+    `pre-line` y no `normal`: hay globos que listan varios items (el de las acciones
+    que no aplican), y con `normal` quedaban todos pegados en un parrafo.
+  */
+  white-space: pre-line;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+.bo-sp__info--derecha::after {
+  left: auto;
+  right: 0;
+}
+.bo-sp__info:hover::after,
+.bo-sp__info:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* El título de sección lleva su ícono de info al lado */
+.bo-sp__doc-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

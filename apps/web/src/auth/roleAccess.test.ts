@@ -23,3 +23,59 @@ describe('roleAllows', () => {
     expect(roleAllows(null, [])).toBe(false);
   });
 });
+
+describe('roleAllows — rol Soporte', () => {
+  it('Soporte accede a la consola de soporte', () => {
+    expect(roleAllows('Soporte', ['Soporte'])).toBe(true);
+  });
+
+  it('SuperAdmin tambien entra a la consola de soporte (decision D5)', () => {
+    expect(roleAllows('SuperAdmin', ['Soporte'])).toBe(true);
+  });
+
+  it('Soporte no accede a Regiones ni a Marketing', () => {
+    expect(roleAllows('Soporte', ['Administrador'])).toBe(false);
+    expect(roleAllows('Soporte', ['Marketing'])).toBe(false);
+  });
+
+  it('ningun otro rol entra a la consola de soporte', () => {
+    expect(roleAllows('Administrador', ['Soporte'])).toBe(false);
+    expect(roleAllows('Marketing', ['Soporte'])).toBe(false);
+    expect(roleAllows(null, ['Soporte'])).toBe(false);
+  });
+});
+
+describe('roleAllows — rol Usuario', () => {
+  /**
+   * La regla del rol es una sola: TODO menos la consola de soporte. Se expresa como
+   * exclusión (`!allow.includes('Soporte')`) y no listando 'Usuario' en cada sección,
+   * justamente para que una sección nueva quede visible sin que nadie se acuerde de
+   * sumarlo. Estos tests fijan esa regla.
+   */
+  it('accede a lo que piden Administrador y Marketing', () => {
+    expect(roleAllows('Usuario', ['Administrador'])).toBe(true);
+    expect(roleAllows('Usuario', ['Marketing'])).toBe(true);
+    expect(roleAllows('Usuario', ['Administrador', 'Marketing'])).toBe(true);
+  });
+
+  it('NO accede a la consola de soporte: es lo unico que lo distingue', () => {
+    expect(roleAllows('Usuario', ['Soporte'])).toBe(false);
+  });
+
+  it('tampoco si Soporte aparece junto a otros roles', () => {
+    // Una seccion mixta sigue siendo de soporte: basta que lo pida.
+    expect(roleAllows('Usuario', ['Soporte', 'Administrador'])).toBe(false);
+  });
+
+  it('una seccion NUEVA le queda visible sin tocar nada', () => {
+    // Es la razon de ser de la exclusion: un rol futuro que no existe todavia.
+    expect(roleAllows('Usuario', ['UnRolQueNoExisteAun' as never])).toBe(true);
+    expect(roleAllows('Usuario', [])).toBe(true);
+  });
+
+  it('no le da acceso a los demas roles por rebote', () => {
+    expect(roleAllows('Administrador', ['Usuario'])).toBe(false);
+    expect(roleAllows('Marketing', ['Usuario'])).toBe(false);
+    expect(roleAllows('Soporte', ['Usuario'])).toBe(false);
+  });
+});

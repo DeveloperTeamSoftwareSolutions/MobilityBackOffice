@@ -22,6 +22,7 @@ usa el dev server de Vite en `:5183`, que proxyea `/api` al backend.
 | Regiones comerciales | **completo** (v1.0.0) | SUPERADMIN, Administrador |
 | Documentacion del RAG (embebido) | **completo** (v1.1.0) | SUPERADMIN, Marketing |
 | Templates de WhatsApp (Marketing) | pendiente | SUPERADMIN, Marketing |
+| Consola de soporte | **completa** (v2.3.0) | SUPERADMIN, Soporte |
 
 ## Puesta en marcha
 
@@ -54,6 +55,7 @@ para el estado por entorno (v2.0.0 requiere el script `005` en PROD).
 
 - `docs/MIGRACION_MIDDLEWARE_V2.md` — **v2.0.0**: migracion a MobilityMiddleWare (sin SQL directo), mapa de datos, migracion PROD y checklist de deploy
 - `docs/SPEC_BACKOFFICE_REGIONES.md` — spec (fundacion + Regiones)
+- `docs/SPEC_CONSOLA_SOPORTE.md` — **v2.1.0**: spec de la consola de soporte (rol, linea de tiempo, plan de override)
 - `docs/AUTENTICACION.md` — login, token propio y guards; por que no se reusa el JWT de ManageIT
 - `docs/ROLES_Y_PERMISOS.md` — roles, permisos y mapeo para aplicar en ITManager
 - `docs/API_ENDPOINTS.md` — contrato de la API

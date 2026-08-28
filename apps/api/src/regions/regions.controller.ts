@@ -42,7 +42,9 @@ function actor(req: AuthedRequest): { email?: string; guid?: string } {
  * El sync máquina-a-máquina vive en `RegionsSyncController` y se autentica por API key.
  */
 @Controller('api/regions')
-@Roles(BackOfficeRole.Administrador)
+// `Usuario` entra tambien: es el rol que abarca todo el back-office menos la
+// consola de soporte. Ver docs/ROLES_Y_PERMISOS.md.
+@Roles(BackOfficeRole.Administrador, BackOfficeRole.Usuario)
 @UseGuards(JwtGuard, RolesGuard)
 export class RegionsController {
   constructor(private readonly regions: RegionsService) {}

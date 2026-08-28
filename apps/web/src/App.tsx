@@ -8,6 +8,7 @@ import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
 import { RegionesPage } from './pages/RegionesPage';
 import { RagPage } from './pages/RagPage';
+import { SoportePage } from './pages/SoportePage';
 
 /**
  * Router de la aplicación. Punto único donde se declaran los módulos.
@@ -67,6 +68,18 @@ export function App(): JSX.Element {
                   fallback={<Navigate to="/" replace />}
                 >
                   <RagPage />
+                </RoleGuard>
+              }
+            />
+
+            <Route
+              path="soporte"
+              element={
+                <RoleGuard
+                  allow={['Soporte']}
+                  fallback={<Navigate to="/" replace />}
+                >
+                  <SoportePage />
                 </RoleGuard>
               }
             />

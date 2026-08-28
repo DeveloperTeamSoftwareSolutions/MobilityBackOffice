@@ -1,7 +1,7 @@
 # API — Mobility BackOffice
 
-> Ultima actualizacion: 2026-07-20
-> Version: 1.1.0
+> Ultima actualizacion: 2026-08-25
+> Version: 2.4.0
 
 Toda respuesta incluye `success`. Los errores siguen el formato de Nest:
 `{ message, error, statusCode }`.
@@ -74,6 +74,56 @@ al RAG externo.
 
 Detalle en `docs/SPEC_RAG_EMBED.md` y `docs/EXTERNAL_APIS.md`.
 
+## Consola de soporte
+
+**Todo el modulo exige rol `Soporte`** (`SuperAdmin` pasa siempre por el `RolesGuard`).
+Es el rol exclusivo del DevelopersTeam: da trazabilidad de cualquier documento **sin** el
+scope de vendedor que limita al resto del ecosistema.
+
+> **Escritura**: solo el override de estado. Las banderas de control (items, pago,
+> credito) llegan en la fase 3. Ver `docs/SPEC_CONSOLA_SOPORTE.md`.
+>
+> **El override puede revertirse solo.** El estado es un valor DERIVADO: si los hechos no
+> respaldan el estado forzado, el proximo recompute lo vuelve a cambiar. La UI lo advierte.
+
+| Metodo | Ruta | Descripcion |
+|---|---|---|
+| GET | `/api/support/documents` | Listado paginado. Cada fila trae `projectedStatus` y `statusConsistent`. Query: `type` (`order` \| `quote`), `search`, `status`, `page`, `limit` (max 200), `sortBy`, `sortDir` |
+| GET | `/api/support/statuses` | Estados presentes en los datos con su conteo, para el filtro. Query: `type` |
+| GET | `/api/support/diagnostics/inconsistent` | Documentos cuyo estado guardado **no coincide** con el calculado. Query: `type`, `limit` (max 2000). Devuelve `scanned`, `total` y `truncated` |
+| GET | `/api/support/documents/:type/:number` | Cabecera del documento. 400 si el tipo es invalido o el numero viene vacio; 404 si no existe |
+| GET | `/api/support/documents/:type/:number/timeline` | Bitacora unificada. Query: `includeViews`, `includeMessages` (`1`/`true`) |
+| GET | `/api/support/vocabulary` | Estados VALIDOS del tipo (para elegir destino del override), con su marca de terminal |
+| PATCH | `/api/support/documents/:type/:guid/status` | **Override de estado.** Body `{ toCode, reasonNotes, reasonCode? }`. 400 si falta `toCode`, si el motivo viene vacio o si `toCode` no pertenece al vocabulario; 404 si el documento no existe |
+| GET | `/api/support/documents/:type/:guid/actions` | **Acciones con intencion** disponibles, con el motivo de las que no |
+| POST | `/api/support/documents/:type/:guid/actions/:action` | Ejecuta una accion (`return_to_manager`, `unblock_forward`, `annul`). Body `{ reasonNotes }`. Escribe HECHOS y recalcula: nunca el estado. Devuelve `expected` y `achieved` |
+| GET | `/api/support/documents/:type/:guid/items` | Lineas del documento + `managerTurn` (si el gerente cerro su turno) |
+| PATCH | `/api/support/documents/:type/:guid/items/:itemGuid` | **Estado de una linea.** Body `{ authorizationStatus?, sellerResponse?, authorizationRequired?, reasonNotes }`. Solo estados: precio, cantidad, descuento y producto NO se leen. `countered` es rechazado |
+| POST | `/api/support/documents/:type/:guid/recompute` | Recalcula el estado del documento a partir de los hechos |
+| GET | `/api/support/documents/:type/:guid/projected-status` | Que estado daria el recalculo HOY, **sin escribir**. `{ current, projected, matches, estimated }`. Es una estimacion: no re-evalua el credito |
+
+### Orden de rutas
+
+`documents` y `statuses` (literales) se declaran **antes** que `documents/:type/:number`.
+Hoy no compiten (distinta cantidad de segmentos), pero es la convencion del repo.
+
+### Por que el listado no sale de los endpoints existentes
+
+Todos los listados de documentos del Middleware estan scopeados por vendedor o cliente
+(`resolveEmail` + `sellerScope`) y a soporte le devuelven vacio o 404 — soporte no es el
+vendedor de ningun documento. Por eso el Middleware suma un router propio
+(`/api/mobility/support`, v1.240.0) que expone la misma data **sin** ese scope, protegido
+con `requireApiKey`.
+
+**Orden de los hitos**: cronologico, con un desempate dentro del mismo segundo — el
+alta va primero. Las marcas de las distintas tablas difieren por milisegundos segun el
+orden de escritura, no por cronologia real (ver v1.242.2 del Middleware).
+
+La bitacora es un passthrough a `GET /mobility/document-timeline` del Middleware: alta,
+ediciones, envio, decisiones por item, contraofertas, decision de cabecera, corridas del motor
+de credito, pagos y su validacion, liberacion o denegacion de credito, cierre del turno del
+gerente, envio a SAP y anulacion con motivo. `includeViews=1` suma quien MIRO el documento.
+
 ## Auditoria
 
 Las escrituras dejan traza en `AuditLogs` con `AppId='MobilityBackOffice'`:
@@ -84,3 +134,7 @@ Las escrituras dejan traza en `AuditLogs` con `AppId='MobilityBackOffice'`:
 | `REGION_CEBE_LINK` | `regions` | `ContinentProfitCenter` | codigo del CEBE |
 | `REGION_CEBE_UNLINK` | `regions` | `ContinentProfitCenter` | codigo del CEBE |
 | `REGION_SYNC` | `regions` | `ContinentProfitCenter` | — |
+| `SUPPORT_ACTION` | `support` | `BusinessOrders` / `BusinessQuotes` | numero del documento |
+| `SUPPORT_STATUS_OVERRIDE` | `support` | `BusinessOrders` / `BusinessQuotes` | numero del documento (camino avanzado) |
+| `SUPPORT_ITEM_OVERRIDE` | `support` | `BusinessOrderItems` / `BusinessQuoteItems` | numero del documento |
+| `SUPPORT_RECOMPUTE` | `support` | `BusinessOrders` / `BusinessQuotes` | numero del documento (solo si el estado cambio) |

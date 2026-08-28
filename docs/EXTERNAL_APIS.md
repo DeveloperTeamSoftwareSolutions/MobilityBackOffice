@@ -1,7 +1,7 @@
 # APIs y Endpoints Externos — Mobility BackOffice
 
-> Ultima actualizacion: 2026-08-05
-> Version: 2.0.0
+> Ultima actualizacion: 2026-08-25
+> Version: 2.4.0
 
 ## Integraciones activas
 
@@ -25,8 +25,11 @@ MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
 
 - **Base URL**: `MIDDLEWARE_URL` (dev `http://localhost:6002/api`; prod = mismo Middleware
   que MobilityManager). La URL **incluye** el prefijo `/api`.
-- **Autenticacion**: header `x-api-key` contra `MIDDLEWARE_API_KEY` (opcional: si el
-  Middleware no exige key, es no-op). Ademas se manda **siempre** `x-source-app:
+- **Autenticacion**: header `x-api-key` contra `MIDDLEWARE_API_KEY`.
+  ⚠️ **Requisito de deploy**: el router `/mobility/support` va montado con `requireApiKey`,
+  que es **no-op si el Middleware no tiene `MIDDLEWARE_API_KEY` seteada** (verificado
+  2026-08-25: `/api/sellers` responde 200 sin key). Sin esa variable esas rutas quedan
+  abiertas. Ver `docs/SPEC_CONSOLA_SOPORTE.md`. Ademas se manda **siempre** `x-source-app:
   MobilityBackOffice` para que la auditoria automatica del Middleware (`ApiLogs`) atribuya
   cada llamada.
 - **Endpoints consumidos** (relativos a `MIDDLEWARE_URL`):
@@ -44,6 +47,9 @@ MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
   | GET | `/mobility/profit-centers` | Maestro de CEBEs (typeahead, diagnosticos) | `dbo.VIEW_ProfitCentersMobility` | idem |
   | GET | `/v2/mobility/companies` | Maestro de sociedades (typeahead) | `dbo.VIEW_V2_CompaniesMobility` sobre `[SAPServices].[dbo].[Companies]` | idem |
   | POST | `/audit-logs` | Traza central (append) | `dbo.AuditLogs` | `src/audit/audit.client.ts` |
+  | GET | `/mobility/document-timeline` | Bitacora unificada de una orden/cotizacion (consola de soporte) | `BusinessOrders`/`BusinessQuotes` + `Auditories`, pagos, credito y resoluciones | `src/support/support.client.ts` |
+  | GET | `/mobility/support/documents` | Listado de documentos SIN scope de vendedor (consola de soporte) | `BusinessOrders` / `BusinessQuotes` | idem |
+  | GET | `/mobility/support/statuses` | Estados presentes con su conteo, para el filtro | idem | idem |
 - **Cross-database y collations**: el join a `[SAPServices].[dbo].[Companies]` y el manejo de
   collations ocurren **dentro del Middleware** (via `VIEW_V2_CompaniesMobility`). BackOffice ya
   no depende de eso: es una preocupacion del Middleware, no de esta app.

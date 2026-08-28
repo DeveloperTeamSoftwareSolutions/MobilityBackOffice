@@ -1,6 +1,6 @@
 # Roles y Permisos — Mobility BackOffice
 
-> Última actualización: 2026-08-27 · Versión: 2.11.0
+> Última actualización: 2026-08-27 · Versión: 2.13.0
 >
 > Qué puede hacer cada rol, cómo se decide, y cómo se registra en ITManager.
 
@@ -27,7 +27,7 @@ Y la regla que más sorprende:
 |---|---|---|---|
 | `MOBILITYBO_SUPERADMIN` | **SuperAdmin** | 1 (gana a todos) | Absolutamente todo, incluida la consola de soporte y cualquier sección futura |
 | `MOBILITYBO_SUPPORT` | **Soporte** | 2 | **Solo** la consola de soporte |
-| `MOBILITYBO_USER` | **Usuario** | 3 | Todo **menos** la consola de soporte |
+| `MOBILITYBO_USER` | **Usuario** | 3 | Todo **menos** la consola de soporte y lo exclusivo de SuperAdmin |
 | `MOBILITYBO_ADMIN` | **Administrador** | 4 | Regiones comerciales |
 | `MOBILITYBO_MARKETING` | **Marketing** | 5 | Documentación del RAG, Templates de WhatsApp |
 
@@ -45,10 +45,13 @@ anularlo. **No** da acceso a Regiones ni a Marketing.
 Es el único rol que toca documentos de negocio, y por eso está separado del resto.
 Ver `docs/SPEC_CONSOLA_SOPORTE.md`.
 
-**Usuario** — el rol del día a día. **Todo el back-office menos la consola de soporte.**
+**Usuario** — el rol del día a día. **Todo el back-office menos la consola de soporte y
+menos lo que sea exclusivo de SuperAdmin.**
 Hoy eso significa Regiones comerciales + Documentación del RAG + Templates de WhatsApp, y
-**cualquier sección que se agregue en el futuro** salvo que sea de soporte.
-No es "SuperAdmin sin la consola": SuperAdmin además entra a la consola.
+**cualquier sección que se agregue en el futuro** salvo que sea de soporte o que se
+declare como exclusiva de SuperAdmin (`roles: ['SuperAdmin']`).
+No es "SuperAdmin sin la consola": SuperAdmin además entra a la consola y a la matriz
+de autorizadores.
 
 **Administrador** — solo Regiones comerciales: vincular CEBEs y sociedades a las regiones.
 Queda como rol acotado para quien solo tenga que mantener ese dato maestro.
@@ -67,6 +70,7 @@ y (cuando exista) los templates de WhatsApp.
 | Documentación del RAG | ✓ | — | ✓ | — | ✓ |
 | Templates de WhatsApp *(próximamente)* | ✓ | — | ✓ | — | ✓ |
 | **Consola de soporte** | ✓ | ✓ | **—** | — | — |
+| **Matriz de autorizadores** | ✓ | — | **—** | **—** | **—** |
 | *Cualquier sección futura no-soporte* | ✓ | — | ✓ | — | — |
 
 "Inicio" es fijo y siempre visible; muestra solo las tarjetas de las secciones que el rol
@@ -81,6 +85,7 @@ puede abrir.
 | `/api/regions/*` | Administrador, Usuario, SuperAdmin |
 | `/rag/*` (proxy) | Marketing, Usuario, SuperAdmin |
 | `/api/support/*` | **Soporte, SuperAdmin** |
+| `/api/authorizers/*` | **Solo SuperAdmin** |
 | `/api/regions/sync` | Ninguno — se autentica por API key (máquina a máquina) |
 
 > **La UI oculta; el backend prohíbe.** Esconder una sección es comodidad, no seguridad:
@@ -217,3 +222,8 @@ Ver `docs/AUTENTICACION.md`.
 no pida `Soporte`. Lo que sí hay que recordar es lo contrario — marcar la sección como de
 Soporte si corresponde —, que es justo lo que no se olvida, porque es el motivo por el que
 se creó la sección.
+
+**Para una sección exclusiva de SuperAdmin**, poner `roles: ['SuperAdmin']`. Listarlo
+explícitamente es redundante para el propio SuperAdmin (ya pasa siempre), pero es lo que
+`roleAccess.ts` mira para dejar afuera a `Usuario`: sin eso, la exclusión por defecto se
+la dejaría visible.

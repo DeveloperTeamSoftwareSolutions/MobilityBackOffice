@@ -27,8 +27,8 @@ interface ApiPaged<T> {
 // (`http://<host>:6002/api`). Se verificaron contra el middleware en vivo: con esa base
 // resuelven a `/api/mobility/...` y `/api/v2/mobility/...`. Ver docs/EXTERNAL_APIS.md.
 
-/** Endpoint del middleware dueño de `VIEW_ProfitCentersMobility` (ShowInMobility = 1). */
-const PATH = '/mobility/profit-centers';
+/** Endpoint del middleware dueño de `VIEW_V2_ProfitCentersMobility` (ShowInMobility = 1). */
+const PATH = '/v2/mobility/profit-centers';
 
 /** Endpoint del middleware dueño de `Continents` + `ContinentProfitCenters`. */
 const REGIONS_PATH = '/mobility/regions';
@@ -131,7 +131,7 @@ export function mapProfitCenter(item: ProfitCenterItem): AvailableCebe {
 /**
  * Cliente HTTP del módulo hacia MobilityMiddleWare. Cubre las TRES fuentes que necesita:
  *
- *   · `/mobility/profit-centers`   maestro de CEBEs (`VIEW_ProfitCentersMobility`)
+ *   · `/v2/mobility/profit-centers` maestro de CEBEs (`VIEW_V2_ProfitCentersMobility`)
  *   · `/mobility/regions`          regiones (`Continents`) y sus links
  *                                  (`ContinentProfitCenters`)
  *   · `/v2/mobility/companies`     maestro de sociedades (envuelve el cross-DB a

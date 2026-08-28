@@ -3,7 +3,7 @@ import { searchCebes } from './regiones.api';
 import { AvailableCebe } from './regiones.types';
 
 /**
- * Typeahead de CEBEs del maestro (VIEW_ProfitCentersMobility). Búsqueda debounced;
+ * Typeahead de CEBEs del maestro (VIEW_V2_ProfitCentersMobility). Búsqueda debounced;
  * al elegir uno, lo devuelve al padre para vincularlo a la región.
  */
 export function CebePicker({

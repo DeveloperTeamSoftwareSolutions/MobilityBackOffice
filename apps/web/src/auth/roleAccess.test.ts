@@ -79,3 +79,30 @@ describe('roleAllows — rol Usuario', () => {
     expect(roleAllows('Soporte', ['Usuario'])).toBe(false);
   });
 });
+
+describe('roleAllows — secciones exclusivas de SuperAdmin', () => {
+  /**
+   * Una seccion que lista `SuperAdmin` como unico rol permitido no la ve nadie mas.
+   * El caso que importa es `Usuario`: como su regla es por exclusion, sin excluir
+   * tambien `SuperAdmin` una seccion asi le quedaria visible por defecto.
+   */
+  it('SuperAdmin entra', () => {
+    expect(roleAllows('SuperAdmin', ['SuperAdmin'])).toBe(true);
+  });
+
+  it('Usuario NO entra, aunque su regla sea por exclusion', () => {
+    expect(roleAllows('Usuario', ['SuperAdmin'])).toBe(false);
+  });
+
+  it('ningun otro rol entra', () => {
+    expect(roleAllows('Administrador', ['SuperAdmin'])).toBe(false);
+    expect(roleAllows('Marketing', ['SuperAdmin'])).toBe(false);
+    expect(roleAllows('Soporte', ['SuperAdmin'])).toBe(false);
+    expect(roleAllows(null, ['SuperAdmin'])).toBe(false);
+  });
+
+  it('una seccion mixta con SuperAdmin sigue tapada para Usuario', () => {
+    expect(roleAllows('Usuario', ['SuperAdmin', 'Administrador'])).toBe(false);
+    expect(roleAllows('Administrador', ['SuperAdmin', 'Administrador'])).toBe(true);
+  });
+});

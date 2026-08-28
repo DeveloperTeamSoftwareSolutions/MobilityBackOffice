@@ -1,7 +1,7 @@
 # API — Mobility BackOffice
 
-> Ultima actualizacion: 2026-08-25
-> Version: 2.4.0
+> Ultima actualizacion: 2026-08-27
+> Version: 2.15.0
 
 Toda respuesta incluye `success`. Los errores siguen el formato de Nest:
 `{ message, error, statusCode }`.
@@ -123,6 +123,67 @@ La bitacora es un passthrough a `GET /mobility/document-timeline` del Middleware
 ediciones, envio, decisiones por item, contraofertas, decision de cabecera, corridas del motor
 de credito, pagos y su validacion, liberacion o denegacion de credito, cierre del turno del
 gerente, envio a SAP y anulacion con motivo. `includeViews=1` suma quien MIRO el documento.
+
+## Matriz de autorizadores
+
+**Todo el modulo exige rol `SuperAdmin`.** Expone los correos de todos los gerentes con
+su banda de firma: es informacion de control interno. `Usuario` **no** entra — ver
+`docs/ROLES_Y_PERMISOS.md`.
+
+> **Solo lectura.** La matriz se replica de SAP (`[SAPServices].[dbo].[AuthorizerLimits]`
+> + `[AuthorizerProfitCenters]`): una fila cargada a mano la pisa la proxima
+> sincronizacion. Si hay que cambiarla, es un pedido a SAP. Ver
+> `docs/SPEC_MATRIZ_AUTORIZADORES.md`.
+
+| Metodo | Ruta | Descripcion |
+|---|---|---|
+| GET | `/api/authorizers/companies` | Typeahead de sociedades. Query: `q`, `limit` (max 50). Va primero porque sin sociedad no hay matriz que pedir |
+| GET | `/api/authorizers/country-managers` | Country Managers de la sociedad — **el otro permiso**, el que no sale de la matriz. Query: `companyCode` (obligatorio). Devuelve `available` y `diagnosis` (ver abajo) |
+| GET | `/api/authorizers` | La matriz, **una fila por autorizador**. Query: `companyCode` (obligatorio, max 8), `page`, `limit` (max 200, default 25), `search`, `sortBy`, `sortDir`, `filter`, `activeOnly`. Devuelve `data`, `pagination` y `summary` |
+
+`sortBy` acepta: `userEmail`, `userId`, `minimumPercentage`, `maximumPercentage`,
+`profitCenterCount`. Fuera de la whitelist cae a `userEmail`.
+`filter` acepta: `all`, `blocked`, `whole-company`, `inactive-cebes`.
+
+### Por que `companyCode` es obligatorio
+
+Porque lo exige el endpoint del Middleware: no hay forma de pedir la matriz completa de
+un saque. Por eso la pantalla arranca con un selector de sociedad y no con una tabla.
+
+### Por que la respuesta no tiene el grano del Middleware
+
+La vista devuelve 1 fila por (sociedad, correo, CEBE) — un gerente con 12 CEBEs son 12
+filas. La pregunta es "quien esta en la matriz", asi que el grano de la respuesta es la
+PERSONA. BackOffice agrupa, y por eso **pagina despues de agrupar**: paginar en el
+Middleware partiria a un gerente entre dos paginas.
+
+### `diagnosis`: por que vino vacia la lista de Country Managers
+
+El endpoint del middleware responde **200 con lista vacia por tres causas distintas** y
+solo una es un hecho del negocio. Presentar las otras dos como "nadie autoriza otra
+forma de pago" seria afirmar algo falso, asi que se separan:
+
+| `diagnosis` | Significa |
+|---|---|
+| `ok` | Hay resultados |
+| `unavailable` | No se pudo consultar (tambien `available: false`) |
+| `sin_nodo` | No existe ningun nodo `COUNTRY MANAGER%` en la jerarquia. **Los identifica por el NOMBRE del nodo**, asi que un renombre los esconde a todos |
+| `sin_miembros` | Existe el nodo, pero ninguno de sus integrantes resuelve a esta sociedad (o le falta la fila en `Users` con su `SapCompanyCode`) |
+
+Para distinguir los dos ultimos, BackOffice consulta
+`/mobility/commercial-team-hierarchy/tree` — **solo cuando la lista vino vacia**. En el
+caso normal esa llamada no se hace.
+
+### La banda viene interpretada, y los crudos tambien
+
+Cada autorizador trae `band: { min, max, blocked, reason }` **y** los
+`minimumPercentage`/`maximumPercentage` crudos. Los crudos mienten leidos literal
+(`0/0` = no puede firmar, `200/200` = sin limite), asi que la UI muestra `band`; los
+crudos quedan para poder auditar contra SAP. Ver `SPEC_MATRIZ_AUTORIZADORES.md` §5.
+
+`coversWholeCompany: true` sale de una fila con CEBE nulo: es el alcance **maximo**
+(el Middleware lo resuelve como `ProfitCenter = @Pc OR ProfitCenter IS NULL`), no una
+ausencia.
 
 ## Auditoria
 

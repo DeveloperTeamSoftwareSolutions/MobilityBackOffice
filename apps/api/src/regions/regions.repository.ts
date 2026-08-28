@@ -27,7 +27,7 @@ import {
 // ⚠️ ESTE REPOSITORIO YA NO TOCA SQL SERVER. Las tres fuentes van por el middleware,
 // que es el único componente que conecta a la base:
 //
-//   · maestro de CEBEs      `/mobility/profit-centers`
+//   · maestro de CEBEs      `/v2/mobility/profit-centers`
 //   · regiones + links      `/mobility/regions`
 //   · maestro de sociedades `/v2/mobility/companies`  (era el último cross-DB a
 //                                                       [SAPServices].[dbo].[Companies])
@@ -162,7 +162,7 @@ export function diffUnmapped(catalog: AvailableCebe[], linkedCodes: string[]): U
  * Datos del módulo de Regiones comerciales por CEBE.
  *
  * TODO pasa por el middleware: regiones y links (`/mobility/regions`), maestro de CEBEs
- * (`/mobility/profit-centers`) y maestro de sociedades (`/v2/mobility/companies`). Este
+ * (`/v2/mobility/profit-centers`) y maestro de sociedades (`/v2/mobility/companies`). Este
  * repositorio ya no conoce SQL ni Prisma; lo que conserva es la lógica de negocio que no
  * le pertenece a nadie más: los diffs, el agrupado y la reconciliación del sync.
  */
@@ -282,8 +282,8 @@ export class RegionsRepository {
   }
 
   /**
-   * Maestro de CEBEs (typeahead). Vía middleware (`/mobility/profit-centers`), que lee
-   * `VIEW_ProfitCentersMobility` (ShowInMobility = 1) con el mismo search (LIKE `%term%`
+   * Maestro de CEBEs (typeahead). Vía middleware (`/v2/mobility/profit-centers`), que lee
+   * `VIEW_V2_ProfitCentersMobility` (ShowInMobility = 1) con el mismo search (LIKE `%term%`
    * sobre código o nombre) y el mismo orden (`ProfitCenterCode ASC`).
    */
   getAvailableCebes(search: string, limit: number): Promise<AvailableCebe[]> {

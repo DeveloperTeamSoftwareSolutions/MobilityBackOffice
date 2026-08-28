@@ -9,6 +9,7 @@ import { HomePage } from './pages/HomePage';
 import { RegionesPage } from './pages/RegionesPage';
 import { RagPage } from './pages/RagPage';
 import { SoportePage } from './pages/SoportePage';
+import { AutorizadoresPage } from './pages/AutorizadoresPage';
 
 /**
  * Router de la aplicación. Punto único donde se declaran los módulos.
@@ -68,6 +69,18 @@ export function App(): JSX.Element {
                   fallback={<Navigate to="/" replace />}
                 >
                   <RagPage />
+                </RoleGuard>
+              }
+            />
+
+            <Route
+              path="matriz-autorizadores"
+              element={
+                <RoleGuard
+                  allow={['SuperAdmin']}
+                  fallback={<Navigate to="/" replace />}
+                >
+                  <AutorizadoresPage />
                 </RoleGuard>
               }
             />

@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Handoff tecnico: que endpoints del MobilityMiddleWare sirven para mostrar la matriz de autorizadores en MobilityBackOffice, que devuelven, que catalogos hacen falta y que hay que decidir antes de construir la pantalla.">
+<title>La matriz de autorizadores en BackOffice</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;0,7..72,600;0,7..72,700&family=Archivo:wght@500;600;700&family=Roboto+Mono:wght@400;500;700&display=swap">
+<style>
+  :root {
+    --ground:#F7F5F1; --surface:#FFFFFF; --surface-alt:#EFEBE4;
+    --line:#DDD6CB; --line-soft:#E9E4DB;
+    --ink:#1F1B15; --ink-soft:#5C544A; --ink-faint:#918878;
+    --accent:#9C4A1E; --accent-ink:#8A4019; --accent-soft:#F6E7DE;
+    --si:#2C6B4A;   --si-bg:#DFEDE5;
+    --no:#96331F;   --no-bg:#FAEAE5;   --no-line:#E7C7B7;
+    --tope:#6E3D73; --tope-bg:#EFE3F0;
+    --libre:#64604F;--libre-bg:#EAE6DC;
+    --shadow:0 1px 2px rgba(31,27,21,.05), 0 14px 32px -24px rgba(31,27,21,.45);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#14120F; --surface:#1B1815; --surface-alt:#23201B;
+      --line:#332E27; --line-soft:#262218;
+      --ink:#EDE8E0; --ink-soft:#A79E91; --ink-faint:#7B7365;
+      --accent:#E08A5A; --accent-ink:#EE9E70; --accent-soft:#2C1A11;
+      --si:#6DC79A;   --si-bg:#12281D;
+      --no:#EE9068;   --no-bg:#2E1810;   --no-line:#4C2618;
+      --tope:#C79ACB; --tope-bg:#291C2B;
+      --libre:#ADA694;--libre-bg:#24211A;
+      --shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 36px -26px rgba(0,0,0,.9);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#14120F; --surface:#1B1815; --surface-alt:#23201B;
+    --line:#332E27; --line-soft:#262218;
+    --ink:#EDE8E0; --ink-soft:#A79E91; --ink-faint:#7B7365;
+    --accent:#E08A5A; --accent-ink:#EE9E70; --accent-soft:#2C1A11;
+    --si:#6DC79A;   --si-bg:#12281D;
+    --no:#EE9068;   --no-bg:#2E1810;   --no-line:#4C2618;
+    --tope:#C79ACB; --tope-bg:#291C2B;
+    --libre:#ADA694;--libre-bg:#24211A;
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 16px 36px -26px rgba(0,0,0,.9);
+  }
+
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink);
+         font-family:Literata,ui-serif,Georgia,serif; font-size:16.5px; line-height:1.68;
+         -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:1020px; margin:0 auto; padding:48px 26px 92px; }
+  .measure { max-width:68ch; }
+
+  h1 { font-weight:700; font-size:clamp(32px,5vw,50px); line-height:1.08; letter-spacing:-.02em; margin:0 0 14px; text-wrap:balance; }
+  h2 { font-weight:700; font-size:27px; line-height:1.22; margin:60px 0 10px; letter-spacing:-.01em; text-wrap:balance; }
+  h3 { font-weight:600; font-size:19px; margin:34px 0 6px; text-wrap:balance; }
+  h4 { font-family:Archivo,ui-sans-serif,system-ui,sans-serif; font-weight:700; font-size:14px;
+       letter-spacing:.02em; color:var(--ink-soft); margin:26px 0 6px; text-wrap:balance; }
+  p { margin:0 0 16px; }
+  .lede { font-size:19.5px; line-height:1.58; color:var(--ink-soft); }
+  .lede b { color:var(--ink); font-weight:600; }
+  .kicker { font-family:Archivo,ui-sans-serif,system-ui,sans-serif; font-size:11.5px; font-weight:700;
+            letter-spacing:.16em; text-transform:uppercase; color:var(--accent-ink); margin-bottom:15px; }
+  header.top { border-bottom:3px double var(--line); padding-bottom:28px; }
+
+  code { font-family:"Roboto Mono",ui-monospace,monospace; font-size:.83em;
+         background:var(--surface-alt); padding:1.5px 5px; border-radius:4px; }
+  a { color:var(--accent-ink); }
+  ul,ol { margin:0 0 16px; padding-left:22px; }
+  li { margin-bottom:7px; }
+  li::marker { color:var(--ink-faint); }
+  ul.check { list-style:none; padding-left:2px; }
+  ul.check li { padding-left:27px; position:relative; }
+  ul.check li::before { content:"\2610"; position:absolute; left:0; top:-1px;
+                        color:var(--ink-faint); font-size:16px; line-height:1.5; }
+
+  .scroll { overflow-x:auto; border:1px solid var(--line); border-radius:11px; background:var(--surface); margin:0 0 22px; }
+  table { border-collapse:collapse; width:100%; font-family:Archivo,ui-sans-serif,system-ui,sans-serif;
+          font-size:14.5px; line-height:1.5; min-width:560px; }
+  thead th { text-align:left; font-size:11px; letter-spacing:.1em; text-transform:uppercase; font-weight:700;
+             color:var(--ink-faint); background:var(--surface-alt); padding:10px 14px;
+             border-bottom:1px solid var(--line); white-space:nowrap; position:sticky; top:0; }
+  tbody td { padding:10px 14px; border-bottom:1px solid var(--line-soft); vertical-align:top; }
+  tbody tr:last-child td { border-bottom:0; }
+  td.m { font-family:"Roboto Mono",monospace; font-size:12.5px; white-space:nowrap; }
+  td.u { font-family:"Roboto Mono",monospace; font-size:12.5px; }
+  td.banda { color:var(--ink-soft); }
+  .sub { display:block; font-size:12px; color:var(--ink-faint); margin-top:2px; }
+  td.num { text-align:right; color:var(--ink-soft); }
+  td.cola b { color:var(--ink); }
+  .cero { color:var(--no); font-family:Archivo,sans-serif; font-size:12px; }
+  tr.oculta { display:none; }
+
+  .est { display:inline-block; font-family:Archivo,sans-serif; font-size:11px; font-weight:700;
+         padding:2px 9px; border-radius:99px; white-space:nowrap; }
+  .est.tope  { background:var(--tope-bg);  color:var(--tope); }
+  .est.libre { background:var(--libre-bg); color:var(--libre); }
+  .est.si    { background:var(--si-bg);    color:var(--si); }
+  .est.no    { background:var(--no-bg);    color:var(--no); }
+
+  .box { border:1px solid var(--line); background:var(--surface); border-radius:10px;
+         padding:16px 21px; margin:0 0 22px; }
+  .box > :last-child { margin-bottom:0; }
+  .box.warn { background:var(--no-bg); border-color:var(--no-line); }
+  .box.warn .box-tag { color:var(--no); }
+  .box-tag { font-family:Archivo,sans-serif; font-size:11px; letter-spacing:.13em; text-transform:uppercase;
+             font-weight:700; color:var(--accent-ink); margin-bottom:8px; }
+
+  pre { font-family:"Roboto Mono",monospace; font-size:12.5px; line-height:1.6; background:var(--surface);
+        border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:8px;
+        padding:15px 18px; overflow-x:auto; margin:0 0 20px; }
+  pre code { background:none; padding:0; font-size:inherit; }
+  .cmt { color:var(--ink-faint); font-style:italic; }
+
+  figure { margin:28px 0; }
+  figure svg { display:block; width:100%; max-width:100%; height:auto; }
+  .figbox { border:1px solid var(--line); border-radius:12px; background:var(--surface);
+            padding:20px 18px 12px; overflow-x:auto; }
+  figcaption { font-size:14.5px; line-height:1.55; color:var(--ink-soft); margin-top:12px; max-width:66ch; }
+  figcaption b { color:var(--ink); font-weight:600; }
+
+  .ejes { display:flex; flex-wrap:wrap; gap:10px; margin:0 0 22px; }
+  .eje { flex:1 1 200px; border:1px solid var(--line); border-left-width:4px; border-radius:10px;
+         padding:13px 15px; background:var(--surface); }
+  .eje-n { font-family:Archivo,sans-serif; font-size:14px; font-weight:700; }
+  .eje-f { font-family:"Roboto Mono",monospace; font-size:11px; color:var(--ink-faint);
+           display:block; margin-top:3px; }
+  .eje-q { font-size:14.5px; color:var(--ink-soft); margin-top:10px; line-height:1.45; }
+  .eje.soc    { border-left-color:var(--accent); } .eje.soc .eje-n    { color:var(--accent-ink); }
+  .eje.cebe   { border-left-color:var(--si); }     .eje.cebe .eje-n   { color:var(--si); }
+  .eje.canal  { border-left-color:var(--tope); }   .eje.canal .eje-n  { color:var(--tope); }
+  .eje.sector { border-left-color:var(--libre); }  .eje.sector .eje-n { color:var(--libre); }
+
+  .formula { font-family:Archivo,ui-sans-serif,system-ui,sans-serif; font-weight:700; font-size:17.5px;
+              text-align:center; padding:16px 18px; margin:0 0 20px; max-width:68ch;
+              background:var(--accent-soft); color:var(--accent-ink); border-radius:10px;
+              border:1px solid var(--accent); }
+
+  .cifras { display:flex; flex-wrap:wrap; gap:10px; margin:0 0 24px; }
+  .cif { flex:1 1 120px; border:1px solid var(--line); border-radius:10px; padding:13px 15px; background:var(--surface); }
+  .cif-n { font-family:"Roboto Mono",monospace; font-size:25px; font-weight:700; line-height:1; font-variant-numeric:tabular-nums; }
+  .cif-l { font-family:Archivo,sans-serif; font-size:11.5px; color:var(--ink-faint); margin-top:6px; }
+
+  .filtros { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:0 0 14px;
+             font-family:Archivo,sans-serif; font-size:13px; }
+  .filtros button { font:inherit; font-weight:600; background:var(--surface); color:var(--ink-soft);
+                    border:1px solid var(--line); border-radius:99px; padding:6px 13px; cursor:pointer; }
+  .filtros button:hover { border-color:var(--accent); color:var(--ink); }
+  .filtros button[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent-ink); border-color:var(--accent); }
+  .filtros .cuenta { font-family:"Roboto Mono",monospace; font-size:12px; color:var(--ink-faint); margin-left:auto; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+
+  /* Indice lateral. Angosto: bloque plegable arriba. Ancho: columna fija a la izquierda. */
+  .toc { font-family:Archivo,ui-sans-serif,system-ui,sans-serif; max-width:1020px;
+         margin:0 auto; padding:22px 26px 0; }
+  .toc details { background:var(--surface); border:1px solid var(--line); border-radius:12px;
+                 box-shadow:var(--shadow); }
+  .toc summary { cursor:pointer; padding:10px 14px; font-size:13px; font-weight:700;
+                 color:var(--ink-soft); list-style:none; }
+  .toc summary::-webkit-details-marker { display:none; }
+  .toc summary::before { content:"\2261"; margin-right:9px; color:var(--ink-faint); font-size:15px; }
+  .toc-body { padding:0 12px 12px; }
+  .toc-q { width:100%; font:inherit; font-size:13px; padding:7px 10px; border-radius:8px;
+           border:1px solid var(--line); background:var(--ground); color:var(--ink); }
+  .toc-q::placeholder { color:var(--ink-faint); }
+  .toc-lista { list-style:none; margin:10px 0 0; padding:0; }
+  .toc-lista li { margin:0; }
+  .toc-lista a { display:block; padding:5px 9px; border-radius:7px; font-size:13px; line-height:1.35;
+                 color:var(--ink-soft); text-decoration:none; border-left:2px solid transparent; }
+  .toc-lista a:hover { background:var(--surface-alt); color:var(--ink); }
+  .toc-lista a[aria-current="true"] { background:var(--accent-soft); color:var(--accent-ink);
+                                      font-weight:600; border-left-color:var(--accent); }
+  .toc-lista li.n3 a { padding-left:21px; font-size:12.5px; color:var(--ink-faint); }
+  .toc-lista li.n3 a:hover { color:var(--ink-soft); }
+  .toc-lista li.oculta { display:none; }
+  .toc-sin { font-size:12.5px; color:var(--ink-faint); margin:10px 4px 0; }
+  .toc mark { background:var(--accent-soft); color:var(--accent-ink); border-radius:3px; padding:0 1px; }
+  h2, h3 { scroll-margin-top:18px; }
+
+  @media (min-width:1200px) {
+    .toc { position:fixed; top:16px; left:16px; width:252px; max-height:calc(100vh - 32px);
+           margin:0; padding:0; display:flex; z-index:40; }
+    .toc details { display:flex; flex-direction:column; width:100%; min-height:0; }
+    .toc summary { display:none; }
+    .toc-body { padding:12px; display:flex; flex-direction:column; min-height:0; }
+    .toc-lista { overflow-y:auto; min-height:0; }
+    .wrap { margin-left:max(288px, calc((100vw - 1020px) / 2)); margin-right:auto; }
+  }
+  @media print { .toc { display:none; } }
+
+  .tema { position:fixed; top:14px; right:14px; z-index:50; display:flex; gap:2px; background:var(--surface);
+          border:1px solid var(--line); border-radius:99px; padding:3px; box-shadow:var(--shadow); }
+  .tema button { font-family:Archivo,ui-sans-serif,system-ui,sans-serif; font-size:11.5px; font-weight:600;
+                 background:none; border:0; color:var(--ink-faint); padding:5px 11px; border-radius:99px; cursor:pointer; }
+  .tema button:hover { color:var(--ink); }
+  .tema button[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent-ink); }
+  @media print { .tema,.filtros { display:none; } }
+
+  footer { margin-top:58px; padding-top:22px; border-top:1px solid var(--line); color:var(--ink-faint); font-size:14.5px; }
+  @media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+  @media (max-width:640px){ .wrap{padding:32px 16px 68px} .toc{padding:18px 16px 0}
+                            .tema{position:static;margin:0 auto 16px;width:max-content} }
+</style>
+</head>
+<body>
+
+<div class="tema" role="group" aria-label="Tema de la página">
+  <button type="button" data-tema="light" aria-pressed="false">Claro</button>
+  <button type="button" data-tema="auto" aria-pressed="true">Auto</button>
+  <button type="button" data-tema="dark" aria-pressed="false">Oscuro</button>
+</div>
+
+<nav class="toc" aria-label="Contenido de la página">
+  <details id="toc-det" open>
+    <summary>Contenido</summary>
+    <div class="toc-body">
+      <input type="search" class="toc-q" id="toc-q" placeholder="Buscar sección…"
+             aria-label="Buscar sección" aria-controls="toc-lista" autocomplete="off" spellcheck="false">
+      <p class="toc-sin" id="toc-sin" hidden>Sin coincidencias.</p>
+      <ol class="toc-lista" id="toc-lista"></ol>
+    </div>
+  </details>
+</nav>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="kicker">Duwest Mobility · Handoff técnico</div>
+  <h1>La matriz de autorizadores en BackOffice</h1>
+  <!-- Nota agregada 2026-08-27 al mover este documento a docs/. No es del autor original. -->
+  <p class="measure" style="border-left:3px solid #b45309;padding:12px 14px;background:rgba(180,83,9,.07);border-radius:8px">
+    <b>Actualización posterior (2026-08-27).</b> El relevamiento
+    <i>RESUMEN DE VISTAS OK Y PARA DEPRECAR</i> marca <b>las tres vistas
+    <code>authorizer-*</code> v1 para deprecar</b>, junto con
+    <code>VIEW_ProfitCentersMobility</code>. BackOffice consume las <b>v2</b>:
+    <code>/v2/mobility/authorizer-limits-profit-centers</code> y
+    <code>/v2/mobility/profit-centers</code>. Mismo contrato, mismas columnas.
+    Los paths v1 que aparecen más abajo en esta página siguen siendo correctos como
+    referencia, pero <b>no son los que hay que usar</b>. Las tablas de origen
+    (<code>AuthorizerLimits</code>, <code>AuthorizerProfitCenters</code>) NO están
+    deprecadas. Ver <code>docs/VISTAS_Y_TABLAS_DEPRECADAS.md</code>.
+  </p>
+
+  <p class="lede measure"><b>Sí, los endpoints existen y ya están andando.</b> Son tres, del
+  MobilityMiddleWare, montados y sin autenticación propia más allá del header de origen. No hay que
+  crear nada del lado del middleware ni tocar la base para construir la pantalla.</p>
+  <p class="lede measure">Verificados <b>en vivo</b> contra el middleware el 27 de agosto de 2026 — los
+  JSON de esta página son respuestas reales, con los correos enmascarados.</p>
+</header>
+
+<h2>Los tres endpoints</h2>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Endpoint</th><th>Qué devuelve</th><th>Filas hoy</th></tr></thead>
+<tbody>
+<tr>
+  <td class="m">GET /api/mobility/<wbr>authorizer-limits</td>
+  <td><b>Quiénes son aprobadores y con qué banda.</b> Una fila por (sociedad, correo). Sin CEBEs.</td>
+  <td class="num">82</td>
+</tr>
+<tr>
+  <td class="m">GET /api/mobility/<wbr>authorizer-profit-centers</td>
+  <td><b>Qué CEBEs cubre cada persona</b>, con vigencia. Sin banda y <b>sin sociedad</b>.</td>
+  <td class="num">221</td>
+</tr>
+<tr>
+  <td class="m"><b>GET /api/mobility/<wbr>authorizer-limits-profit-centers</b></td>
+  <td><b>Las dos cosas juntas — es la matriz.</b> Una fila por (sociedad, correo, CEBE).</td>
+  <td class="num">991</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<div class="measure">
+<p>Los tres tienen un gemelo en <code>/api/v2/mobility/…</code> que lee las vistas <code>VIEW_V2_*</code>.
+Misma forma de respuesta. Para esta pantalla da igual cuál se use; conviene <b>elegir uno y no
+mezclarlos</b> en la misma vista.</p>
+</div>
+
+<h2>Cuál usar</h2>
+
+<div class="measure">
+<p><b>El tercero</b>, <code>authorizer-limits-profit-centers</code>. Es el que la matriz representa de
+verdad y el mismo que consulta el middleware cuando decide si alguien puede autorizar. Los otros dos
+sirven para vistas parciales —“todos los aprobadores” sin abrir CEBEs, o “quién cubre el CEBE
+1002”— pero reconstruir la matriz cruzándolos a mano es trabajo repetido y una fuente de deriva.</p>
+</div>
+
+<div class="box warn measure">
+  <div class="box-tag">La restricción que condiciona el diseño de la pantalla</div>
+  <p><code>companyCode</code> es <b>obligatorio</b> en ese endpoint. Sin él responde
+  <code>400 {"success": false, "error": "companyCode is required"}</code> — no hay forma de pedir la
+  matriz completa de un saque.</p>
+  <p style="margin-bottom:0">O sea que la pantalla arranca con un <b>selector de sociedad</b>, o hace
+  <b>13 llamadas</b> (una por sociedad del catálogo) y arma el total del lado del cliente. La primera
+  opción es la natural: nadie mira 991 filas juntas, y la sociedad es justamente el eje por el que se
+  razona el alcance.</p>
+</div>
+
+<h2>La forma real de la respuesta</h2>
+
+<div class="measure">
+<p>Respuesta paginada estándar del middleware —<code>success</code>, <code>data</code>,
+<code>pagination</code>— más <code>companyCode</code> y <code>activeOnly</code> devueltos como eco:</p>
+</div>
+
+<pre><code><span class="cmt">GET /api/mobility/authorizer-limits-profit-centers?companyCode=2100&amp;limit=2</span>
+{
+  "success": true,
+  "companyCode": "2100",
+  "activeOnly": false,
+  "data": [
+    {
+      "companyCode": "2100",
+      "userEmail": "ANA.CARDONA@…",
+      "userId": "2100358",
+      "minimumPercentage": 50,        <span class="cmt">// crudo — ver la trampa de abajo</span>
+      "maximumPercentage": 50,
+      "approvalLevel": "",            <span class="cmt">// viene vacío en todas las filas</span>
+      "profitCenter": "1002",         <span class="cmt">// null = cubre TODA la sociedad</span>
+      "validFrom": "2023-08-09T00:00:00.000Z",
+      "validUntil": "9999-12-31T00:00:00.000Z",
+      "authorizerLimitGuid": "70897B33-…",
+      "profitCenterGuid": "0851DAB9-…",
+      "timeStamp": 1784211414196, "serverTimestamp": 1784554484745,
+      "deletedTimestamp": null
+    }
+  ],
+  "pagination": { "total": 120, "page": 1, "limit": 2, "totalPages": 60 }
+}</code></pre>
+
+<h3>Parámetros que acepta</h3>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Parámetro</th><th>Para qué</th></tr></thead>
+<tbody>
+<tr><td class="m">companyCode</td><td><b>obligatorio.</b> Máximo 8 caracteres.</td></tr>
+<tr><td class="m">page · limit</td><td>paginación. <code>limit</code> tope 200 (50.000 con <code>export=1</code>).</td></tr>
+<tr><td class="m">sortBy · sortDir</td><td>whitelist: <code>UserEmail</code>, <code>UserId</code>, <code>ApprovalLevel</code>, <code>MinimumPercentage</code>, <code>MaximumPercentage</code>, <code>ProfitCenter</code>, <code>ValidFrom</code>, <code>ValidUntil</code>, <code>ServerTimestamp</code>. Fuera de la lista cae a <code>UserEmail</code> sin avisar.</td></tr>
+<tr><td class="m">activeOnly</td><td><code>1</code>/<code>true</code> deja sólo las vigencias que cubren hoy.</td></tr>
+<tr><td class="m">export</td><td><code>1</code> sube el tope de <code>limit</code> a 50.000.</td></tr>
+<tr><td class="m">includeDeleted · serverTimestampGt</td><td>parámetros de sync incremental. No hacen falta acá.</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box measure">
+  <div class="box-tag">No hay <code>search</code> en el combinado</div>
+  <p style="margin-bottom:0">Los otros dos endpoints sí tienen <code>search</code>; éste <b>no</b>. Para
+  buscar por persona dentro de una sociedad, lo razonable es traer la página completa con
+  <code>export=1</code> —son 120 filas en la sociedad más grande— y filtrar del lado del cliente.</p>
+</div>
+
+<h2>La trampa: los números crudos mienten</h2>
+
+<div class="box warn measure">
+  <div class="box-tag">Es el punto que más fácil se pasa por alto</div>
+  <p><b><code>minimumPercentage</code> y <code>maximumPercentage</code> no se muestran tal cual.</b>
+  El endpoint los devuelve crudos, sin interpretar. Si la pantalla los pinta literal, va a decir cosas
+  falsas:</p>
+  <ul style="margin-bottom:0">
+    <li><code>200 / 200</code> se leería “de 200% a 200%”. Significa <b>sin límite</b>: cualquier valor
+    ≥ 100 es un centinela.</li>
+    <li><code>0 / 0</code> se leería “de 0% a 0%”. Significa <b>sin configurar</b>, y esa persona
+    <b>no puede firmar nada</b> — sólo rechazar.</li>
+    <li><code>200 / 50</code> parece un rango invertido. Es <b>sin piso, techo 50%</b>: el centinela se
+    aplica por extremo <b>antes</b> de juzgar la inversión.</li>
+  </ul>
+</div>
+
+<div class="measure">
+<p>La regla vive en <code>MobilityMiddleWare/src/utils/approverLimits.js</code>, función
+<code>effectiveBand()</code>. Es pura, sin dependencias, unas 30 líneas — pero <b>no está expuesta por
+HTTP</b>: se usa sólo dentro del middleware, al decidir sobre un documento concreto.</p>
+</div>
+
+<div class="box measure">
+  <div class="box-tag">Mi recomendación, y por qué</div>
+  <p><b>Pedirle al middleware que devuelva la banda ya interpretada</b> en este endpoint —un objeto
+  <code>band: { min, max, blocked, reason }</code> junto a los crudos— en vez de copiar la función a
+  BackOffice.</p>
+  <p style="margin-bottom:0">El motivo no es purismo: <b>esta regla ya cambió una vez</b>, el 18 de
+  agosto, y la lectura anterior era la contraria en los casos ambiguos (antes dejaban pasar, ahora
+  bloquean). Una copia en BackOffice sobreviviría al cambio siguiente <b>mostrando lo viejo sin
+  fallar</b>, que es la peor forma de estar equivocado. Es un cambio chico en el middleware y evita
+  tener la misma regla en dos repos.</p>
+</div>
+
+<h2>Los catálogos de apoyo</h2>
+
+<div class="measure">
+<p>La matriz devuelve códigos, no nombres. Para que la pantalla sea legible hacen falta tres consultas
+más, todas ya existentes:</p>
+</div>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Endpoint</th><th>Para qué en esta pantalla</th><th>Filas</th></tr></thead>
+<tbody>
+<tr><td class="m">GET /api/v2/mobility/companies</td><td>el <b>selector de sociedad</b>, con nombre, país y moneda</td><td class="num">13</td></tr>
+<tr><td class="m">GET /api/mobility/profit-centers</td><td><b>nombre del CEBE</b> — la matriz sólo trae el código</td><td class="num">66</td></tr>
+<tr><td class="m">GET /api/mobility/commercial-team-hierarchy/<wbr>country-manager?companyCode=…</td><td>los <b>Country Managers</b>: el otro permiso, que no sale de la matriz</td><td class="num">3 en 2100</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box measure">
+  <div class="box-tag">Por qué conviene incluir a los Country Managers en la misma pantalla</div>
+  <p style="margin-bottom:0">Porque si no, la pantalla <b>miente por omisión</b>. Autorizar “otra forma
+  de pago” <b>no pasa por la matriz</b>: lo resuelve el Country Manager de la sociedad. Hay personas que
+  autorizan documentos todos los días y <b>no tienen una sola fila</b> en
+  <code>AuthorizerLimits</code> — hoy en QATEST son dos, ambas en la sociedad <code>2100</code>. Una
+  pantalla titulada “quiénes autorizan” que no las muestre va a generar exactamente el ticket que
+  intenta evitar. Ese endpoint devuelve nombre y correo listos para mostrar.</p>
+</div>
+
+<h2>Cosas del dato que conviene saber antes de diseñar</h2>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Qué</th><th>Por qué importa</th></tr></thead>
+<tbody>
+<tr>
+  <td><b><code>profitCenter: null</code> no es “sin CEBE”</b></td>
+  <td>Es <b>“cubre toda la sociedad”</b>. Pintarlo como vacío o como un guion invierte el significado:
+  esa fila es la de <b>mayor</b> alcance, no la de menor. Hoy son 2 filas de 991.</td>
+</tr>
+<tr>
+  <td><b>El grano es (sociedad, correo, CEBE)</b></td>
+  <td>Una persona aparece muchas veces. Para “46 aprobadores” hay que agrupar por correo del lado del
+  cliente — el endpoint no agrupa.</td>
+</tr>
+<tr>
+  <td><b>Los CEBEs se asignan por persona, sin sociedad</b></td>
+  <td>El <code>LEFT JOIN</code> de la vista une <b>sólo por correo</b>. Por eso 82 límites × 221
+  asignaciones dan 991 filas, y por eso <b>no se puede</b> dar un CEBE en una sociedad y no en otra.</td>
+</tr>
+<tr>
+  <td><b><code>validUntil</code> viene <code>9999-12-31</code></b></td>
+  <td>No <code>null</code>. Mostrar esa fecha literal confunde; conviene renderizarla como “sin
+  vencimiento”.</td>
+</tr>
+<tr>
+  <td><b><code>approvalLevel</code> viene vacío</b></td>
+  <td>En todas las filas relevadas. No sirve como columna hoy.</td>
+</tr>
+<tr>
+  <td><b>Sólo trae correo y <code>userId</code></b></td>
+  <td>No hay nombre de la persona. Si se quiere mostrar, hay que cruzar contra
+  <code>Users</code> por correo — el endpoint de Country Managers sí trae <code>memberName</code>.</td>
+</tr>
+<tr>
+  <td><b>Es de sólo lectura</b></td>
+  <td>Los tres endpoints exponen <b>únicamente <code>GET</code></b>. Las tablas se replican de SAP: una
+  pantalla de edición no es posible hoy, y una fila cargada a mano la pisa la próxima sincronización.</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<h2>Dónde enchufarlo en MobilityBackOffice</h2>
+
+<div class="measure">
+<p><b>El cableado al middleware ya existe en el repo</b>, así que no hay que resolverlo de nuevo:</p>
+</div>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Ya está</th><th>Dónde</th></tr></thead>
+<tbody>
+<tr><td>Base del middleware y headers (<code>x-source-app</code>, <code>x-api-key</code>)</td><td class="m">apps/api/src/common/middleware-request.ts</td></tr>
+<tr><td>Config y validación de env (<code>MIDDLEWARE_URL</code>, <code>MIDDLEWARE_API_KEY</code>)</td><td class="m">apps/api/src/config/</td></tr>
+<tr><td><b>El patrón completo a copiar</b>: client → service → controller → módulo, con sus tests</td><td class="m">apps/api/src/regions/</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box measure">
+  <div class="box-tag">Dos detalles del cableado</div>
+  <ul style="margin-bottom:0">
+    <li><code>MIDDLEWARE_URL</code> <b>ya incluye el prefijo <code>/api</code></b>
+    (<code>http://host:6002/api</code>). Los paths se escriben relativos:
+    <code>'/mobility/authorizer-limits-profit-centers'</code>, sin repetir <code>/api</code>.</li>
+    <li><code>x-source-app: MobilityBackOffice</code> va <b>siempre</b>: es lo que hace atribuible la
+    auditoría del middleware. Sale gratis usando <code>middlewareHeaders()</code>.</li>
+  </ul>
+</div>
+
+<h2>Lo que no existe y hay que decidir</h2>
+
+<div class="measure">
+<ol>
+  <li><b>No hay alta ni edición.</b> La pantalla es de consulta. Si se necesita administrar la matriz,
+  eso es un pedido a SAP, no un desarrollo.</li>
+  <li><b>No hay banda interpretada por HTTP.</b> Ver la recomendación de arriba: pedirla al middleware
+  antes que copiar <code>effectiveBand()</code>.</li>
+  <li><b>No hay nombre de persona</b> en los endpoints de la matriz. Decidir si se muestra el correo o
+  se cruza contra <code>Users</code>.</li>
+  <li><b>No hay “matriz completa” en una llamada.</b> Selector de sociedad, o 13 llamadas.</li>
+</ol>
+</div>
+
+<h2>Checklist para dar la pantalla por terminada</h2>
+
+<div class="box measure">
+  <div class="box-tag">Lo que hay que poder demostrar</div>
+  <ul class="check" style="margin-bottom:0">
+    <li>Cambiar de sociedad recarga la matriz y el total coincide con el <code>pagination.total</code>.</li>
+    <li>Una fila con <code>profitCenter: null</code> se muestra como <b>“toda la sociedad”</b>, no como vacía.</li>
+    <li>Una fila <code>200/200</code> se muestra como <b>“sin límite”</b> y una <code>0/0</code> como <b>“no puede firmar”</b>.</li>
+    <li>Una <code>200/50</code> se muestra como <b>“sin piso, techo 50%”</b> — no como rango inválido.</li>
+    <li><code>validUntil: 9999-12-31</code> se muestra como “sin vencimiento”.</li>
+    <li>Los Country Managers de la sociedad aparecen, aunque no estén en la matriz.</li>
+    <li>Una sociedad sin aprobadores muestra un vacío explicado, no una tabla en blanco.</li>
+    <li>El header <code>x-source-app</code> viaja en todas las llamadas (se ve en <code>ApiLogs</code>).</li>
+  </ul>
+</div>
+
+<h2>Cómo verificarlo sin leer código</h2>
+
+<div class="measure">
+<p>Con el middleware corriendo, estas cuatro llamadas alcanzan para ver todo lo de esta página:</p>
+</div>
+
+<pre><code><span class="cmt"># la matriz de una sociedad — es el endpoint de la pantalla</span>
+curl "http://localhost:6002/api/mobility/authorizer-limits-profit-centers?companyCode=2100&amp;limit=5"
+
+<span class="cmt"># la restricción: sin companyCode responde 400</span>
+curl "http://localhost:6002/api/mobility/authorizer-limits-profit-centers"
+
+<span class="cmt"># el selector de sociedades</span>
+curl "http://localhost:6002/api/v2/mobility/companies?limit=20"
+
+<span class="cmt"># el otro permiso, el que no sale de la matriz</span>
+curl "http://localhost:6002/api/mobility/commercial-team-hierarchy/country-manager?companyCode=2100"</code></pre>
+
+<footer>
+  <p>Endpoints verificados en vivo contra el middleware el <b>27 de agosto de 2026</b>; los conteos son
+  de <code>Mobility_QATEST</code> en <code>PC1-Windows-Server-NC</code>. Los catálogos los sincroniza
+  SAP, así que cambian: si algo no coincide, la base manda.</p>
+  <p>El significado de la matriz, la banda y el alcance está en
+  <code>docs/PERMISOS_DE_AUTORIZACION.html</code>. Los conceptos comerciales —sociedad, CEBE, canal,
+  sector— en <code>docs/SOCIEDAD_CEBE_CANAL_SECTOR.html</code>.</p>
+</footer>
+
+</div>
+
+<script>
+/* Indice lateral: se arma leyendo los h2/h3 del documento. Agregar una seccion
+   nueva no exige tocar nada aca — por eso no hay una lista escrita a mano. */
+(function () {
+  var lista = document.getElementById('toc-lista');
+  var caja = document.getElementById('toc-q');
+  var sin = document.getElementById('toc-sin');
+  var det = document.getElementById('toc-det');
+  if (!lista || !caja) return;
+
+  /** Minusculas y sin tildes: buscar "credito" tiene que encontrar "Crédito". */
+  function plano(s) {
+    return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+  function slug(s) {
+    return plano(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
+  }
+
+  var titulos = Array.prototype.slice.call(
+    document.querySelectorAll('.wrap h2, .wrap h3')
+  );
+  var items = titulos.map(function (el, i) {
+    if (!el.id) {
+      var base = slug(el.textContent) || ('s' + i);
+      var id = base, k = 2;
+      while (document.getElementById(id)) { id = base + '-' + k++; }
+      el.id = id;
+    }
+    var texto = el.textContent.trim();
+    var li = document.createElement('li');
+    if (el.tagName === 'H3') li.className = 'n3';
+    var a = document.createElement('a');
+    a.href = '#' + el.id;
+    a.textContent = texto;
+    li.appendChild(a);
+    lista.appendChild(li);
+    return { el: el, li: li, a: a, texto: texto, busca: plano(texto) };
+  });
+
+  /** Reescribe el enlace resaltando el tramo que coincide. Sin innerHTML. */
+  function pinta(it, q) {
+    while (it.a.firstChild) it.a.removeChild(it.a.firstChild);
+    var pos = q ? it.busca.indexOf(q) : -1;
+    if (pos < 0) { it.a.appendChild(document.createTextNode(it.texto)); return; }
+    var m = document.createElement('mark');
+    m.appendChild(document.createTextNode(it.texto.slice(pos, pos + q.length)));
+    it.a.appendChild(document.createTextNode(it.texto.slice(0, pos)));
+    it.a.appendChild(m);
+    it.a.appendChild(document.createTextNode(it.texto.slice(pos + q.length)));
+  }
+
+  function filtrar() {
+    var q = plano(caja.value.trim());
+    var n = 0;
+    items.forEach(function (it) {
+      var ok = !q || it.busca.indexOf(q) !== -1;
+      it.li.classList.toggle('oculta', !ok);
+      if (ok) { n++; pinta(it, q); }
+    });
+    sin.hidden = n > 0;
+  }
+
+  caja.addEventListener('input', filtrar);
+  caja.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { caja.value = ''; filtrar(); return; }
+    if (e.key !== 'Enter') return;
+    var primero = lista.querySelector('li:not(.oculta) a');
+    if (primero) { e.preventDefault(); primero.click(); }
+  });
+
+  /* Marca en qué sección está el lector. Sin esto el índice orienta a dónde ir,
+     pero no dónde se está — que en una página larga es la mitad del valor. */
+  var activo = null;
+  function ubicar() {
+    var cual = items[0];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].el.getBoundingClientRect().top <= 120) cual = items[i]; else break;
+    }
+    if (cual === activo) return;
+    if (activo) activo.a.removeAttribute('aria-current');
+    activo = cual;
+    if (activo) activo.a.setAttribute('aria-current', 'true');
+  }
+  window.addEventListener('scroll', ubicar, { passive: true });
+  ubicar();
+
+  /* En pantalla ancha el panel es una columna fija y va siempre abierto; en angosta
+     arranca plegado para no empujar la portada fuera de vista. */
+  try {
+    var mq = window.matchMedia('(min-width:1200px)');
+    var ajusta = function () { det.open = mq.matches; };
+    ajusta();
+    if (mq.addEventListener) mq.addEventListener('change', ajusta);
+    else if (mq.addListener) mq.addListener(ajusta);
+  } catch (e) { /* sin matchMedia queda abierto, que es el fallback util */ }
+})();
+
+(function () {
+  var KEY = 'tema-permisos';
+  var raiz = document.documentElement;
+  var botones = Array.prototype.slice.call(document.querySelectorAll('.tema button'));
+  function aplicar(v) {
+    if (v === 'auto') raiz.removeAttribute('data-theme');
+    else raiz.setAttribute('data-theme', v);
+    botones.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.tema === v)); });
+  }
+  var g = null;
+  try { g = localStorage.getItem(KEY); } catch (e) {}
+  aplicar(g || 'auto');
+  botones.forEach(function (b) {
+    b.addEventListener('click', function () {
+      aplicar(b.dataset.tema);
+      try { localStorage.setItem(KEY, b.dataset.tema); } catch (e) {}
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

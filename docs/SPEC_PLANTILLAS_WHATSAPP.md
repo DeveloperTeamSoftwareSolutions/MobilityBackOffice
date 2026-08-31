@@ -1,6 +1,6 @@
 # Plantillas de WhatsApp — especificacion
 
-> Ultima actualizacion: 2026-08-31 · Version: 2.22.0
+> Ultima actualizacion: 2026-08-31 · Version: 2.23.0
 >
 > Seccion "Templates de WhatsApp" (rol Marketing). Consulta, crea y edita las plantillas
 > del panel WABA sin abrirlo y sin un segundo login.
@@ -432,6 +432,17 @@ de diagnosticar desde la pantalla.
 `GET /api/templates` **sin query params** sigue devolviendo el array plano de aprobadas:
 es lo que consume el selector de plantillas al enviar un mensaje
 (`public/js/sendMessage.js`). Cambiar esa forma rompia el envio.
+
+---
+
+### Queda registrado quien lo hizo
+
+Crear, editar, enviar, borrar y sincronizar dejan traza en `AuditLogs` con el email de
+quien lo hizo, bajo la categoria `Templates`. **Guardar un borrador no**: no sale de la
+aplicacion y llenaria la traza de ruido.
+
+Del lado de WABA las acciones figuran como `apikey` sin usuario —entramos con una clave
+de integracion—, asi que el "quien" vive en la auditoria central. Ver `docs/AUDITORIA.md`.
 
 ---
 

@@ -9,6 +9,7 @@ import {
   Param,
   Post,
   Put,
+  Req,
   Query,
   UploadedFile,
   UseGuards,
@@ -20,6 +21,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { BackOfficeRole } from '../auth/backoffice-role.enum';
 import { TemplatesService } from './templates.service';
+import { actorFrom, AuthedRequest } from '../common/actor';
 import {
   CreateTemplateInput,
   isSortableField,
@@ -120,8 +122,8 @@ export class TemplatesController {
   // Va antes de las rutas con `:id`, si no `sync` entraria como identificador.
   @Post('sync')
   @HttpCode(200)
-  async sync() {
-    return { success: true, data: await this.templates.sync() };
+  async sync(@Req() req: AuthedRequest) {
+    return { success: true, data: await this.templates.sync(actorFrom(req)) };
   }
 
   // POST /api/templates/validate — el JSON que se le mandaria a META
@@ -183,8 +185,12 @@ export class TemplatesController {
   // POST /api/templates/drafts/:id/submit — recien aca se manda a META
   @Post('drafts/:id/submit')
   @HttpCode(200)
-  async submitDraft(@Param('id') id: string, @Body() body: CreateTemplateInput) {
-    const template = await this.templates.submitDraft(parseId(id), body);
+  async submitDraft(
+    @Param('id') id: string,
+    @Body() body: CreateTemplateInput,
+    @Req() req: AuthedRequest,
+  ) {
+    const template = await this.templates.submitDraft(parseId(id), body, actorFrom(req));
     if (!template) throw new NotFoundException('Borrador no encontrado');
     return { success: true, data: template };
   }
@@ -205,7 +211,7 @@ export class TemplatesController {
   // no hay dos criterios que puedan divergir. Aca solo se corta lo que ni siquiera
   // vale la pena mandar.
   @Post()
-  async create(@Body() body: CreateTemplateInput) {
+  async create(@Body() body: CreateTemplateInput, @Req() req: AuthedRequest) {
     requireText(body?.name, 'name');
     requireText(body?.language, 'language');
     requireText(body?.category, 'category');
@@ -234,7 +240,7 @@ export class TemplatesController {
       requireText(body?.bodyText, 'bodyText');
     }
 
-    const template = await this.templates.create(body);
+    const template = await this.templates.create(body, actorFrom(req));
     return { success: true, data: template };
   }
 
@@ -243,8 +249,12 @@ export class TemplatesController {
   // `name` e `language` NO se aceptan: META los toma como identidad de la plantilla.
   // Si llegan en el body, se ignoran en el service.
   @Put(':id')
-  async update(@Param('id') id: string, @Body() body: UpdateTemplateInput) {
-    const template = await this.templates.update(parseId(id), body ?? {});
+  async update(
+    @Param('id') id: string,
+    @Body() body: UpdateTemplateInput,
+    @Req() req: AuthedRequest,
+  ) {
+    const template = await this.templates.update(parseId(id), body ?? {}, actorFrom(req));
     if (!template) {
       throw new NotFoundException('Plantilla no encontrada');
     }
@@ -253,8 +263,8 @@ export class TemplatesController {
 
   // DELETE /api/templates/:id — borra en META y local
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    await this.templates.remove(parseId(id));
+  async remove(@Param('id') id: string, @Req() req: AuthedRequest) {
+    await this.templates.remove(parseId(id), actorFrom(req));
     return { success: true };
   }
 }

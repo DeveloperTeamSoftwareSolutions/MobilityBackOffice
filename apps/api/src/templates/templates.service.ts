@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { TemplatesClient } from './templates.client';
+import { AuditService } from '../audit/audit.service';
+import { AuditCategory } from '../audit/audit.categories';
+import { Actor } from '../common/actor';
 import { mapDraft, mapEditPolicy, mapTemplate, summarizeByStatus } from './templates.util';
 import {
   CreateTemplateInput,
@@ -22,7 +25,10 @@ import {
  */
 @Injectable()
 export class TemplatesService {
-  constructor(private readonly client: TemplatesClient) {}
+  constructor(
+    private readonly client: TemplatesClient,
+    private readonly audit: AuditService,
+  ) {}
 
   /** `false` cuando falta `WABA_API_URL` o `WABA_API_KEY`. */
   isConfigured(): boolean {
@@ -97,9 +103,15 @@ export class TemplatesService {
    * entrada. La validacion de fondo la hace WABA (`templateValidator`), que es la misma
    * que usan su asistente y su formulario: no hay dos criterios distintos.
    */
-  async create(input: CreateTemplateInput): Promise<Template | null> {
+  async create(input: CreateTemplateInput, actor: Actor): Promise<Template | null> {
     const saved = await this.client.create(aPayloadWaba(input));
-    return mapTemplate(saved);
+    const template = mapTemplate(saved);
+
+    await this.auditar(actor, 'TEMPLATE_CREATE', template?.name ?? input.name, [
+      `categoria=${input.category}`,
+      `idioma=${input.language}`,
+    ]);
+    return template;
   }
 
   /**
@@ -108,7 +120,7 @@ export class TemplatesService {
    * `name` y `language` no se aceptan: META los toma como identidad de la plantilla y no
    * los deja cambiar. Mandarlos daria un rechazo despues de un ciclo de revision.
    */
-  async update(id: number, input: UpdateTemplateInput): Promise<Template | null> {
+  async update(id: number, input: UpdateTemplateInput, actor: Actor): Promise<Template | null> {
     const saved = await this.client.update(id, {
       category: input.category ? input.category.trim().toUpperCase() : undefined,
       headerType: input.headerType ?? undefined,
@@ -117,7 +129,13 @@ export class TemplatesService {
       footerText: input.footerText ?? null,
       buttonsJson: input.buttons ? serializeButtons(input.buttons) : undefined,
     });
-    return saved ? mapTemplate(saved) : null;
+    if (!saved) return null;
+
+    const template = mapTemplate(saved);
+    await this.auditar(actor, 'TEMPLATE_UPDATE', template?.name ?? '', [
+      'vuelve a revision de META',
+    ]);
+    return template;
   }
 
   /**
@@ -164,18 +182,72 @@ export class TemplatesService {
   }
 
   /** Recien aca el borrador se manda a META. */
-  async submitDraft(id: number, input: CreateTemplateInput): Promise<Template | null> {
+  async submitDraft(
+    id: number,
+    input: CreateTemplateInput,
+    actor: Actor,
+  ): Promise<Template | null> {
     const saved = await this.client.submitDraft(id, aPayloadWaba(input));
-    return saved ? mapTemplate(saved) : null;
+    if (!saved) return null;
+
+    const template = mapTemplate(saved);
+    await this.auditar(actor, 'TEMPLATE_SUBMIT', template?.name ?? input.name, [
+      `borrador=${id}`,
+    ]);
+    return template;
   }
 
-  remove(id: number): Promise<void> {
-    return this.client.remove(id);
+  /**
+   * Borra en META y local.
+   *
+   * Se busca el nombre **antes** de borrar: despues ya no existe, y sin nombre la
+   * traza dice que se borro algo pero no que.
+   */
+  async remove(id: number, actor: Actor): Promise<void> {
+    const detalle = await this.client.getById(id).catch(() => null);
+    const name = detalle ? mapTemplate(detalle.template)?.name : null;
+
+    await this.client.remove(id);
+    await this.auditar(actor, 'TEMPLATE_DELETE', name ?? String(id), [
+      'en META no se deshace',
+    ]);
   }
 
   /** Trae de META lo que haya cambiado alla: aprobaciones, rechazos, pausas. */
-  sync(): Promise<unknown> {
-    return this.client.sync();
+  async sync(actor: Actor): Promise<unknown> {
+    const result = await this.client.sync();
+    await this.auditar(actor, 'TEMPLATE_SYNC', '');
+    return result;
+  }
+
+  /**
+   * Deja la traza de lo que salio hacia META.
+   *
+   * `safeRecord` y no `record`: la accion ya ocurrio del otro lado, y un fallo de la
+   * auditoria no puede revertirla ni romperle la respuesta a quien la hizo.
+   *
+   * **Solo se audita lo que sale de la aplicacion.** Guardar un borrador no se registra:
+   * no llega a META, se guarda muchas veces por plantilla, y llenaria la traza de ruido
+   * hasta tapar lo que importa.
+   */
+  private async auditar(
+    actor: Actor,
+    action: string,
+    name: string,
+    detalle: string[] = [],
+  ): Promise<void> {
+    await this.audit.safeRecord({
+      action,
+      entity: 'WhatsAppTemplate',
+      // El nombre y no el id: es la identidad de la plantilla en META, y el id de WABA
+      // no significa nada para quien lee la auditoria desde ITManager.
+      entityId: name || null,
+      category: AuditCategory.Templates,
+      guidUsers: actor.guid ?? null,
+      guidApiLoginClients: actor.guidApiLoginClients ?? null,
+      actorEmail: actor.email ?? null,
+      detail: detalle.length ? detalle.join(' | ') : null,
+    });
   }
 }
 

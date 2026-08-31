@@ -1,4 +1,6 @@
 import { TemplatesService } from './templates.service';
+import { AuditService } from '../audit/audit.service';
+import { AuditCategory } from '../audit/audit.categories';
 import { TemplatesClient } from './templates.client';
 import { TemplatesQuery, WabaTemplateRow } from './templates.types';
 
@@ -32,10 +34,28 @@ function makeService(rows: WabaTemplateRow[], configured = true) {
   const client = {
     getTemplates: jest.fn().mockResolvedValue(rows),
     isConfigured: jest.fn().mockReturnValue(configured),
+    create: jest.fn(),
+    update: jest.fn(),
+    remove: jest.fn(),
+    sync: jest.fn(),
+    submitDraft: jest.fn(),
+    getById: jest.fn(),
+    saveDraft: jest.fn(),
+  };
+  // Lo que se auditó, para poder mirarlo desde los tests.
+  const audited: Record<string, unknown>[] = [];
+  const audit = {
+    safeRecord: jest.fn(async (e: Record<string, unknown>) => {
+      audited.push(e);
+    }),
   };
   return {
-    service: new TemplatesService(client as unknown as TemplatesClient),
+    service: new TemplatesService(
+      client as unknown as TemplatesClient,
+      audit as unknown as AuditService,
+    ),
     client,
+    audited,
   };
 }
 
@@ -194,5 +214,148 @@ describe('TemplatesService — configuracion', () => {
     // en pantalla se ven igual.
     const { service } = makeService([], false);
     expect(service.isConfigured()).toBe(false);
+  });
+});
+
+/**
+ * La traza de las plantillas.
+ *
+ * Existe para responder "quién mandó esto a META". Tres cosas la vuelven inútil si se
+ * pierden, y por eso están fijadas acá: el cliente (sin él ITManager no muestra la fila),
+ * el email del actor, y el nombre de la plantilla.
+ */
+describe('TemplatesService — auditoría', () => {
+  const ACTOR = {
+    email: 'marketing@duwest.com',
+    guid: 'guid-usuario',
+    guidApiLoginClients: 'guid-cliente',
+  };
+
+  const ALTA = {
+    name: 'promo_navidad',
+    language: 'es_MX',
+    category: 'MARKETING',
+    bodyText: 'Hola',
+  };
+
+  it('registra quién creó la plantilla', async () => {
+    const { service, client, audited } = makeService([]);
+    client.create.mockResolvedValue(row({ Name: 'promo_navidad' }));
+
+    await service.create(ALTA, ACTOR);
+
+    expect(audited).toHaveLength(1);
+    expect(audited[0]).toMatchObject({
+      action: 'TEMPLATE_CREATE',
+      entity: 'WhatsAppTemplate',
+      entityId: 'promo_navidad',
+      category: AuditCategory.Templates,
+      guidUsers: 'guid-usuario',
+      actorEmail: 'marketing@duwest.com',
+    });
+  });
+
+  it('sin el cliente la fila no se ve desde ITManager', () => {
+    // Es el campo por el que filtra su pantalla: se fija aparte para que no se caiga solo.
+    const { service, client, audited } = makeService([]);
+    client.create.mockResolvedValue(row());
+
+    return service.create(ALTA, ACTOR).then(() => {
+      expect(audited[0].guidApiLoginClients).toBe('guid-cliente');
+    });
+  });
+
+  it('identifica la plantilla por su nombre, no por el id de WABA', async () => {
+    // El id no significa nada para quien lee la auditoría desde ITManager.
+    const { service, client, audited } = makeService([]);
+    client.update.mockResolvedValue(row({ Id: 42, Name: 'promo_navidad' }));
+
+    await service.update(42, { bodyText: 'otro' }, ACTOR);
+
+    expect(audited[0].entityId).toBe('promo_navidad');
+  });
+
+  it('al editar deja dicho que vuelve a revisión', async () => {
+    const { service, client, audited } = makeService([]);
+    client.update.mockResolvedValue(row({ Name: 'promo_navidad' }));
+
+    await service.update(42, { bodyText: 'otro' }, ACTOR);
+
+    expect(audited[0].action).toBe('TEMPLATE_UPDATE');
+    expect(audited[0].detail).toContain('revision');
+  });
+
+  it('enviar un borrador registra de cuál salió', async () => {
+    const { service, client, audited } = makeService([]);
+    client.submitDraft.mockResolvedValue(row({ Name: 'promo_navidad' }));
+
+    await service.submitDraft(62, ALTA, ACTOR);
+
+    expect(audited[0].action).toBe('TEMPLATE_SUBMIT');
+    expect(audited[0].detail).toContain('borrador=62');
+  });
+
+  it('al borrar guarda el nombre, que después ya no existe', async () => {
+    // Se consulta antes de borrar: si no, la traza diría que se borró algo sin decir qué.
+    const { service, client, audited } = makeService([]);
+    client.getById.mockResolvedValue({ template: row({ Name: 'promo_navidad' }), editPolicy: null });
+
+    await service.remove(42, ACTOR);
+
+    expect(client.getById).toHaveBeenCalledWith(42);
+    expect(audited[0]).toMatchObject({
+      action: 'TEMPLATE_DELETE',
+      entityId: 'promo_navidad',
+    });
+  });
+
+  it('si no se pudo saber el nombre, igual se borra y se registra', async () => {
+    // Perder la traza sería malo; no poder borrar por eso, peor.
+    const { service, client, audited } = makeService([]);
+    client.getById.mockRejectedValue(new Error('WABA no responde'));
+
+    await service.remove(42, ACTOR);
+
+    expect(client.remove).toHaveBeenCalledWith(42);
+    expect(audited[0].entityId).toBe('42');
+  });
+
+  it('el sync también queda registrado', async () => {
+    const { service, client, audited } = makeService([]);
+    client.sync.mockResolvedValue({});
+
+    await service.sync(ACTOR);
+
+    expect(audited[0].action).toBe('TEMPLATE_SYNC');
+  });
+
+  it('guardar un borrador NO se audita', async () => {
+    // No sale de la aplicación y se guarda muchas veces por plantilla: llenaría la traza
+    // de ruido hasta tapar lo que importa.
+    const { service, client, audited } = makeService([]);
+    client.saveDraft.mockResolvedValue(62);
+
+    await service.saveDraft({ ...ALTA, draftId: null });
+
+    expect(audited).toHaveLength(0);
+  });
+
+  it('usa el modo que no propaga errores', async () => {
+    // La plantilla ya salió hacia META: un fallo del audit central no puede revertirla ni
+    // romperle la respuesta a quien la mandó. Eso lo garantiza `safeRecord`, no `record`,
+    // y la diferencia no se ve hasta que el middleware se cae.
+    const { service, client } = makeService([]);
+    client.create.mockResolvedValue(row());
+
+    const audit = { record: jest.fn(), safeRecord: jest.fn() };
+    const conAudit = new TemplatesService(
+      client as unknown as TemplatesClient,
+      audit as unknown as AuditService,
+    );
+    await conAudit.create(ALTA, ACTOR);
+
+    expect(audit.safeRecord).toHaveBeenCalled();
+    expect(audit.record).not.toHaveBeenCalled();
+    expect(service).toBeDefined();
   });
 });

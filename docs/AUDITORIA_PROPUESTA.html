@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Que falta para que la auditoria de BackOffice se vea en ITManager, y las dos decisiones que hay que tomar.">
+<title>Auditoría de BackOffice en ITManager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #f6f8fa;
+    --surface: #ffffff;
+    --surface-sunk: #eef2f6;
+    --line: #dbe3ea;
+    --line-strong: #c2cedb;
+    --ink: #15212e;
+    --ink-soft: #465667;
+    --ink-mute: #6b7a8a;
+    --blue: #2c5282;
+    --blue-soft: #e4ecf6;
+    --amber: #a8620c;
+    --amber-soft: #fbf0e2;
+    --teal: #0d7a70;
+    --teal-soft: #e2f2f0;
+    --red: #b3341f;
+    --shadow: 0 1px 2px rgba(21, 33, 46, .05), 0 6px 20px -12px rgba(21, 33, 46, .18);
+
+    --measure: 66ch;
+    --step-0: 1.0625rem;
+    --step-1: 1.3rem;
+    --step-2: 1.7rem;
+    --step-3: 2.35rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #10161d;
+      --surface: #17202a;
+      --surface-sunk: #1d2833;
+      --line: #2b3846;
+      --line-strong: #3d4d5e;
+      --ink: #e8eef4;
+      --ink-soft: #b3c1cf;
+      --ink-mute: #8b9aab;
+      --blue: #8fb4e0;
+      --blue-soft: #1b2c42;
+      --amber: #e0a460;
+      --amber-soft: #2f2417;
+      --teal: #55c4b8;
+      --teal-soft: #14312e;
+      --red: #e08373;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px -12px rgba(0, 0, 0, .7);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #10161d;
+    --surface: #17202a;
+    --surface-sunk: #1d2833;
+    --line: #2b3846;
+    --line-strong: #3d4d5e;
+    --ink: #e8eef4;
+    --ink-soft: #b3c1cf;
+    --ink-mute: #8b9aab;
+    --blue: #8fb4e0;
+    --blue-soft: #1b2c42;
+    --amber: #e0a460;
+    --amber-soft: #2f2417;
+    --teal: #55c4b8;
+    --teal-soft: #14312e;
+    --red: #e08373;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px -12px rgba(0, 0, 0, .7);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 74ch;
+    margin: 0 auto;
+    padding: clamp(2.5rem, 6vw, 5rem) clamp(1.15rem, 4vw, 2rem) 5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2.75rem;
+  }
+
+  .prose { max-width: var(--measure); }
+
+  h1, h2, h3 {
+    font-family: Newsreader, Georgia, 'Times New Roman', serif;
+    font-weight: 500;
+    text-wrap: balance;
+    margin: 0;
+    line-height: 1.18;
+    letter-spacing: -.01em;
+  }
+  h1 { font-size: var(--step-3); }
+  h2 { font-size: var(--step-2); }
+  h3 { font-size: var(--step-1); }
+  p { margin: 0; }
+
+  .eyebrow {
+    font-size: .74rem;
+    font-weight: 600;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin: 0 0 .85rem;
+  }
+
+  .lede {
+    font-family: Newsreader, Georgia, serif;
+    font-size: var(--step-1);
+    line-height: 1.5;
+    color: var(--ink-soft);
+    margin-top: 1.1rem;
+  }
+
+  section { display: flex; flex-direction: column; gap: 1.1rem; }
+
+  strong { font-weight: 600; color: var(--ink); }
+
+  code, .mono {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: .875em;
+  }
+  code {
+    background: var(--surface-sunk);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: .08em .35em;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid var(--line);
+    margin: 0;
+  }
+
+  /* ---- El diagrama de por que no se ve ---- */
+
+  .flow {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 1.4rem 1.5rem 1.6rem;
+  }
+  .flow-cap {
+    font-size: .8rem;
+    color: var(--ink-mute);
+    margin: 0 0 1.1rem;
+  }
+  .flow-steps {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: .6rem;
+  }
+  .fstep {
+    flex: 1 1 9rem;
+    min-width: 9rem;
+    background: var(--surface-sunk);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: .75rem .85rem;
+  }
+  .fstep b { display: block; font-size: .95rem; }
+  .fstep span { display: block; font-size: .82rem; color: var(--ink-mute); margin-top: .2rem; }
+  .fstep--stop {
+    background: var(--amber-soft);
+    border-color: var(--amber);
+  }
+  .fstep--stop b { color: var(--amber); }
+  .farrow {
+    align-self: center;
+    color: var(--ink-mute);
+    font-size: 1.1rem;
+  }
+
+  /* ---- Decisiones ---- */
+
+  .decision {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .decision-head {
+    padding: 1.1rem 1.4rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-sunk);
+  }
+  .decision-head h3 { font-size: 1.18rem; }
+  .decision-head p { font-size: .9rem; color: var(--ink-mute); margin-top: .3rem; }
+
+  .opts { display: grid; grid-template-columns: 1fr; }
+  @media (min-width: 620px) { .opts { grid-template-columns: 1fr 1fr; } }
+
+  .opt {
+    padding: 1.15rem 1.4rem 1.35rem;
+    border-top: 1px solid var(--line);
+  }
+  @media (min-width: 620px) {
+    .opt + .opt { border-left: 1px solid var(--line); }
+  }
+  .opt--pick { background: var(--teal-soft); }
+
+  .opt-tag {
+    display: inline-block;
+    font-size: .68rem;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: .15em .55em;
+    border-radius: 999px;
+    margin-bottom: .55rem;
+  }
+  .opt--pick .opt-tag { background: var(--teal); color: #fff; }
+  .opt--alt .opt-tag { background: var(--surface-sunk); color: var(--ink-mute); border: 1px solid var(--line); }
+
+  .opt h4 {
+    margin: 0 0 .5rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: .95rem;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .opt ul { margin: .55rem 0 0; padding-left: 1.1rem; font-size: .92rem; color: var(--ink-soft); }
+  .opt li { margin-bottom: .3rem; }
+  .opt li b { color: var(--ink); }
+
+  .why {
+    padding: 1.05rem 1.4rem 1.25rem;
+    border-top: 1px solid var(--line);
+    font-size: .95rem;
+    color: var(--ink-soft);
+  }
+  .why b { color: var(--ink); }
+
+  /* ---- Tabla ---- */
+
+  .tablewrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .93rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  th, td {
+    text-align: left;
+    padding: .6rem .85rem;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    font-size: .74rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    font-weight: 600;
+    background: var(--surface-sunk);
+  }
+  tr:last-child td { border-bottom: 0; }
+  td.mono { font-size: .85rem; }
+
+  /* ---- Pasos del plan ---- */
+
+  ol.plan { margin: 0; padding: 0; list-style: none; counter-reset: paso; display: flex; flex-direction: column; gap: .85rem; }
+  ol.plan li {
+    counter-increment: paso;
+    position: relative;
+    padding-left: 2.6rem;
+  }
+  ol.plan li::before {
+    content: counter(paso);
+    position: absolute;
+    left: 0;
+    top: .05rem;
+    width: 1.8rem;
+    height: 1.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--blue);
+    color: #fff;
+    font-size: .85rem;
+    font-weight: 600;
+  }
+  ol.plan b { display: block; }
+  ol.plan span { color: var(--ink-soft); font-size: .95rem; }
+
+  .callout {
+    background: var(--blue-soft);
+    border-left: 3px solid var(--blue);
+    border-radius: 0 8px 8px 0;
+    padding: .9rem 1.15rem;
+    font-size: .95rem;
+    color: var(--ink-soft);
+  }
+  .callout b { color: var(--ink); }
+
+  /* Va despues de .callout: misma especificidad, gana la ultima. */
+  .callout--calm {
+    background: var(--teal-soft);
+    border-left-color: var(--teal);
+  }
+
+  footer {
+    font-size: .82rem;
+    color: var(--ink-mute);
+    border-top: 1px solid var(--line);
+    padding-top: 1.2rem;
+  }
+</style>
+</head>
+
+<body>
+<div class="page">
+
+  <header class="prose">
+    <p class="eyebrow">Mobility BackOffice · Auditoría</p>
+    <h1>Auditar BackOffice en ITManager</h1>
+    <p class="lede">
+      La infraestructura ya existe y BackOffice ya audita. El problema es que sus
+      registros <strong>no se ven desde ITManager</strong>. Este documento explica por qué,
+      y las dos decisiones que hay que tomar antes de seguir.
+    </p>
+  </header>
+
+  <hr>
+
+  <section>
+    <h2>Lo que pasa hoy</h2>
+    <p class="prose">
+      BackOffice ya escribe en <code>AuditLogs</code> —la tabla central que comparte con
+      ITManager y MobilityManager— cada login, cada cambio de regiones y cada acción de la
+      consola de soporte. Escribe a través del Middleware, que es el dueño de la tabla.
+    </p>
+    <p class="prose">
+      Pero la pantalla de auditoría de ITManager <strong>filtra por cliente</strong>
+      (<code>GuidApiLoginClients</code>), y BackOffice deja ese campo vacío. Las filas
+      existen en la base; simplemente no entran en el filtro.
+    </p>
+
+    <div class="flow">
+      <p class="flow-cap">Por qué no aparecen</p>
+      <div class="flow-steps">
+        <div class="fstep">
+          <b>BackOffice</b>
+          <span>audita la acción</span>
+        </div>
+        <div class="farrow" aria-hidden="true">&rarr;</div>
+        <div class="fstep">
+          <b>Middleware</b>
+          <span>guarda la fila</span>
+        </div>
+        <div class="farrow" aria-hidden="true">&rarr;</div>
+        <div class="fstep">
+          <b>AuditLogs</b>
+          <span>la fila está acá</span>
+        </div>
+        <div class="farrow" aria-hidden="true">&rarr;</div>
+        <div class="fstep fstep--stop">
+          <b>ITManager</b>
+          <span>filtra por cliente y no la encuentra</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Aplicación</th><th>Registros</th><th>Sin cliente<br><span style="font-weight:400;text-transform:none;letter-spacing:0">(no se ven en ITManager)</span></th></tr>
+        </thead>
+        <tbody>
+          <tr><td><b>MobilityBackOffice</b></td><td>148</td><td><b style="color:var(--red)">94</b> &mdash; 63 %</td></tr>
+          <tr><td>MobilityManager</td><td>2.869</td><td>1.209 &mdash; 42 %</td></tr>
+          <tr><td>Mobility_ITManager</td><td>74</td><td>0</td></tr>
+          <tr><td>Mobility_Presupuestos</td><td>99</td><td>0</td></tr>
+          <tr><td>Mobility_BI</td><td>14</td><td>0</td></tr>
+          <tr><td>Mobility_PresupPNL</td><td>15</td><td>0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="prose" style="font-size:.9rem;color:var(--ink-mute)">
+      Consultado sobre <code>Mobility_QATEST</code> el 31/08/2026. Las filas que escribe
+      ITManager tienen el cliente siempre; las que escriben las aplicaciones por su cuenta,
+      casi nunca. <strong>No es un problema solo nuestro:</strong> MobilityManager tiene el
+      mismo hueco.
+    </p>
+
+    <p class="prose">
+      Las 54 de BackOffice que sí lo tienen se explican solas: al iniciar sesión, ITManager
+      escribe <em>su propia</em> fila con nuestro identificador de aplicación. Así que cada
+      login deja dos registros &mdash;el de ITManager, visible, y el nuestro, invisible&mdash;
+      y todo lo demás que hacemos queda fuera.
+    </p>
+
+    <div class="callout callout--calm">
+      <b>Nada de esto toca la base de datos.</b> Las columnas que hacen falta
+      &mdash;<code>GuidApiLoginClients</code> y <code>ActorEmail</code>&mdash; <b>ya existen</b>
+      en <code>AuditLogs</code>, el Middleware ya sabe escribirlas y otras aplicaciones ya las
+      usan. Lo único que cambia es que BackOffice empiece a completarlas. Sin migraciones,
+      sin tocar ITManager, sin tocar el Middleware.
+    </div>
+
+    <p class="prose">
+      El dato que falta ya está disponible: ITManager lo devuelve al iniciar sesión, y el
+      token de BackOffice hasta tiene el campo declarado sin usar. Es llenarlo y mandarlo.
+      <strong>Sin esto, auditar los templates no cambia nada</strong>: se escribirían filas
+      que nadie ve.
+    </p>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Decisión 1 &mdash; Cómo agrupar los eventos</h2>
+    <p class="prose">
+      Cada fila lleva una <em>categoría</em>. ITManager usa las suyas
+      (<code>Auth</code>, <code>Users</code>, <code>Apps</code>&hellip;) y BackOffice usa
+      otras (<code>regions</code>, <code>support</code>). Hay que decidir si se unifican.
+    </p>
+
+    <div class="decision">
+      <div class="decision-head">
+        <h3>¿Categorías de ITManager o propias de BackOffice?</h3>
+        <p>Define cómo se agrupan los eventos en el buscador de auditoría.</p>
+      </div>
+      <div class="opts">
+        <div class="opt opt--pick">
+          <span class="opt-tag">Recomendado</span>
+          <h4>Propias, escritas al estilo de ITManager</h4>
+          <p><code>Auth</code> · <code>Regions</code> · <code>Support</code> · <code>Templates</code></p>
+          <ul>
+            <li><b>Se ven igual de bien:</b> el desplegable de categorías de ITManager se arma con lo que hay en la tabla, no con una lista fija. Las nuevas aparecen solas.</li>
+            <li><b>Dicen de qué son.</b> "Templates" responde la pregunta; "Apps" no.</li>
+            <li>El login usa <code>Auth</code>, la misma que ITManager: los accesos quedan todos juntos.</li>
+          </ul>
+        </div>
+        <div class="opt opt--alt">
+          <span class="opt-tag">Alternativa</span>
+          <h4>Encajar todo en las de ITManager</h4>
+          <p><code>Apps</code> · <code>System</code> · <code>WhatsApp</code></p>
+          <ul>
+            <li>Nada nuevo en el desplegable.</li>
+            <li><b>Se pierde el detalle:</b> regiones y soporte no tienen categoría propia allá, así que caerían en <code>System</code> o <code>Apps</code>, que no dicen nada.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="why">
+        <b>Por qué la primera.</b> Creía que había que elegir entre "integrado" y "claro", pero
+        no: el desplegable de ITManager es dinámico, así que una categoría propia se integra
+        sola. Y la columna <code>AppId</code> ya dice que la fila vino de BackOffice, así que
+        no hay riesgo de confundirla con otra app.
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Decisión 2 &mdash; Cuánto detalle en la acción</h2>
+
+    <div class="decision">
+      <div class="decision-head">
+        <h3>¿Verbo genérico o acción específica?</h3>
+        <p>Es lo que se lee en la columna principal del listado.</p>
+      </div>
+      <div class="opts">
+        <div class="opt opt--pick">
+          <span class="opt-tag">Recomendado</span>
+          <h4>Específica</h4>
+          <p><code>TEMPLATE_CREATE</code> · <code>TEMPLATE_SUBMIT</code> · <code>TEMPLATE_DELETE</code></p>
+          <ul>
+            <li><b>Se lee sin abrir el detalle.</b> La auditoría se consulta cuando algo salió mal, y ahí importa saber qué pasó de un vistazo.</li>
+            <li>Distingue cosas que un verbo genérico mezcla: editar el texto de una plantilla no es lo mismo que mandarla a META.</li>
+            <li>Ya hay precedente en las dos apps: BackOffice usa <code>REGION_CEBE_LINK</code> e ITManager usa <code>SSO_LOGIN</code>.</li>
+          </ul>
+        </div>
+        <div class="opt opt--alt">
+          <span class="opt-tag">Alternativa</span>
+          <h4>Genérica</h4>
+          <p><code>CREATE</code> · <code>UPDATE</code> · <code>DELETE</code></p>
+          <ul>
+            <li>Homogéneo con el resto de ITManager.</li>
+            <li><b>Obliga a abrir cada fila</b> para saber qué se hizo: "UPDATE sobre Template" no distingue una corrección de texto de un envío a META.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="why">
+        <b>Por qué la primera.</b> Una auditoría sirve para reconstruir qué pasó. Si hay que
+        abrir fila por fila para entenderlo, deja de ser útil justo cuando más se necesita.
+      </div>
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <div class="callout callout--calm">
+      <b>Las dos decisiones tampoco tocan el esquema.</b> <code>Category</code> y
+      <code>Action</code> son columnas de texto que ya existen: lo único que se decide es qué
+      palabra se escribe adentro.
+    </div>
+  </section>
+
+  <section>
+    <h2>Qué se registraría de los templates</h2>
+    <p class="prose">
+      Todas con el email de quien la ejecutó en <code>ActorEmail</code> &mdash;la columna que
+      la tabla ya tiene para eso&mdash; en vez de escondido dentro del texto libre. Así se
+      puede filtrar por persona en vez de buscar por coincidencia.
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Cuándo</th><th>Acción</th><th>Qué queda registrado</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Se crea y envía a META</td><td class="mono">TEMPLATE_CREATE</td><td>quién, nombre de la plantilla, categoría e idioma</td></tr>
+          <tr><td>Se edita una aprobada</td><td class="mono">TEMPLATE_UPDATE</td><td>quién, nombre, y que vuelve a revisión</td></tr>
+          <tr><td>Se envía un borrador</td><td class="mono">TEMPLATE_SUBMIT</td><td>quién, nombre, y el borrador del que salió</td></tr>
+          <tr><td>Se elimina</td><td class="mono">TEMPLATE_DELETE</td><td>quién y nombre &mdash; en META no se deshace</td></tr>
+          <tr><td>Se sincroniza con META</td><td class="mono">TEMPLATE_SYNC</td><td>quién y cuántas cambiaron</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="prose">
+      Los borradores guardados no se registran: no salen de la aplicación y llenarían la
+      auditoría de ruido. Lo que se audita es lo que sale hacia META.
+    </p>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>En qué orden</h2>
+    <ol class="plan">
+      <li>
+        <b>Hacer visibles las filas que ya existen</b>
+        <span>Completar dos columnas que ya existen: el cliente y el email del actor. Con esto solo, todo lo que BackOffice
+        ya audita &mdash;logins, regiones, soporte&mdash; aparece en ITManager y se puede
+        filtrar por persona. Es el cambio de mayor impacto y no agrega eventos nuevos.</span>
+      </li>
+      <li>
+        <b>Unificar el formato de las categorías</b>
+        <span>Según la Decisión 1.</span>
+      </li>
+      <li>
+        <b>Auditar los templates</b>
+        <span>Las cinco acciones de la tabla de arriba.</span>
+      </li>
+    </ol>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Un punto aparte: el panel de WhatsApp</h2>
+    <p class="prose">
+      WABA tiene su propia auditoría y ya registra las plantillas, pero como BackOffice
+      entra con una clave de integración, todas las acciones le figuran como
+      "MobilityBackOffice" y <strong>no queda quién de nuestro equipo la hizo</strong>.
+    </p>
+    <div class="callout">
+      <b>No hace falta tocarlo ahora.</b> Con la auditoría central resuelta, el "quién" queda
+      registrado del lado de ITManager, que es lo que se pidió. Pasarle también la identidad
+      a WABA es un cambio chico y se puede hacer después, si además quieren verlo desde su
+      panel.
+    </div>
+  </section>
+
+  <hr>
+
+  <footer>
+    <p>
+      Mobility BackOffice &mdash; 31 de agosto de 2026. Detalle técnico en
+      <code>docs/AUDITORIA.md</code>. Nada de esto está implementado todavía: es la propuesta
+      previa a hacerlo.
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>

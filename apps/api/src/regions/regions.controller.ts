@@ -16,15 +16,9 @@ import { Roles } from '../auth/roles.decorator';
 import { BackOfficeRole } from '../auth/backoffice-role.enum';
 import { RegionsService } from './regions.service';
 import { CebeInput } from './regions.types';
+import { actorFrom, AuthedRequest } from '../common/actor';
 
-interface AuthedRequest {
-  user?: { email?: string; guid?: string; sub?: string };
-}
 
-/** Actor (identidad del logueado) para la traza de auditoría: guid + email. */
-function actor(req: AuthedRequest): { email?: string; guid?: string } {
-  return { email: req.user?.email, guid: req.user?.guid ?? req.user?.sub };
-}
 
 /**
  * API de Regiones comerciales por CEBE.
@@ -130,7 +124,7 @@ export class RegionsController {
     @Body() body: { cebes?: CebeInput[] },
     @Req() req: AuthedRequest,
   ) {
-    const data = await this.regions.linkCebes(guid, body?.cebes ?? [], actor(req));
+    const data = await this.regions.linkCebes(guid, body?.cebes ?? [], actorFrom(req));
     return { success: true, ...data };
   }
 
@@ -143,7 +137,7 @@ export class RegionsController {
     @Param('companyCode') companyCode: string,
     @Req() req: AuthedRequest,
   ) {
-    const ok = await this.regions.unlinkCebe(guid, code, companyCode, actor(req));
+    const ok = await this.regions.unlinkCebe(guid, code, companyCode, actorFrom(req));
     if (!ok) {
       throw new NotFoundException(
         'El CEBE no está vinculado a la región para esa sociedad',

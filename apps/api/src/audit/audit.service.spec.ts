@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { AuditService } from './audit.service';
+import { AuditCategory } from './audit.categories';
 import { AuditClient } from './audit.client';
 
 /**
@@ -30,7 +31,7 @@ describe('AuditService', () => {
       await service.record({
         action: 'REGION_LINK',
         entity: 'ContinentProfitCenters',
-        category: 'regions',
+        category: AuditCategory.Regions,
         guidUsers: 'GUID-ADMIN',
         entityId: '1080',
         detail: 'user@duwest.com',
@@ -41,8 +42,11 @@ describe('AuditService', () => {
         action: 'REGION_LINK',
         entity: 'ContinentProfitCenters',
         entityId: '1080',
-        category: 'regions',
+        category: AuditCategory.Regions,
         guidUsers: 'GUID-ADMIN',
+        // Siempre viajan, aunque sea en null: el middleware los espera.
+        guidApiLoginClients: null,
+        actorEmail: null,
         detail: 'user@duwest.com',
         appId: 'MobilityBackOffice',
       });
@@ -51,7 +55,7 @@ describe('AuditService', () => {
     it('NO manda timestamps: los pone el middleware', async () => {
       // Antes los ponía BackOffice con Date.now(), así que la hora de la auditoría era la
       // del proceso que auditaba y no la del servidor de base donde queda la fila.
-      await service.record({ action: 'LOGIN', entity: 'Auth', category: 'auth' });
+      await service.record({ action: 'LOGIN', entity: 'Auth', category: AuditCategory.Auth });
 
       const body = auditCreate.mock.calls[0][0];
       expect(body).not.toHaveProperty('timeStamp');
@@ -59,7 +63,7 @@ describe('AuditService', () => {
     });
 
     it('normaliza campos opcionales ausentes a null', async () => {
-      await service.record({ action: 'LOGOUT', entity: 'Auth', category: 'auth' });
+      await service.record({ action: 'LOGOUT', entity: 'Auth', category: AuditCategory.Auth });
 
       const body = auditCreate.mock.calls[0][0];
       expect(body.guidUsers).toBeNull();
@@ -73,7 +77,7 @@ describe('AuditService', () => {
       auditCreate.mockRejectedValue(new Error('middleware caido'));
 
       await expect(
-        service.record({ action: 'LOGIN', entity: 'Auth', category: 'auth' }),
+        service.record({ action: 'LOGIN', entity: 'Auth', category: AuditCategory.Auth }),
       ).rejects.toThrow('middleware caido');
     });
   });
@@ -83,7 +87,7 @@ describe('AuditService', () => {
       await service.safeRecord({
         action: 'REGION_UNLINK',
         entity: 'ContinentProfitCenters',
-        category: 'regions',
+        category: AuditCategory.Regions,
       });
 
       expect(auditCreate).toHaveBeenCalledTimes(1);
@@ -96,7 +100,7 @@ describe('AuditService', () => {
         service.safeRecord({
           action: 'REGION_UNLINK',
           entity: 'ContinentProfitCenters',
-          category: 'regions',
+          category: AuditCategory.Regions,
         }),
       ).resolves.toBeUndefined();
     });

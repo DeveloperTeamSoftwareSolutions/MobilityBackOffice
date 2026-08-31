@@ -36,4 +36,9 @@ export const envValidationSchema = Joi.object({
   // DuwyEngineRAG — base URL del cargador de documentacion a embeber. Sin ella, el
   // proxy /rag no se monta y la seccion queda deshabilitada.
   RAG_URL: Joi.string().uri().optional(),
+
+  // Panel WABA — base de su API REST y la key de la cuenta. Las dos o ninguna: sin
+  // ellas la seccion de plantillas queda deshabilitada.
+  WABA_API_URL: Joi.string().uri().optional(),
+  WABA_API_KEY: Joi.string().allow('').optional(),
 });

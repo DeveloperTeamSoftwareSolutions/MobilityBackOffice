@@ -34,6 +34,8 @@ Fuente de verdad del backend: `apps/api/src/config/env.validation.ts` (Joi) y
 | `JWT_EXPIRES_IN` | Vigencia del token propio. El rol queda congelado hasta que expira | `1h` | `apps/api/src/auth/token.service.ts` |
 | `REGIONS_SYNC_API_KEY` | Key del sync maquina-a-maquina (`x-api-key`). **Vacia o ausente = endpoint deshabilitado (403)**, no 500 | vacio | `apps/api/src/regions/api-key.guard.ts` (fase 4) |
 | `RAG_URL` | Base URL de DuwyEngineRAG. Sin ella, el proxy `/rag` no se monta y la seccion "Documentacion del RAG" no carga | — | `apps/api/src/main.ts`, `apps/api/src/rag/rag.proxy.ts` |
+| `WABA_API_URL` | Base del panel WABA (ej. `http://localhost:3020`). Sin ella la seccion de plantillas queda deshabilitada | — | `src/templates/templates.client.ts` |
+| `WABA_API_KEY` | API key de la cuenta WABA (`WabaAccounts.ApiKey`). **La cuenta es implicita en la key** | — | idem |
 
 ## Frontend
 

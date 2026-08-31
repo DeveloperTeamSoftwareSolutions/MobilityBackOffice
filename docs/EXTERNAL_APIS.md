@@ -59,6 +59,22 @@ MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
 - **Nota de paths**: los path constants del cliente son relativos a `MIDDLEWARE_URL` (que ya
   trae `/api`). Verificado contra el Middleware en vivo.
 
+### WhatsApp WABA Admin — plantillas de WhatsApp
+
+Las plantillas viven en la base `WhatsAppWABA`, que el middleware **no expone**. Se
+consumen directo de la API REST del panel, con el criterio de MobilityManager: se traen
+los DATOS y BackOffice arma su propia pantalla. Ver `docs/SPEC_PLANTILLAS_WHATSAPP.md`.
+
+- **Base URL**: `WABA_API_URL` (dev `http://localhost:3020`)
+- **Autenticacion**: header `x-api-key` (`WABA_API_KEY`). **La cuenta WABA es implicita
+  en la key**: una key = una cuenta.
+- **Endpoints usados**:
+  | Metodo | Endpoint | Descripcion | Archivo |
+  |---|---|---|---|
+  | GET | `/api/templates` | Plantillas de la cuenta. **Hoy solo devuelve las APROBADAS** (`findAllApproved`) | `src/templates/templates.client.ts` |
+- **Pendiente**: que WABA exponga `POST`/`PUT`/`DELETE`/`sync` como REST. Hoy solo
+  existen como rutas HTML con `requireRole`, que la API key no satisface.
+
 ## Integraciones consumidas por terceros
 
 ### Web service de sync de Regiones

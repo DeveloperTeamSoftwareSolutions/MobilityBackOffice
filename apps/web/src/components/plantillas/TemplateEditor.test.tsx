@@ -203,3 +203,67 @@ describe('TemplateEditor', () => {
     expect(container.querySelector('.bo-pl__formactions')).toContainElement(aviso);
   });
 });
+
+/**
+ * Editar un borrador y editar una plantilla de META son dos cosas distintas, y tratarlas
+ * igual rompe las dos: al borrador le faltaba poder guardarse, y el botón de enviar lo
+ * guardaba local sin que llegara nada a META.
+ */
+describe('TemplateEditor — editar un borrador', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const borrador = () => plantilla({ status: 'DRAFT' });
+
+  it('ofrece guardar borrador', () => {
+    // Un borrador nunca salió de acá: sigue siendo un borrador mientras se edita.
+    montar({ template: borrador() });
+    expect(screen.getByRole('button', { name: 'Guardar borrador' })).toBeInTheDocument();
+  });
+
+  it('una plantilla que ya está en META no ofrece guardar borrador', () => {
+    montar({ template: plantilla({ status: 'APPROVED' }) });
+    expect(screen.queryByRole('button', { name: 'Guardar borrador' })).toBeNull();
+  });
+
+  it('guarda sobre ese borrador, no crea uno nuevo', async () => {
+    // Sin mandar el id, cada guardado dejaría un borrador duplicado y el original intacto.
+    const post = interceptarBorrador(99);
+    montar({ template: borrador() });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar borrador' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    expect((post.mock.calls[0][1] as { draftId: number | null }).draftId).toBe(7);
+  });
+
+  it('cambiar de modo guarda sobre ese mismo borrador', async () => {
+    // Es lo que fallaba: los cambios quedaban en pantalla pero no en el borrador.
+    const post = interceptarBorrador(7);
+    montar({ template: borrador() });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Modo avanzado' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    expect(post.mock.calls[0][0]).toBe('/api/templates/drafts');
+    expect((post.mock.calls[0][1] as { draftId: number | null }).draftId).toBe(7);
+  });
+
+  it('el botón dice "Enviar", no "reenviar": nunca estuvo en revisión', async () => {
+    montar({ template: borrador() });
+
+    await userEvent.click(screen.getByRole('button', { name: /^\d?\s*Revisión$/ }));
+
+    expect(screen.getByRole('button', { name: 'Enviar a revisión' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /reenviar/ })).toBeNull();
+  });
+
+  it('en una plantilla de META sí dice reenviar', async () => {
+    montar({ template: plantilla({ status: 'APPROVED' }) });
+
+    await userEvent.click(screen.getByRole('button', { name: /^\d?\s*Revisión$/ }));
+
+    expect(
+      screen.getByRole('button', { name: 'Guardar y reenviar a revisión' }),
+    ).toBeInTheDocument();
+  });
+});

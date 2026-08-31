@@ -116,3 +116,52 @@ describe('TemplateWizard — la categoría de META', () => {
     expect(within(codigo as HTMLElement).getByText('Autenticación')).toBeInTheDocument();
   });
 });
+
+describe('TemplateWizard — un error no se ve igual que un aviso', () => {
+  /** Una plantilla completa salvo el botón, que quedó sin teléfono. */
+  const conError = () =>
+    plantilla({
+      buttons: [{ type: 'PHONE_NUMBER', text: 'Llamar', url: null, phoneNumber: null }],
+    });
+
+  it('lo que hay que corregir y lo que solo hay que saber usan estilos distintos', async () => {
+    // Tenían los dos el mismo ámbar: "el botón necesita un teléfono" se leía igual que
+    // "al enviarla queda en revisión", y uno frena mientras el otro solo informa.
+    const { container } = montar(conError());
+
+    await userEvent.click(paso('Revisión'));
+
+    const error = screen.getByText(/Hay que corregir esto/).closest('div');
+    expect(error).toHaveClass('bo-pl__warn');
+
+    const aviso = container.querySelector('.bo-pl__notice--tight');
+    expect(aviso?.textContent).toMatch(/revisión de META/);
+    expect(aviso).not.toHaveClass('bo-pl__warn');
+  });
+
+  it('el aviso queda pegado a la botonera, no arriba del todo', async () => {
+    // Lejos del botón, no se leía como "esto pasa si aprieto acá".
+    const { container } = montar(plantilla());
+
+    await userEvent.click(paso('Revisión'));
+
+    const aviso = container.querySelector('.bo-pl__notice--tight');
+    const acciones = container.querySelector('.bo-pl__formactions');
+    expect(aviso?.nextElementSibling).toBe(acciones);
+  });
+
+  it('el aviso solo aparece en el último paso', () => {
+    const { container } = montar(plantilla());
+    expect(container.querySelector('.bo-pl__notice--tight')).toBeNull();
+  });
+
+  it('editando una aprobada, el aviso dice que vuelve a revisión', async () => {
+    const { container } = montar(plantilla({ status: 'APPROVED' }));
+
+    await userEvent.click(paso('Revisión'));
+
+    expect(container.querySelector('.bo-pl__notice--tight')?.textContent).toMatch(
+      /vuelve a revisión/,
+    );
+  });
+});

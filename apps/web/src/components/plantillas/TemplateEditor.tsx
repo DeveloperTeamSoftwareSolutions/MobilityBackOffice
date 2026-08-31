@@ -39,6 +39,17 @@ export function TemplateEditor({
   serverErrors: string[];
 }) {
   const esEdicion = template !== null;
+
+  /**
+   * Un borrador **no vive en META**: se edita como cualquier otro borrador.
+   *
+   * La distincion no es cosmetica. Sin ella "editar" tapaba dos cosas muy distintas:
+   * corregir algo que META ya aprobo, y seguir armando algo que nunca salio de aca. Al
+   * segundo hay que ofrecerle guardar el avance, y el cambio de modo tiene que caer
+   * sobre **ese** borrador y no crear uno nuevo.
+   */
+  const esBorrador = template?.status === 'DRAFT';
+  const puedeGuardarBorrador = !esEdicion || esBorrador;
   const [form, setForm] = useState<TemplateFormState>(() => estadoInicial(template));
   // Crear y editar arrancan igual: en el asistente. Es la forma en la que la pantalla
   // explica cada paso, y no hay motivo para negarsela a quien corrige una plantilla.
@@ -53,7 +64,8 @@ export function TemplateEditor({
    * Se lee dentro del guardado, no se dibuja: en estado, dos guardados seguidos podrían
    * leer el mismo valor viejo y crear un borrador duplicado por cada uno.
    */
-  const draftId = useRef<number | null>(null);
+  // Al editar un borrador se sigue trabajando sobre ESE, no sobre uno nuevo.
+  const draftId = useRef<number | null>(esBorrador ? (template?.id ?? null) : null);
 
   /**
    * Guarda el avance sin mandar nada a META.
@@ -63,7 +75,8 @@ export function TemplateEditor({
    */
   const guardarBorrador = useCallback(
     async (f: TemplateFormState, silencioso = false): Promise<boolean> => {
-      if (esEdicion) return false; // Una plantilla que ya existe en META no es un borrador.
+      // Lo que ya existe en META no es un borrador; lo que todavia es borrador, si.
+      if (!puedeGuardarBorrador) return false;
 
       setGuardandoBorrador(true);
       if (!silencioso) setAvisoBorrador(null);
@@ -84,7 +97,7 @@ export function TemplateEditor({
         setGuardandoBorrador(false);
       }
     },
-    [esEdicion],
+    [puedeGuardarBorrador],
   );
 
   /**
@@ -106,7 +119,7 @@ export function TemplateEditor({
     onSubmit: () => onSubmit(form),
     saving,
     serverErrors,
-    onSaveDraft: esEdicion ? null : () => guardarBorrador(form),
+    onSaveDraft: puedeGuardarBorrador ? () => guardarBorrador(form) : null,
     savingDraft: guardandoBorrador,
     draftNotice: avisoBorrador,
     // El asistente y el modo avanzado necesitan saberlo para bloquear nombre e idioma.

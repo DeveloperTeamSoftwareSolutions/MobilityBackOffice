@@ -7,6 +7,7 @@ import {
   getTemplateDetail,
   getTemplates,
   mensajesDeError,
+  submitDraft,
   syncTemplates,
   updateTemplate,
 } from './plantillas.api';
@@ -167,19 +168,38 @@ export function PlantillasPanel() {
     }
   };
 
+  /**
+   * Manda la plantilla a META.
+   *
+   * Tres caminos, no dos, porque un borrador **nunca estuvo en META**:
+   *
+   * - Alta: `POST` crea y envía.
+   * - Borrador: `submit` lo envía por primera vez y lo promueve. Un `PUT` acá lo guardaba
+   *   local y lo dejaba en `DRAFT` en silencio: la pantalla decía "enviada a revisión" y
+   *   a META no había llegado nada.
+   * - Plantilla que ya existe en META: `PUT`, que la devuelve a revisión.
+   */
   const guardar = async (f: TemplateFormState) => {
     setGuardando(true);
     setErroresServidor([]);
     try {
       const payload = aPayload(f);
-      if (editando?.template?.id) {
+      const id = editando?.template?.id ?? null;
+      const esBorrador = editando?.template?.status === 'DRAFT';
+
+      if (id !== null && esBorrador) {
+        await submitDraft(id, payload);
+        setAviso('Borrador enviado a revisión de META. Puede tardar en aprobarse.');
+      } else if (id !== null) {
+        // `name` e `language` no viajan: META los toma como identidad de la plantilla.
         const { name: _n, language: _l, ...resto } = payload;
-        await updateTemplate(editando.template.id, resto);
+        await updateTemplate(id, resto);
         setAviso('Se envió a revisión de META. Puede tardar en aprobarse.');
       } else {
         await createTemplate(payload);
         setAviso('Plantilla enviada a revisión de META. Puede tardar en aprobarse.');
       }
+
       setEditando(null);
       load();
     } catch (err) {

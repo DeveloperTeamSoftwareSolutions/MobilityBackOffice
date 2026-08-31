@@ -62,6 +62,8 @@ export function TemplateWizard({
   editPolicy: EditPolicy | null;
 }) {
   const esEdicion = template !== null;
+  // Un borrador nunca estuvo en revisión: no se "reenvía", se envía por primera vez.
+  const esBorrador = template?.status === 'DRAFT';
   // Si META no la deja editar, no se ofrece enviar: el rechazo llegaria igual, pero
   // despues de completar todo el asistente.
   const bloqueadaPorMeta = esEdicion && editPolicy ? editPolicy.canEdit === false : false;
@@ -143,7 +145,9 @@ export function TemplateWizard({
         </h2>
         <p className="bo-pl__formsub">
           {esEdicion
-            ? 'Al guardar, la plantilla vuelve a revisión de META. El nombre y el idioma no se pueden cambiar.'
+            ? esBorrador
+              ? 'Es un borrador: todavía no se envió a META. El nombre y el idioma no se pueden cambiar.'
+              : 'Al guardar, la plantilla vuelve a revisión de META. El nombre y el idioma no se pueden cambiar.'
             : 'Nada se envía a META hasta el último paso.'}
         </p>
       </div>
@@ -234,6 +238,19 @@ export function TemplateWizard({
 
       {bloqueo && <p className="bo-pl__stepblock">{bloqueo}</p>}
 
+      {/*
+        * Que pasa al apretar el boton, pegado al boton. En el paso de revision quedaba
+        * arriba y con el mismo estilo que "hay que corregir esto": uno hay que
+        * corregirlo, el otro solo hay que saberlo.
+        */}
+      {esUltimo && (
+        <p className="bo-pl__notice bo-pl__notice--tight">
+          {esEdicion && !esBorrador
+            ? 'Al guardar vuelve a revisión de META y, hasta que la aprueben, podría no estar disponible para enviar.'
+            : 'Al enviarla queda en revisión de META. Hasta que la aprueben no se puede usar, y pueden rechazarla.'}
+        </p>
+      )}
+
       <div className="bo-pl__formactions">
         <button type="button" className="bo-pl__btn" onClick={onAdvanced} disabled={saving}>
           Modo avanzado
@@ -274,7 +291,7 @@ export function TemplateWizard({
           >
             {saving
               ? 'Enviando…'
-              : esEdicion
+              : esEdicion && !esBorrador
                 ? 'Guardar y reenviar a revisión'
                 : 'Enviar a revisión'}
           </button>
@@ -962,10 +979,6 @@ function PasoRevision({ form, errores }: { form: TemplateFormState; errores: str
         hint="Es el payload exacto que recibe META. Sirve para entender un rechazo, que suele venir escrito en estos términos."
       />
 
-      <p className="bo-pl__notice">
-        Al enviarla queda <strong>en revisión de META</strong>. Hasta que la aprueben no se
-        puede usar, y pueden rechazarla.
-      </p>
     </>
   );
 }

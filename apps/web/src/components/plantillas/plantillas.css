@@ -97,14 +97,54 @@
 
 /* ---- Aviso de que la fuente filtra ---- */
 
+/*
+ * Tres niveles, y se distinguen a simple vista. Tenian todos el mismo ambar, asi que
+ * "el boton 1 necesita un telefono" y "al enviarla queda en revision" se leian igual:
+ * uno hay que corregirlo y el otro solo hay que saberlo.
+ *
+ *   .bo-pl__warn            algo esta mal y frena  -> rojo
+ *   .bo-pl__notice--warn    conviene saberlo antes -> ambar
+ *   .bo-pl__notice          informacion            -> azul
+ */
 .bo-pl__notice {
+  position: relative;
   margin: 0 0 20px;
-  padding: 10px 14px;
-  border-left: 3px solid var(--bo-warning);
+  padding: 10px 14px 10px 38px;
+  border-left: 3px solid var(--bo-primary);
   border-radius: 0 var(--bo-radius-sm) var(--bo-radius-sm) 0;
-  background: rgba(180, 83, 9, 0.06);
+  background: rgba(44, 82, 130, 0.06);
   font-size: 13px;
   color: var(--bo-text);
+}
+
+/* La marca deja claro el nivel aunque el color no se distinga (daltonismo, impresion). */
+.bo-pl__notice::before {
+  content: 'i';
+  position: absolute;
+  left: 13px;
+  top: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bo-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  font-style: italic;
+}
+
+.bo-pl__notice--warn {
+  border-left-color: var(--bo-warning);
+  background: rgba(180, 83, 9, 0.06);
+}
+
+.bo-pl__notice--warn::before {
+  content: '!';
+  background: var(--bo-warning);
+  font-style: normal;
 }
 
 /* ---- Tabla ---- */
@@ -427,14 +467,33 @@
   color: var(--bo-text-muted);
 }
 
+/* Algo esta mal y hay que corregirlo antes de seguir. No es lo mismo que un aviso. */
 .bo-pl__warn {
+  position: relative;
   margin: 0;
-  padding: 12px 14px;
-  border-left: 3px solid var(--bo-warning);
+  padding: 12px 14px 12px 38px;
+  border-left: 3px solid var(--bo-danger);
   border-radius: 0 var(--bo-radius-sm) var(--bo-radius-sm) 0;
-  background: rgba(180, 83, 9, 0.06);
+  background: rgba(197, 48, 48, 0.06);
   font-size: 14px;
   color: var(--bo-text);
+}
+
+.bo-pl__warn::before {
+  content: '!';
+  position: absolute;
+  left: 13px;
+  top: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bo-danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .bo-pl__warn code {
@@ -1014,4 +1073,9 @@
   letter-spacing: 0.02em;
   color: var(--bo-text-muted);
   vertical-align: middle;
+}
+
+/* Pegado a la botonera que dispara eso mismo: no necesita el aire de un aviso suelto. */
+.bo-pl__notice--tight {
+  margin: 0 0 10px;
 }

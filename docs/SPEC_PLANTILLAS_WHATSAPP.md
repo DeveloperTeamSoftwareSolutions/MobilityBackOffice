@@ -1,6 +1,6 @@
 # Plantillas de WhatsApp — especificacion
 
-> Ultima actualizacion: 2026-08-31 · Version: 2.20.0
+> Ultima actualizacion: 2026-08-31 · Version: 2.21.0
 >
 > Seccion "Templates de WhatsApp" (rol Marketing). Consulta, crea y edita las plantillas
 > del panel WABA sin abrirlo y sin un segundo login.
@@ -248,6 +248,28 @@ del encabezado—. Sin borradores lo unico posible era enviarla o perderla.
 - Solo en alta: **lo que ya existe en META no es un borrador**, asi que en edicion el
   boton no aparece.
 
+### Editar un borrador no es editar una plantilla de META
+
+Son dos operaciones distintas en WABA, y confundirlas **falla en silencio**. Un `PUT`
+sobre un borrador entra por `updateTemplate`, que ve `requiresMeta: false`, guarda
+local y lo deja en `DRAFT`: la pantalla decia "enviada a revision" y a META no habia
+llegado nada.
+
+Por eso hay **tres** caminos al guardar, no dos:
+
+| Que se esta editando | Guardar el avance | Enviar a META |
+|---|---|---|
+| Alta (nada todavia) | `POST /drafts` | `POST /templates` |
+| Un borrador (`DRAFT`) | `POST /drafts` con su `draftId` | `POST /drafts/:id/submit` |
+| Una plantilla de META | — no es un borrador | `PUT /templates/:id` |
+
+Al abrir un borrador, `draftId` arranca con **el id de esa plantilla**. Sin eso, cada
+cambio de modo creaba un borrador nuevo y dejaba el original sin tocar — se veia como
+"los cambios no se guardan", cuando en realidad se guardaban en otro lado.
+
+Y el boton dice **"Enviar a revision"**, no "reenviar": un borrador nunca estuvo en
+revision.
+
 ### El archivo de ejemplo del encabezado
 
 META **exige ver el medio** para revisar una plantilla con encabezado de imagen, video o
@@ -261,6 +283,24 @@ vuelve a viajar, ni siquiera al reenviar la plantilla.
 
 Los tipos se cortan en los dos lados (JPG/PNG, MP4/3GP, PDF) y el tamaño en 25 MB, para
 no subir algo que va a rebotar del otro lado.
+
+### Un error no se ve como un aviso
+
+Tres niveles, con color y marca distintos. Antes `warn` y `notice` compartian el mismo
+ambar, asi que "el boton 1 necesita un numero de telefono" y "al enviarla queda en
+revision de META" se leian igual: uno hay que corregirlo, el otro solo hay que saberlo.
+
+| Clase | Que dice | Color |
+|---|---|---|
+| `.bo-pl__warn` | algo esta mal y frena | rojo, marca `!` |
+| `.bo-pl__notice--warn` | conviene saberlo antes (cupo bajo, espera) | ambar, marca `!` |
+| `.bo-pl__notice` | informacion | azul, marca `i` |
+
+La marca ademas deja claro el nivel cuando el color no alcanza (daltonismo, impresion).
+
+El aviso de "queda en revision de META" salio del paso de revision y va **pegado a la
+botonera**, que es la que dispara eso mismo: arriba y lejos del boton no se leia como
+"esto pasa si aprieto aca".
 
 ### El JSON, plegado
 
@@ -413,7 +453,13 @@ valido** en la cuenta. Sin eso, la subida falla con el motivo de META a la vista
 - [ ] Se alterna entre modos **sin perder** lo cargado.
 - [ ] Al alternar se guarda un borrador; si falla, igual se cambia de modo y avisa.
 - [ ] El segundo guardado **actualiza** el mismo borrador, no crea otro.
-- [ ] En edicion no aparece "Guardar borrador".
+- [ ] Editando un **borrador** si aparece "Guardar borrador", y guarda sobre ese mismo id.
+- [ ] Editando una plantilla de META no aparece "Guardar borrador".
+- [ ] Cambiar de modo sobre un borrador **no crea uno nuevo**.
+- [ ] Enviar un borrador lo manda a META y lo saca de `DRAFT` (no se queda en borrador).
+- [ ] En un borrador el boton dice "Enviar a revision"; en una de META, "Guardar y reenviar".
+- [ ] Un error se ve rojo y un aviso azul: no se confunden.
+- [ ] El aviso de "queda en revision" esta pegado a la botonera, no arriba del paso.
 - [ ] El asistente dice **que falta** para avanzar, no deja un boton apagado sin explicacion.
 - [ ] Creando, no se puede saltar a un paso sin completar los anteriores.
 - [ ] Editando, se puede ir a cualquier paso desde el arranque.

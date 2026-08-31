@@ -29,7 +29,10 @@ export function EditPolicyNotice({ policy }: { policy: EditPolicy | null }) {
   if (policy.warnings.length === 0 && !hayCupo) return null;
 
   return (
-    <div className="bo-pl__notice">
+    // Un cupo bajo o una espera en curso son advertencias; el resto es informacion.
+    <div
+      className={`bo-pl__notice${policy.warnings.length > 0 ? ' bo-pl__notice--warn' : ''}`}
+    >
       {policy.warnings.length > 0 && (
         <ul className="bo-pl__errlist">
           {policy.warnings.map((w, i) => (

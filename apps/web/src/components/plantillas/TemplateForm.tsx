@@ -139,6 +139,8 @@ export function TemplateForm({
   draftNotice: string | null;
 }) {
   const esEdicion = template !== null;
+  // Un borrador nunca estuvo en revisión: no se "reenvía", se envía por primera vez.
+  const esBorrador = template?.status === 'DRAFT';
   const [intentado, setIntentado] = useState(false);
 
   const errores = useMemo(() => validateForm(form, esEdicion), [form, esEdicion]);
@@ -177,9 +179,11 @@ export function TemplateForm({
           {esEdicion ? `Editar ${template.name}` : 'Nueva plantilla — modo avanzado'}
         </h2>
         <p className="bo-pl__formsub">
-          {esEdicion
-            ? 'Al guardar, la plantilla vuelve a revisión de META.'
-            : 'La plantilla se envía a META para aprobación. No se puede usar hasta que la aprueben.'}
+          {esBorrador
+            ? 'Es un borrador: todavía no se envió a META. Podés seguir guardándolo así.'
+            : esEdicion
+              ? 'Al guardar, la plantilla vuelve a revisión de META.'
+              : 'La plantilla se envía a META para aprobación. No se puede usar hasta que la aprueben.'}
         </p>
       </div>
 
@@ -333,7 +337,7 @@ export function TemplateForm({
         >
           {saving
             ? 'Enviando…'
-            : esEdicion
+            : esEdicion && !esBorrador
               ? 'Guardar y reenviar a revisión'
               : 'Enviar a revisión de META'}
         </button>

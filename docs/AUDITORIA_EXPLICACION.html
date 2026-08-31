@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Que falta para que la auditoria de BackOffice se vea en ITManager, y las dos decisiones que hay que tomar.">
+<meta name="description" content="Que se implemento para que la auditoria de BackOffice se vea en ITManager, y que queda registrado exactamente.">
 <title>Auditoría de BackOffice en ITManager</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -337,59 +337,43 @@
 <div class="page">
 
   <header class="prose">
-    <p class="eyebrow">Mobility BackOffice · Auditoría</p>
+    <p class="eyebrow">Mobility BackOffice · Auditoría · Implementado</p>
     <h1>Auditar BackOffice en ITManager</h1>
     <p class="lede">
-      La infraestructura ya existe y BackOffice ya audita. El problema es que sus
-      registros <strong>no se ven desde ITManager</strong>. Este documento explica por qué,
-      y las dos decisiones que hay que tomar antes de seguir.
+      BackOffice ya auditaba, pero sus registros <strong>no se veían desde ITManager</strong>.
+      Ya está corregido, y las plantillas de WhatsApp ahora dejan traza de quién las envió.
+      Esto es qué se hizo y por qué.
     </p>
   </header>
 
   <hr>
 
   <section>
-    <h2>Lo que pasa hoy</h2>
+    <h2>Qué estaba pasando</h2>
     <p class="prose">
-      BackOffice ya escribe en <code>AuditLogs</code> —la tabla central que comparte con
-      ITManager y MobilityManager— cada login, cada cambio de regiones y cada acción de la
-      consola de soporte. Escribe a través del Middleware, que es el dueño de la tabla.
-    </p>
-    <p class="prose">
-      Pero la pantalla de auditoría de ITManager <strong>filtra por cliente</strong>
-      (<code>GuidApiLoginClients</code>), y BackOffice deja ese campo vacío. Las filas
-      existen en la base; simplemente no entran en el filtro.
+      BackOffice escribe en <code>AuditLogs</code> —la tabla central que comparte con
+      ITManager y MobilityManager— a través del Middleware, que es su dueño. Pero la
+      pantalla de auditoría de ITManager <strong>filtra por cliente</strong>, y BackOffice
+      dejaba ese campo vacío. Las filas existían; no entraban en el filtro.
     </p>
 
     <div class="flow">
-      <p class="flow-cap">Por qué no aparecen</p>
+      <p class="flow-cap">Antes</p>
       <div class="flow-steps">
-        <div class="fstep">
-          <b>BackOffice</b>
-          <span>audita la acción</span>
-        </div>
+        <div class="fstep"><b>BackOffice</b><span>audita la acción</span></div>
         <div class="farrow" aria-hidden="true">&rarr;</div>
-        <div class="fstep">
-          <b>Middleware</b>
-          <span>guarda la fila</span>
-        </div>
+        <div class="fstep"><b>Middleware</b><span>guarda la fila</span></div>
         <div class="farrow" aria-hidden="true">&rarr;</div>
-        <div class="fstep">
-          <b>AuditLogs</b>
-          <span>la fila está acá</span>
-        </div>
+        <div class="fstep"><b>AuditLogs</b><span>la fila está acá</span></div>
         <div class="farrow" aria-hidden="true">&rarr;</div>
-        <div class="fstep fstep--stop">
-          <b>ITManager</b>
-          <span>filtra por cliente y no la encuentra</span>
-        </div>
+        <div class="fstep fstep--stop"><b>ITManager</b><span>filtra por cliente y no la encuentra</span></div>
       </div>
     </div>
 
     <div class="tablewrap">
       <table>
         <thead>
-          <tr><th>Aplicación</th><th>Registros</th><th>Sin cliente<br><span style="font-weight:400;text-transform:none;letter-spacing:0">(no se ven en ITManager)</span></th></tr>
+          <tr><th>Aplicación</th><th>Registros</th><th>Sin cliente<br><span style="font-weight:400;text-transform:none;letter-spacing:0">(no se veían en ITManager)</span></th></tr>
         </thead>
         <tbody>
           <tr><td><b>MobilityBackOffice</b></td><td>148</td><td><b style="color:var(--red)">94</b> &mdash; 63 %</td></tr>
@@ -402,112 +386,74 @@
       </table>
     </div>
     <p class="prose" style="font-size:.9rem;color:var(--ink-mute)">
-      Consultado sobre <code>Mobility_QATEST</code> el 31/08/2026. Las filas que escribe
-      ITManager tienen el cliente siempre; las que escriben las aplicaciones por su cuenta,
-      casi nunca. <strong>No es un problema solo nuestro:</strong> MobilityManager tiene el
-      mismo hueco.
+      Consultado sobre <code>Mobility_QATEST</code> el 31/08/2026, antes del cambio. Las filas
+      que escribe ITManager tienen el cliente siempre; las que escribían las aplicaciones por
+      su cuenta, casi nunca. <strong>No era un problema solo nuestro:</strong> MobilityManager
+      tiene el mismo hueco.
     </p>
-
     <p class="prose">
-      Las 54 de BackOffice que sí lo tienen se explican solas: al iniciar sesión, ITManager
-      escribe <em>su propia</em> fila con nuestro identificador de aplicación. Así que cada
-      login deja dos registros &mdash;el de ITManager, visible, y el nuestro, invisible&mdash;
-      y todo lo demás que hacemos queda fuera.
+      Las 54 de BackOffice que sí lo tenían las escribía <em>ITManager</em>: al iniciar sesión
+      registra su propia fila con nuestro identificador de aplicación. Todo lo demás que
+      hacíamos quedaba fuera.
     </p>
 
     <div class="callout callout--calm">
-      <b>Nada de esto toca la base de datos.</b> Las columnas que hacen falta
-      &mdash;<code>GuidApiLoginClients</code> y <code>ActorEmail</code>&mdash; <b>ya existen</b>
-      en <code>AuditLogs</code>, el Middleware ya sabe escribirlas y otras aplicaciones ya las
-      usan. Lo único que cambia es que BackOffice empiece a completarlas. Sin migraciones,
-      sin tocar ITManager, sin tocar el Middleware.
+      <b>No hizo falta tocar la base de datos.</b> Las columnas
+      &mdash;<code>GuidApiLoginClients</code> y <code>ActorEmail</code>&mdash; ya existían, el
+      Middleware ya sabía escribirlas y otras aplicaciones ya las usaban. Solo faltaba
+      completarlas. Sin migraciones, sin tocar ITManager, sin tocar el Middleware.
     </div>
-
-    <p class="prose">
-      El dato que falta ya está disponible: ITManager lo devuelve al iniciar sesión, y el
-      token de BackOffice hasta tiene el campo declarado sin usar. Es llenarlo y mandarlo.
-      <strong>Sin esto, auditar los templates no cambia nada</strong>: se escribirían filas
-      que nadie ve.
-    </p>
   </section>
 
   <hr>
 
   <section>
-    <h2>Decisión 1 &mdash; Cómo agrupar los eventos</h2>
-    <p class="prose">
-      Cada fila lleva una <em>categoría</em>. ITManager usa las suyas
-      (<code>Auth</code>, <code>Users</code>, <code>Apps</code>&hellip;) y BackOffice usa
-      otras (<code>regions</code>, <code>support</code>). Hay que decidir si se unifican.
-    </p>
+    <h2>Qué se hizo</h2>
+    <ol class="plan">
+      <li>
+        <b>Se completó el cliente y el email de quien actúa</b>
+        <span>El cliente sale del login de ITManager y viaja en el token de BackOffice. Con
+        esto, todo lo que ya se auditaba &mdash;accesos, regiones, soporte&mdash; aparece en
+        ITManager. El email pasó a su propia columna: antes iba escondido dentro del texto,
+        así que buscar "todo lo que hizo una persona" era buscar por coincidencia.</span>
+      </li>
+      <li>
+        <b>Se unificó el formato de las categorías</b>
+        <span><code>Auth</code>, <code>Regions</code>, <code>Support</code> y
+        <code>Templates</code>. <code>Auth</code> es la misma que usa ITManager, así que los
+        accesos quedan todos juntos.</span>
+      </li>
+      <li>
+        <b>Se auditaron las plantillas de WhatsApp</b>
+        <span>Las cinco acciones que salen hacia META, con el nombre de la plantilla y quién
+        la mandó.</span>
+      </li>
+    </ol>
 
-    <div class="decision">
-      <div class="decision-head">
-        <h3>¿Categorías de ITManager o propias de BackOffice?</h3>
-        <p>Define cómo se agrupan los eventos en el buscador de auditoría.</p>
-      </div>
-      <div class="opts">
-        <div class="opt opt--pick">
-          <span class="opt-tag">Recomendado</span>
-          <h4>Propias, escritas al estilo de ITManager</h4>
-          <p><code>Auth</code> · <code>Regions</code> · <code>Support</code> · <code>Templates</code></p>
-          <ul>
-            <li><b>Se ven igual de bien:</b> el desplegable de categorías de ITManager se arma con lo que hay en la tabla, no con una lista fija. Las nuevas aparecen solas.</li>
-            <li><b>Dicen de qué son.</b> "Templates" responde la pregunta; "Apps" no.</li>
-            <li>El login usa <code>Auth</code>, la misma que ITManager: los accesos quedan todos juntos.</li>
-          </ul>
-        </div>
-        <div class="opt opt--alt">
-          <span class="opt-tag">Alternativa</span>
-          <h4>Encajar todo en las de ITManager</h4>
-          <p><code>Apps</code> · <code>System</code> · <code>WhatsApp</code></p>
-          <ul>
-            <li>Nada nuevo en el desplegable.</li>
-            <li><b>Se pierde el detalle:</b> regiones y soporte no tienen categoría propia allá, así que caerían en <code>System</code> o <code>Apps</code>, que no dicen nada.</li>
-          </ul>
-        </div>
-      </div>
-      <div class="why">
-        <b>Por qué la primera.</b> Creía que había que elegir entre "integrado" y "claro", pero
-        no: el desplegable de ITManager es dinámico, así que una categoría propia se integra
-        sola. Y la columna <code>AppId</code> ya dice que la fila vino de BackOffice, así que
-        no hay riesgo de confundirla con otra app.
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <h2>Decisión 2 &mdash; Cuánto detalle en la acción</h2>
-
-    <div class="decision">
-      <div class="decision-head">
-        <h3>¿Verbo genérico o acción específica?</h3>
-        <p>Es lo que se lee en la columna principal del listado.</p>
-      </div>
-      <div class="opts">
-        <div class="opt opt--pick">
-          <span class="opt-tag">Recomendado</span>
-          <h4>Específica</h4>
-          <p><code>TEMPLATE_CREATE</code> · <code>TEMPLATE_SUBMIT</code> · <code>TEMPLATE_DELETE</code></p>
-          <ul>
-            <li><b>Se lee sin abrir el detalle.</b> La auditoría se consulta cuando algo salió mal, y ahí importa saber qué pasó de un vistazo.</li>
-            <li>Distingue cosas que un verbo genérico mezcla: editar el texto de una plantilla no es lo mismo que mandarla a META.</li>
-            <li>Ya hay precedente en las dos apps: BackOffice usa <code>REGION_CEBE_LINK</code> e ITManager usa <code>SSO_LOGIN</code>.</li>
-          </ul>
-        </div>
-        <div class="opt opt--alt">
-          <span class="opt-tag">Alternativa</span>
-          <h4>Genérica</h4>
-          <p><code>CREATE</code> · <code>UPDATE</code> · <code>DELETE</code></p>
-          <ul>
-            <li>Homogéneo con el resto de ITManager.</li>
-            <li><b>Obliga a abrir cada fila</b> para saber qué se hizo: "UPDATE sobre Template" no distingue una corrección de texto de un envío a META.</li>
-          </ul>
-        </div>
-      </div>
-      <div class="why">
-        <b>Por qué la primera.</b> Una auditoría sirve para reconstruir qué pasó. Si hay que
-        abrir fila por fila para entenderlo, deja de ser útil justo cuando más se necesita.
+    <div class="flow">
+      <p class="flow-cap">Una fila real, después del cambio &mdash; y la anterior, para comparar</p>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>Acción</th><th>Plantilla</th><th>Categoría</th><th>Cliente</th><th>Quién</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono">TEMPLATE_DELETE</td>
+              <td class="mono">prueba_auditoria</td>
+              <td class="mono">Templates</td>
+              <td class="mono">00000000-…-0001</td>
+              <td>karen.ruiz@…</td>
+            </tr>
+            <tr>
+              <td class="mono">LOGIN</td>
+              <td>&mdash;</td>
+              <td class="mono">auth</td>
+              <td><b style="color:var(--red)">falta</b></td>
+              <td><b style="color:var(--red)">falta</b></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </section>
@@ -515,60 +461,104 @@
   <hr>
 
   <section>
-    <div class="callout callout--calm">
-      <b>Las dos decisiones tampoco tocan el esquema.</b> <code>Category</code> y
-      <code>Action</code> son columnas de texto que ya existen: lo único que se decide es qué
-      palabra se escribe adentro.
-    </div>
-  </section>
-
-  <section>
-    <h2>Qué se registraría de los templates</h2>
+    <h2>Qué queda registrado exactamente</h2>
     <p class="prose">
-      Todas con el email de quien la ejecutó en <code>ActorEmail</code> &mdash;la columna que
-      la tabla ya tiene para eso&mdash; en vez de escondido dentro del texto libre. Así se
-      puede filtrar por persona en vez de buscar por coincidencia.
+      Todo lo que <strong>cambia algo</strong>. Las consultas no se registran: nadie audita
+      que alguien miró una lista.
     </p>
+
     <div class="tablewrap">
       <table>
         <thead>
-          <tr><th>Cuándo</th><th>Acción</th><th>Qué queda registrado</th></tr>
+          <tr><th>Categoría</th><th>Qué acciones</th><th>Qué queda</th></tr>
         </thead>
         <tbody>
-          <tr><td>Se crea y envía a META</td><td class="mono">TEMPLATE_CREATE</td><td>quién, nombre de la plantilla, categoría e idioma</td></tr>
-          <tr><td>Se edita una aprobada</td><td class="mono">TEMPLATE_UPDATE</td><td>quién, nombre, y que vuelve a revisión</td></tr>
-          <tr><td>Se envía un borrador</td><td class="mono">TEMPLATE_SUBMIT</td><td>quién, nombre, y el borrador del que salió</td></tr>
-          <tr><td>Se elimina</td><td class="mono">TEMPLATE_DELETE</td><td>quién y nombre &mdash; en META no se deshace</td></tr>
-          <tr><td>Se sincroniza con META</td><td class="mono">TEMPLATE_SYNC</td><td>quién y cuántas cambiaron</td></tr>
+          <tr>
+            <td class="mono">Auth</td>
+            <td>Entrar, y los intentos fallidos</td>
+            <td>quién, con qué rol, y el motivo del rechazo</td>
+          </tr>
+          <tr>
+            <td class="mono">Regions</td>
+            <td>Vincular y desvincular un CEBE; el sync automático</td>
+            <td>quién, región, CEBE, sociedad, y si vino de la pantalla o del servicio</td>
+          </tr>
+          <tr>
+            <td class="mono">Support</td>
+            <td>Las seis: acciones sobre el documento, decisiones y respuestas sobre líneas y plazos de pago, y el recálculo</td>
+            <td>quién, documento, <b>estado antes → después</b>, y el motivo que escribió la persona</td>
+          </tr>
+          <tr>
+            <td class="mono">Templates</td>
+            <td>Crear, editar, enviar un borrador, eliminar y sincronizar</td>
+            <td>quién, nombre de la plantilla, y el detalle de cada caso</td>
+          </tr>
         </tbody>
       </table>
     </div>
-    <p class="prose">
-      Los borradores guardados no se registran: no salen de la aplicación y llenarían la
-      auditoría de ruido. Lo que se audita es lo que sale hacia META.
+
+    <h3 style="margin-top:1rem">Las plantillas, una por una</h3>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Cuándo</th><th>Acción</th><th>Detalle</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Se crea y envía a META</td><td class="mono">TEMPLATE_CREATE</td><td>categoría e idioma</td></tr>
+          <tr><td>Se edita una que ya está en META</td><td class="mono">TEMPLATE_UPDATE</td><td>que vuelve a revisión</td></tr>
+          <tr><td>Se envía un borrador</td><td class="mono">TEMPLATE_SUBMIT</td><td>de qué borrador salió</td></tr>
+          <tr><td>Se elimina</td><td class="mono">TEMPLATE_DELETE</td><td>que en META no se deshace</td></tr>
+          <tr><td>Se sincroniza con META</td><td class="mono">TEMPLATE_SYNC</td><td>&mdash;</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="prose" style="font-size:.92rem;color:var(--ink-soft)">
+      La plantilla se identifica por su <strong>nombre</strong>, no por su número interno: el
+      número es de WABA y no significa nada para quien lee la auditoría desde ITManager. Al
+      eliminar, el nombre se consulta <em>antes</em> de borrar &mdash; después ya no existe, y
+      sin él la traza diría que se borró algo pero no qué.
     </p>
   </section>
 
   <hr>
 
   <section>
-    <h2>En qué orden</h2>
-    <ol class="plan">
-      <li>
-        <b>Hacer visibles las filas que ya existen</b>
-        <span>Completar dos columnas que ya existen: el cliente y el email del actor. Con esto solo, todo lo que BackOffice
-        ya audita &mdash;logins, regiones, soporte&mdash; aparece en ITManager y se puede
-        filtrar por persona. Es el cambio de mayor impacto y no agrega eventos nuevos.</span>
-      </li>
-      <li>
-        <b>Unificar el formato de las categorías</b>
-        <span>Según la Decisión 1.</span>
-      </li>
-      <li>
-        <b>Auditar los templates</b>
-        <span>Las cinco acciones de la tabla de arriba.</span>
-      </li>
-    </ol>
+    <h2>Qué no se registra, y por qué</h2>
+
+    <div class="decision">
+      <div class="decision-head">
+        <h3>Guardar un borrador</h3>
+        <p>Es la ausencia más notoria, y es a propósito.</p>
+      </div>
+      <div class="why">
+        Un borrador <b>no sale de la aplicación</b>: se queda en nuestra base y META nunca se
+        entera. Además se guarda solo, cada vez que alguien cambia de modo en el asistente, así
+        que una sola plantilla puede generar veinte registros mientras se arma. Registrarlos
+        llenaría la traza de ruido hasta tapar lo único que ahí importa: <b>quién mandó algo a
+        META</b>. Cuando el borrador finalmente se envía, eso sí queda &mdash; como
+        <code>TEMPLATE_SUBMIT</code>, con el borrador del que salió.
+      </div>
+    </div>
+
+    <div class="decision" style="margin-top:1.1rem">
+      <div class="decision-head">
+        <h3>Subir el archivo de ejemplo</h3>
+        <p>Este es discutible y conviene decidirlo.</p>
+      </div>
+      <div class="why">
+        Cuando una plantilla lleva imagen o video, el archivo se sube a META en el momento de
+        elegirlo. A diferencia del borrador, <b>esto sí sale de la aplicación</b>: queda un
+        archivo en los servidores de META. Hoy no se registra. Es el único caso con efecto
+        afuera que quedó sin traza, y agregarlo es una línea. <b>Queda a criterio del
+        encargado.</b>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top:1.1rem">
+      <b>Lo demás que no se registra no cambia nada:</b> ver listas y detalles, la previsualización
+      del JSON antes de enviar (no escribe nada, es un ensayo), y cerrar sesión (solo borra una
+      cookie del navegador; no hay sesión que cerrar del lado del servidor).
+    </div>
   </section>
 
   <hr>
@@ -576,15 +566,13 @@
   <section>
     <h2>Un punto aparte: el panel de WhatsApp</h2>
     <p class="prose">
-      WABA tiene su propia auditoría y ya registra las plantillas, pero como BackOffice
-      entra con una clave de integración, todas las acciones le figuran como
-      "MobilityBackOffice" y <strong>no queda quién de nuestro equipo la hizo</strong>.
+      WABA tiene su propia auditoría y también registra las plantillas, pero como BackOffice
+      entra con una clave de integración, allá todas las acciones figuran sin usuario.
+      <strong>El "quién" vive en la auditoría central</strong>, que es lo que se pidió.
     </p>
-    <div class="callout">
-      <b>No hace falta tocarlo ahora.</b> Con la auditoría central resuelta, el "quién" queda
-      registrado del lado de ITManager, que es lo que se pidió. Pasarle también la identidad
-      a WABA es un cambio chico y se puede hacer después, si además quieren verlo desde su
-      panel.
+    <div class="callout callout--calm">
+      <b>No hizo falta tocarlo.</b> Pasarle también la identidad a WABA es un cambio chico y se
+      puede hacer después, si además quieren verlo desde su panel.
     </div>
   </section>
 
@@ -592,9 +580,9 @@
 
   <footer>
     <p>
-      Mobility BackOffice &mdash; 31 de agosto de 2026. Detalle técnico en
-      <code>docs/AUDITORIA.md</code>. Nada de esto está implementado todavía: es la propuesta
-      previa a hacerlo.
+      Mobility BackOffice v2.23.0 &mdash; 31 de agosto de 2026. Implementado y verificado
+      contra el entorno de pruebas. Detalle técnico y consultas de verificación en
+      <code>docs/AUDITORIA.md</code>.
     </p>
   </footer>
 

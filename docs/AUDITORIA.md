@@ -116,6 +116,18 @@ Al **borrar** se consulta el nombre antes de la baja: despues ya no existe, y si
 traza diria que se borro algo pero no que. Si esa consulta falla, se borra igual y se
 registra el id — perder la traza es malo, no poder borrar por eso es peor.
 
+## Lo que NO se audita
+
+Las lecturas no: nadie audita que alguien miro una lista. De las escrituras quedan cuatro
+afuera, y solo una es una decision pendiente:
+
+| Que | Por que |
+|---|---|
+| Guardar un borrador | No sale de la aplicacion, y se guarda solo cada vez que se alterna de modo: una plantilla puede generar veinte filas mientras se arma. Cuando se envia, eso si queda (`TEMPLATE_SUBMIT`) |
+| `POST /templates/upload-sample` | **Pendiente de decidir.** A diferencia del borrador, esto **si** sale: queda un archivo en los servidores de META. Es el unico caso con efecto afuera que quedo sin traza |
+| `POST /auth/logout` | Solo limpia una cookie del navegador; no hay sesion del lado del servidor que cerrar |
+| `POST /templates/validate` | Es un ensayo: arma el payload y no escribe nada, ni aca ni en META |
+
 ## Lo que WABA audita por su lado
 
 WABA tiene su propia tabla `AuditLog` y registra las plantillas, pero BackOffice entra con

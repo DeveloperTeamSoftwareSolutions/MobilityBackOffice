@@ -77,12 +77,43 @@ export interface TemplateDetail {
  * Todo string (incluida la expiración del OTP) porque es lo que devuelven los inputs;
  * la conversión a número se hace al enviar, en un solo lugar.
  */
+/**
+ * Un dato variable del mensaje.
+ *
+ * META **exige un ejemplo** por cada variable: es lo que mira el revisor para entender
+ * qué va a ir ahí. Sin ejemplos, rechaza. El `label` es solo para quien arma la
+ * plantilla — no viaja a META, pero hace legible el formulario cuando hay varias.
+ */
+export interface TemplateVariable {
+  /** Número de la variable: el `1` de `{{1}}`. */
+  index: number;
+  /** Dónde aparece. El encabezado admite una sola. */
+  target: 'body' | 'header';
+  /** Nombre para reconocerla (ej. "nombre del cliente"). No va a META. */
+  label: string;
+  /** Valor de ejemplo. **META lo usa para revisar.** */
+  example: string;
+}
+
 export interface TemplateFormState {
+  /**
+   * Título para reconocerla en la lista. No va a META: de acá sale el nombre técnico.
+   */
+  friendlyTitle: string;
   name: string;
   language: string;
   category: string;
   headerType: string;
   headerContent: string;
+  /**
+   * Handle del archivo de ejemplo del encabezado multimedia.
+   *
+   * META exige ver el medio para revisar la plantilla. Lo devuelve la subida; el
+   * archivo en si no vuelve a viajar.
+   */
+  headerHandle: string;
+  /** Nombre del archivo subido. Solo para mostrarlo: no va a META. */
+  headerFileName: string;
   bodyText: string;
   footerText: string;
   buttons: TemplateButton[];
@@ -90,6 +121,8 @@ export interface TemplateFormState {
   addSecurityRecommendation: boolean;
   codeExpirationMinutes: string;
   otpType: string;
+  /** Nombre y ejemplo de cada `{{n}}` del mensaje. */
+  variables: TemplateVariable[];
 }
 
 /** Lo que se manda al crear. */
@@ -99,12 +132,14 @@ export interface CreateTemplatePayload {
   category: string;
   headerType?: string;
   headerContent?: string | null;
+  headerHandle?: string | null;
   bodyText?: string;
   footerText?: string | null;
   buttons?: TemplateButton[];
   addSecurityRecommendation?: boolean;
   codeExpirationMinutes?: number | null;
   otpType?: string;
+  variables?: TemplateVariable[];
 }
 
 /** Lo que se manda al editar. Sin `name` ni `language`: META no los deja cambiar. */

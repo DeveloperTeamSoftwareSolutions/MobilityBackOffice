@@ -7,6 +7,7 @@ import {
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import FormData from 'form-data';
 import { EditPolicy, WabaTemplateRow } from './templates.types';
 
 /**
@@ -210,6 +211,141 @@ export class TemplatesClient {
     }
   }
 
+  /**
+   * Valida y devuelve el payload que se le mandaria a META.
+   *
+   * Lo arma WABA con **el mismo codigo del envio real**, no una reconstruccion: asi lo
+   * que se muestra en la revision es exactamente lo que se manda. No escribe nada.
+   */
+  async validate(input: Record<string, unknown>): Promise<{
+    valid: boolean;
+    errors: string[];
+    payload: unknown;
+    payloadError: string | null;
+  }> {
+    this.assertConfigured();
+
+    try {
+      const res = await firstValueFrom(
+        this.http.post<{
+          data?: { valid?: boolean; errors?: string[]; payload?: unknown; payloadError?: string };
+        }>(`${this.base()}${TEMPLATES_PATH}/validate`, input, {
+          headers: this.headers(),
+          timeout: 20000,
+        }),
+      );
+      const d = res.data?.data ?? {};
+      return {
+        valid: d.valid === true,
+        errors: Array.isArray(d.errors) ? d.errors : [],
+        payload: d.payload ?? null,
+        payloadError: d.payloadError ?? null,
+      };
+    } catch (err) {
+      throw this.wrap(err, 'No se pudo validar la plantilla');
+    }
+  }
+
+  /**
+   * Sube el archivo de ejemplo del encabezado y devuelve el handle de META.
+   *
+   * META exige un ejemplo del medio para revisar una plantilla con encabezado de
+   * imagen, video o documento. El archivo se reenvia a WABA, que es quien tiene la
+   * credencial de META: BackOffice no habla con META directamente.
+   */
+  async uploadSample(
+    file: { buffer: Buffer; originalname: string; mimetype: string },
+    headerType: string,
+  ): Promise<{ handle: string; fileName: string; mimeType: string }> {
+    this.assertConfigured();
+
+    const form = new FormData();
+    form.append('file', file.buffer, {
+      filename: file.originalname,
+      contentType: file.mimetype,
+    });
+    form.append('headerType', headerType);
+
+    try {
+      const res = await firstValueFrom(
+        this.http.post<{ data?: { handle?: string; fileName?: string; mimeType?: string } }>(
+          `${this.base()}${TEMPLATES_PATH}/upload-sample`,
+          form,
+          {
+            headers: { ...this.headers(), ...form.getHeaders() },
+            // Subir un video puede tardar; y el archivo no debe partirse.
+            timeout: 120000,
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity,
+          },
+        ),
+      );
+      const d = res.data?.data ?? {};
+      return {
+        handle: d.handle ?? '',
+        fileName: d.fileName ?? file.originalname,
+        mimeType: d.mimeType ?? file.mimetype,
+      };
+    } catch (err) {
+      throw this.wrap(err, 'No se pudo subir el archivo');
+    }
+  }
+
+  /** Guarda el avance SIN mandar nada a META. Con `draftId` actualiza ese borrador. */
+  async saveDraft(input: Record<string, unknown>): Promise<number | null> {
+    this.assertConfigured();
+
+    try {
+      const res = await firstValueFrom(
+        this.http.post<{ data?: { draftId?: number } }>(
+          `${this.base()}${TEMPLATES_PATH}/drafts`,
+          input,
+          { headers: this.headers(), timeout: 20000 },
+        ),
+      );
+      return res.data?.data?.draftId ?? null;
+    } catch (err) {
+      throw this.wrap(err, 'No se pudo guardar el borrador');
+    }
+  }
+
+  /** Recupera un borrador. `null` si no existe o es de otra cuenta. */
+  async getDraft(id: number): Promise<Record<string, unknown> | null> {
+    this.assertConfigured();
+
+    try {
+      const res = await firstValueFrom(
+        this.http.get<{ data?: Record<string, unknown> }>(
+          `${this.base()}${TEMPLATES_PATH}/drafts/${encodeURIComponent(String(id))}`,
+          { headers: this.headers(), timeout: 20000 },
+        ),
+      );
+      return res.data?.data ?? null;
+    } catch (err) {
+      if (statusOf(err) === 404) return null;
+      throw this.wrap(err, 'No se pudo abrir el borrador');
+    }
+  }
+
+  /** Recien aca el borrador se manda a META. */
+  async submitDraft(id: number, input: Record<string, unknown>): Promise<WabaTemplateRow | null> {
+    this.assertConfigured();
+
+    try {
+      const res = await firstValueFrom(
+        this.http.post<{ data?: WabaTemplateRow }>(
+          `${this.base()}${TEMPLATES_PATH}/drafts/${encodeURIComponent(String(id))}/submit`,
+          input,
+          { headers: this.headers(), timeout: 30000 },
+        ),
+      );
+      return (res.data?.data ?? null) as WabaTemplateRow | null;
+    } catch (err) {
+      if (statusOf(err) === 404) return null;
+      throw this.wrap(err, 'No se pudo enviar el borrador');
+    }
+  }
+
   private assertConfigured(): void {
     if (!this.isConfigured()) {
       throw new ServiceUnavailableException('El panel de WhatsApp no está configurado');
@@ -243,7 +379,17 @@ export class TemplatesClient {
         body?.errors ? { message, errors: body.errors } : message,
       );
     }
-    return new ServiceUnavailableException(fallback);
+
+    /*
+     * En un 5xx tambien se conserva el motivo, si WABA lo mando en su sobre JSON.
+     *
+     * No es un stack trace: WABA arma ese texto con `friendlyError`, que ya extrajo el
+     * mensaje de META y le enmascaro el access token. Tirarlo convierte un problema
+     * configurable ("token mal formado") en un 503 mudo, imposible de diagnosticar desde
+     * la pantalla — que es justo cuando mas hace falta saber que paso.
+     */
+    const motivo = typeof body?.message === 'string' ? body.message.trim() : '';
+    return new ServiceUnavailableException(motivo ? `${fallback}: ${motivo}` : fallback);
   }
 }
 

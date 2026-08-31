@@ -3,10 +3,50 @@ import {
   CreateTemplatePayload,
   Template,
   TemplateDetail,
+  TemplateFormState,
   TemplatesPage,
   TemplatesQuery,
   UpdateTemplatePayload,
 } from './plantillas.types';
+
+/**
+ * El formulario al payload del API.
+ *
+ * Lo comparten enviar, validar y guardar borrador. Si cada uno armara el suyo, el JSON
+ * que se muestra en la revisión podría no ser el que termina viajando — que es
+ * justamente lo que el JSON está ahí para responder.
+ *
+ * AUTHENTICATION no lleva cuerpo, encabezado ni botones: META escribe el texto.
+ */
+export function aPayload(f: TemplateFormState): CreateTemplatePayload {
+  const base = { name: f.name.trim(), language: f.language, category: f.category };
+
+  if (f.category === 'AUTHENTICATION') {
+    const mins = f.codeExpirationMinutes.trim();
+    return {
+      ...base,
+      addSecurityRecommendation: f.addSecurityRecommendation,
+      codeExpirationMinutes: mins === '' ? null : Number(mins),
+      otpType: f.otpType,
+    };
+  }
+
+  const esMedia = f.headerType !== 'NONE' && f.headerType !== 'TEXT';
+
+  return {
+    ...base,
+    headerType: f.headerType,
+    headerContent: f.headerType === 'TEXT' ? f.headerContent : null,
+    // El handle solo aplica a los encabezados multimedia.
+    headerHandle: esMedia ? f.headerHandle || null : null,
+    bodyText: f.bodyText,
+    footerText: f.footerText.trim() || null,
+    buttons: f.buttons,
+    // Los ejemplos son obligatorios para META: sin ellos rechaza la plantilla.
+    variables: f.variables,
+  };
+}
+
 
 interface ApiData<T> {
   success: boolean;
@@ -100,4 +140,79 @@ export function mensajesDeError(err: unknown): string[] {
   if (typeof msg === 'string' && msg.trim()) return [msg];
 
   return ['No se pudo completar la operación. Intentá de nuevo.'];
+}
+
+/** El JSON que se le mandaría a META. No escribe nada: es para revisar antes de enviar. */
+export async function validateTemplate(payload: CreateTemplatePayload): Promise<{
+  valid: boolean;
+  errors: string[];
+  payload: unknown;
+  payloadError: string | null;
+}> {
+  const res = await httpClient.post<{
+    success: boolean;
+    valid: boolean;
+    errors: string[];
+    payload: unknown;
+    payloadError: string | null;
+  }>('/api/templates/validate', payload);
+  return {
+    valid: res.data.valid,
+    errors: res.data.errors ?? [],
+    payload: res.data.payload,
+    payloadError: res.data.payloadError,
+  };
+}
+
+/**
+ * Sube el archivo de ejemplo del encabezado.
+ *
+ * META exige ver el medio para revisar una plantilla con encabezado de imagen, video o
+ * documento. Devuelve el `handle` que hay que mandar al crear.
+ */
+export async function uploadSample(
+  file: File,
+  headerType: string,
+): Promise<{ handle: string; fileName: string; mimeType: string }> {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('headerType', headerType);
+
+  const res = await httpClient.post<ApiData<{ handle: string; fileName: string; mimeType: string }>>(
+    '/api/templates/upload-sample',
+    form,
+  );
+  return res.data.data;
+}
+
+/** Guarda el avance SIN mandar nada a META. Con `draftId` actualiza ese borrador. */
+export async function saveDraft(
+  payload: CreateTemplatePayload & {
+    draftId?: number | null;
+    /** Titulo para reconocer el borrador despues. No va a META. */
+    friendlyTitle?: string | null;
+  },
+): Promise<number | null> {
+  const res = await httpClient.post<{ success: boolean; draftId: number | null }>(
+    '/api/templates/drafts',
+    payload,
+  );
+  return res.data.draftId;
+}
+
+export async function getDraft(id: number): Promise<Record<string, unknown>> {
+  const res = await httpClient.get<ApiData<Record<string, unknown>>>(`/api/templates/drafts/${id}`);
+  return res.data.data;
+}
+
+/** Recién acá el borrador se manda a META. */
+export async function submitDraft(
+  id: number,
+  payload: CreateTemplatePayload,
+): Promise<Template> {
+  const res = await httpClient.post<ApiData<Template>>(
+    `/api/templates/drafts/${id}/submit`,
+    payload,
+  );
+  return res.data.data;
 }

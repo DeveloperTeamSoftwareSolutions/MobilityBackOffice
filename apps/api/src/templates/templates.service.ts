@@ -97,31 +97,7 @@ export class TemplatesService {
    * que usan su asistente y su formulario: no hay dos criterios distintos.
    */
   async create(input: CreateTemplateInput): Promise<Template | null> {
-    const category = input.category.trim().toUpperCase();
-
-    // AUTHENTICATION no lleva cuerpo, encabezado ni botones: META escribe el texto y
-    // arma el boton OTP. Mandar esos campos ahi es un rechazo seguro.
-    const payload: Record<string, unknown> =
-      category === 'AUTHENTICATION'
-        ? {
-            addSecurityRecommendation: input.addSecurityRecommendation === true,
-            codeExpirationMinutes: input.codeExpirationMinutes ?? null,
-            otpType: input.otpType ?? 'COPY_CODE',
-          }
-        : {
-            headerType: input.headerType ?? 'NONE',
-            headerContent: input.headerContent ?? null,
-            bodyText: input.bodyText,
-            footerText: input.footerText ?? null,
-            buttonsJson: serializeButtons(input.buttons),
-          };
-
-    const saved = await this.client.create({
-      name: input.name.trim(),
-      language: input.language.trim(),
-      category,
-      ...payload,
-    });
+    const saved = await this.client.create(aPayloadWaba(input));
     return mapTemplate(saved);
   }
 
@@ -143,6 +119,48 @@ export class TemplatesService {
     return saved ? mapTemplate(saved) : null;
   }
 
+  /**
+   * Valida y devuelve el payload que se le mandaria a META.
+   *
+   * Lo arma WABA con el mismo codigo del envio real: lo que se ve en la revision es
+   * exactamente lo que se manda, no una reconstruccion que pueda desincronizarse.
+   */
+  validate(input: CreateTemplateInput) {
+    return this.client.validate(aPayloadWaba(input));
+  }
+
+  /** Sube el ejemplo del encabezado y devuelve el handle de META. */
+  uploadSample(
+    file: { buffer: Buffer; originalname: string; mimetype: string },
+    headerType: string,
+  ) {
+    return this.client.uploadSample(file, headerType);
+  }
+
+  /**
+   * Guarda el avance sin mandar nada a META.
+   *
+   * Es lo que permite cerrar y seguir despues, y alternar entre el asistente y el
+   * modo avanzado sin perder lo cargado.
+   */
+  saveDraft(input: CreateTemplateInput & { draftId?: number | null }) {
+    return this.client.saveDraft({
+      ...aPayloadWaba(input),
+      draftId: input.draftId ?? null,
+      friendlyTitle: input.friendlyTitle ?? null,
+    });
+  }
+
+  getDraft(id: number) {
+    return this.client.getDraft(id);
+  }
+
+  /** Recien aca el borrador se manda a META. */
+  async submitDraft(id: number, input: CreateTemplateInput): Promise<Template | null> {
+    const saved = await this.client.submitDraft(id, aPayloadWaba(input));
+    return saved ? mapTemplate(saved) : null;
+  }
+
   remove(id: number): Promise<void> {
     return this.client.remove(id);
   }
@@ -151,6 +169,46 @@ export class TemplatesService {
   sync(): Promise<unknown> {
     return this.client.sync();
   }
+}
+
+/**
+ * El input de BackOffice al formato que espera WABA.
+ *
+ * Lo comparten crear, validar, guardar borrador y enviar. Si cada uno armara el suyo,
+ * la vista previa del JSON podria mostrar algo distinto de lo que termina enviandose.
+ *
+ * AUTHENTICATION no lleva cuerpo, encabezado ni botones: META escribe el texto y arma
+ * el boton OTP. Mandar esos campos ahi es un rechazo seguro.
+ */
+function aPayloadWaba(input: CreateTemplateInput): Record<string, unknown> {
+  const category = (input.category ?? '').trim().toUpperCase();
+  const base = {
+    name: (input.name ?? '').trim(),
+    language: (input.language ?? '').trim(),
+    category,
+  };
+
+  if (category === 'AUTHENTICATION') {
+    return {
+      ...base,
+      addSecurityRecommendation: input.addSecurityRecommendation === true,
+      codeExpirationMinutes: input.codeExpirationMinutes ?? null,
+      otpType: input.otpType ?? 'COPY_CODE',
+    };
+  }
+
+  return {
+    ...base,
+    headerType: input.headerType ?? 'NONE',
+    headerContent: input.headerContent ?? null,
+    // El handle del archivo de ejemplo, cuando el encabezado es multimedia.
+    headerHandle: input.headerHandle ?? null,
+    bodyText: input.bodyText,
+    footerText: input.footerText ?? null,
+    buttonsJson: serializeButtons(input.buttons),
+    // Sin los ejemplos META rechaza: los usa para revisar la plantilla.
+    variables: input.variables ?? [],
+  };
 }
 
 /**

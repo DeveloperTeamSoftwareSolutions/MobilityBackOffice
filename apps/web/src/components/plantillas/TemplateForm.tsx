@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   EditPolicy,
   Template,
   TemplateButton,
   TemplateFormState,
 } from './plantillas.types';
+import { aPayload, mensajesDeError, validateTemplate } from './plantillas.api';
+import { HeaderMediaUpload } from './HeaderMediaUpload';
+import { JsonBox } from './JsonBox';
 import { LIMITS, validateForm, variableNumbers } from './plantillas.validate';
 import { TemplatePreview } from './TemplatePreview';
 
@@ -52,17 +55,22 @@ const TIPOS_BOTON = [
 
 export function estadoInicial(template?: Template | null): TemplateFormState {
   return {
+    friendlyTitle: '',
     name: template?.name ?? '',
     language: template?.language ?? 'es_MX',
     category: template?.category ?? 'MARKETING',
     headerType: template?.headerType ?? 'NONE',
     headerContent: template?.headerContent ?? '',
+    // El handle vive solo mientras se arma: el archivo ya subido no vuelve a viajar.
+    headerHandle: '',
+    headerFileName: '',
     bodyText: template?.bodyText ?? '',
     footerText: template?.footerText ?? '',
     buttons: template?.buttons ? template.buttons.map((b) => ({ ...b })) : [],
     addSecurityRecommendation: false,
     codeExpirationMinutes: '',
     otpType: 'COPY_CODE',
+    variables: [],
   };
 }
 
@@ -86,22 +94,36 @@ function comoPlantilla(form: TemplateFormState): Template {
 export function TemplateForm({
   template,
   editPolicy,
+  form,
+  setForm,
   onCancel,
   onSubmit,
+  onWizard,
   saving,
   serverErrors,
+  onSaveDraft,
+  savingDraft,
+  draftNotice,
 }: {
   /** `null` = alta. Con plantilla = edición. */
   template: Template | null;
   editPolicy: EditPolicy | null;
+  /** El estado vive en el contenedor: así alternar de modo no pierde nada. */
+  form: TemplateFormState;
+  setForm: (f: TemplateFormState | ((f: TemplateFormState) => TemplateFormState)) => void;
   onCancel: () => void;
-  onSubmit: (form: TemplateFormState) => void;
+  onSubmit: () => void;
+  /** Volver al asistente. `null` en edición: ahí el asistente no aplica. */
+  onWizard: (() => void) | null;
   saving: boolean;
   /** Errores que devolvió el servidor (validación de WABA o rechazo de META). */
   serverErrors: string[];
+  /** Guardar el avance sin enviar. `null` en edición: lo que ya existe en META no es borrador. */
+  onSaveDraft: (() => void) | null;
+  savingDraft: boolean;
+  draftNotice: string | null;
 }) {
   const esEdicion = template !== null;
-  const [form, setForm] = useState<TemplateFormState>(() => estadoInicial(template));
   const [intentado, setIntentado] = useState(false);
 
   const errores = useMemo(() => validateForm(form, esEdicion), [form, esEdicion]);
@@ -130,14 +152,14 @@ export function TemplateForm({
     e.preventDefault();
     setIntentado(true);
     if (errores.length > 0) return;
-    onSubmit(form);
+    onSubmit();
   };
 
   return (
     <form className="bo-pl__form" onSubmit={enviar} noValidate>
       <div className="bo-pl__formhead">
         <h2 className="bo-pl__formtitle">
-          {esEdicion ? `Editar ${template.name}` : 'Nueva plantilla'}
+          {esEdicion ? `Editar ${template.name}` : 'Nueva plantilla — modo avanzado'}
         </h2>
         <p className="bo-pl__formsub">
           {esEdicion
@@ -272,7 +294,28 @@ export function TemplateForm({
         </div>
       </div>
 
+      <PayloadBox form={form} />
+
+      {draftNotice && <p className="bo-pl__notice">{draftNotice}</p>}
+
       <div className="bo-pl__formactions">
+        {onWizard && (
+          <button type="button" className="bo-pl__btn" onClick={onWizard} disabled={saving}>
+            Volver al asistente
+          </button>
+        )}
+        {/* Guardar sin enviar: una plantilla se arma en varias sesiones. */}
+        {onSaveDraft && (
+          <button
+            type="button"
+            className="bo-pl__btn"
+            onClick={onSaveDraft}
+            disabled={saving || savingDraft}
+          >
+            {savingDraft ? 'Guardando…' : 'Guardar borrador'}
+          </button>
+        )}
+        <span className="bo-pl__spacer" />
         <button type="button" className="bo-pl__btn" onClick={onCancel} disabled={saving}>
           Cancelar
         </button>
@@ -289,6 +332,53 @@ export function TemplateForm({
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * El JSON que se le mandaría a META, pedido al servidor.
+ *
+ * No se arma en el front: lo genera WABA con el mismo código del envío real, así lo que
+ * se muestra es exactamente lo que viaja. Una segunda versión acá podría desincronizarse
+ * en silencio y mostrar algo que no es.
+ */
+function PayloadBox({ form }: { form: TemplateFormState }) {
+  const [abierto, setAbierto] = useState(false);
+  const [payload, setPayload] = useState<unknown>(null);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Se vuelve a pedir si el formulario cambió mientras estaba abierto: un JSON viejo
+  // sería peor que ninguno, porque lo que responde es qué se va a enviar.
+  useEffect(() => {
+    if (!abierto) return;
+    let vigente = true;
+
+    setCargando(true);
+    setError(null);
+    validateTemplate(aPayload(form))
+      .then((res) => {
+        if (!vigente) return;
+        setPayload(res.payload);
+        setError(res.payloadError);
+      })
+      .catch((err) => vigente && setError(mensajesDeError(err)[0]))
+      .finally(() => vigente && setCargando(false));
+
+    return () => {
+      vigente = false;
+    };
+  }, [abierto, form]);
+
+  return (
+    <JsonBox
+      titulo="Ver el JSON que se envía a META"
+      valor={payload}
+      cargando={cargando}
+      error={error}
+      onOpenChange={setAbierto}
+      hint="Es el payload exacto que recibe META. Sirve para entender un rechazo, que suele venir escrito en estos términos."
+    />
   );
 }
 
@@ -349,10 +439,14 @@ function ContentFields({
       )}
 
       {form.headerType !== 'NONE' && form.headerType !== 'TEXT' && (
-        <p className="bo-pl__hint">
-          El archivo lo elige quien envía el mensaje. Acá solo se define que la plantilla
-          lleva un encabezado de este tipo.
-        </p>
+        <>
+          <p className="bo-pl__hint">
+            El archivo que se manda a cada cliente lo elige quien envía el mensaje. Acá se
+            define que la plantilla lleva un encabezado de este tipo, y se sube un ejemplo
+            para que META pueda revisarla.
+          </p>
+          <HeaderMediaUpload form={form} set={set} saving={saving} id="pl-headerfile" />
+        </>
       )}
 
       <div className="bo-pl__field">
@@ -471,6 +565,14 @@ function ContentFields({
           Hasta {LIMITS.MAX_QUICK_REPLY} de respuesta rápida, {LIMITS.MAX_URL_BUTTONS} de
           enlace y {LIMITS.MAX_PHONE_BUTTONS} de llamada.
         </span>
+
+        {form.buttons.length > 0 && (
+          <JsonBox
+            titulo="Ver el JSON de los botones"
+            valor={form.buttons}
+            hint="Es como viajan los botones dentro de la plantilla. Útil para pegárselo a quien integra, o para comparar contra lo que devuelve META."
+          />
+        )}
       </div>
     </>
   );

@@ -4,17 +4,21 @@ import { TemplateFormState } from './plantillas.types';
 
 function form(over: Partial<TemplateFormState> = {}): TemplateFormState {
   return {
+    friendlyTitle: 'Saludo de Navidad',
     name: 'saludo_navidad',
     language: 'es_MX',
     category: 'MARKETING',
     headerType: 'NONE',
     headerContent: '',
+    headerHandle: '',
+    headerFileName: '',
     bodyText: 'Hola {{1}}, felices fiestas.',
     footerText: '',
     buttons: [],
     addSecurityRecommendation: false,
     codeExpirationMinutes: '',
     otpType: 'COPY_CODE',
+    variables: [],
     ...over,
   };
 }

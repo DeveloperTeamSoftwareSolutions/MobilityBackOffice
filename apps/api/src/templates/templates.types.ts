@@ -133,6 +133,20 @@ export interface TemplateDetail {
  * traduce: no se manda `bodyText`, ni encabezado, ni botones normales. Solo se
  * configuran las tres opciones de abajo. Mandar un cuerpo ahi es un rechazo seguro.
  */
+/**
+ * Un dato variable del mensaje.
+ *
+ * **META exige un `example` por cada variable**: es lo que mira el revisor para saber
+ * que va a ir ahi. Sin ejemplos rechaza la plantilla, y es de los motivos de rechazo
+ * mas frecuentes. El `label` no viaja a META — es para quien arma la plantilla.
+ */
+export interface TemplateVariable {
+  index: number;
+  target: 'body' | 'header';
+  label?: string;
+  example: string;
+}
+
 export interface CreateTemplateInput {
   name: string;
   language: string;
@@ -143,6 +157,12 @@ export interface CreateTemplateInput {
   bodyText?: string;
   footerText?: string | null;
   buttons?: TemplateButton[];
+  /** Handle del archivo de ejemplo, cuando el encabezado es multimedia. */
+  headerHandle?: string | null;
+  /** Titulo para reconocerla. No va a META: solo se guarda en el borrador. */
+  friendlyTitle?: string | null;
+  /** Nombre y ejemplo de cada `{{n}}`. Sin los ejemplos, META rechaza. */
+  variables?: TemplateVariable[];
 
   // ---- Solo AUTHENTICATION ----
   /** Suma la frase de META que recomienda no compartir el codigo. */

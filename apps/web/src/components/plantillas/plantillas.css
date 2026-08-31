@@ -226,72 +226,138 @@
   background: var(--bo-bg);
 }
 
+/* ---- Vista previa: la burbuja como la dibuja WhatsApp ---- */
+
 .bo-pl__preview {
   max-width: 380px;
   padding: 8px 0;
 }
 
-.bo-pl__bubble {
-  padding: 10px 12px;
-  border-radius: 10px 10px 10px 2px;
-  background: var(--bo-surface);
+/*
+ * El fondo del chat. Da el contexto que hace legible la burbuja: sobre el fondo blanco
+ * de la tarjeta, un mensaje claro no se distingue de la pantalla.
+ */
+.bo-pl__chat {
+  padding: 14px 12px;
+  border-radius: var(--bo-radius-sm);
   border: 1px solid var(--bo-border);
-  box-shadow: var(--bo-shadow);
+  background-color: #ece5dd;
+  background-image: radial-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+.bo-pl__bubble {
+  position: relative;
+  padding: 8px 10px 6px;
+  border-radius: 8px 8px 8px 2px;
+  background: #ffffff;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.16);
   font-size: 14px;
-  line-height: 1.5;
-  color: var(--bo-text);
+  line-height: 1.45;
+  color: #111b21;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .bo-pl__header {
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   font-weight: 600;
 }
 
+.bo-pl__body {
+  min-height: 20px;
+}
+
+/* El hueco del multimedia: la plantilla define el espacio, no el archivo. */
+.bo-pl__media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 96px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  background: #dfe5e7;
+  color: #54656f;
+}
+
+.bo-pl__mediaicon {
+  font-size: 24px;
+  line-height: 1;
+}
+
 .bo-pl__headermedia {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: var(--bo-bg);
-  border: 1px solid var(--bo-border);
   font-size: 12px;
   font-weight: 600;
-  color: var(--bo-text-muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .bo-pl__footer {
   margin-top: 6px;
   font-size: 12px;
-  color: var(--bo-text-muted);
+  color: #667781;
+}
+
+.bo-pl__notext {
+  color: #8696a0;
+  font-style: italic;
+}
+
+/* La hora y el doble tilde: sin eso la burbuja no se lee como un mensaje. */
+.bo-pl__meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #667781;
+}
+
+.bo-pl__ticks {
+  color: #53bdeb;
+  letter-spacing: -2px;
 }
 
 /* La variable se resalta: sin completarla, la plantilla no se puede enviar. */
 .bo-pl__var {
   padding: 0 3px;
   border-radius: 3px;
-  background: rgba(13, 148, 136, 0.12);
-  color: var(--bo-accent-hover);
+  background: rgba(0, 128, 105, 0.14);
+  color: #00806a;
   font-weight: 600;
 }
 
+/* WhatsApp dibuja los botones fuera de la burbuja, apilados. */
 .bo-pl__buttons {
-  margin: 8px 0 0;
+  margin: 4px 0 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .bo-pl__button {
-  padding: 7px 10px;
-  border: 1px solid var(--bo-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
   border-radius: 8px;
-  background: var(--bo-surface);
+  background: #ffffff;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.16);
   font-size: 13px;
-  color: var(--bo-primary);
-  text-align: center;
+  color: #00a5f4;
+}
+
+.bo-pl__buttonicon {
+  font-size: 12px;
+}
+
+.bo-pl__buttonlabel {
+  overflow-wrap: anywhere;
 }
 
 /* ---- Paginador ---- */
@@ -388,6 +454,18 @@
   display: flex;
   gap: 6px;
   white-space: nowrap;
+  /*
+   * La celda alinea al tope (conviene para los textos largos de otras columnas),
+   * pero los botones tienen que quedar a la altura del nombre. Sin esto se van
+   * arriba y el borde inferior de la fila se ve quebrado.
+   */
+  align-items: flex-start;
+  padding-top: 0;
+}
+
+/* Los botones de acción no estiran la fila más que el texto. */
+.bo-pl__rowactions .bo-pl__btn--sm {
+  line-height: 1.35;
 }
 
 .bo-pl__btn {
@@ -567,4 +645,290 @@
 
 .bo-pl__errlist li {
   margin-bottom: 3px;
+}
+
+.bo-pl__filterbox {
+  min-width: 170px;
+  flex: 0 1 170px;
+}
+
+/* ---- Asistente ---- */
+
+.bo-pl__wizard {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Barra de pasos: dónde estoy y cuánto falta. */
+.bo-pl__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0 0 14px;
+  list-style: none;
+  border-bottom: 1px solid var(--bo-border);
+}
+
+.bo-pl__step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px 5px 6px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--bo-text-muted);
+}
+
+.bo-pl__stepnum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--bo-border);
+  background: var(--bo-surface);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.bo-pl__step--now {
+  background: var(--bo-bg);
+  color: var(--bo-text);
+  font-weight: 600;
+}
+
+.bo-pl__step--now .bo-pl__stepnum {
+  border-color: var(--bo-primary);
+  background: var(--bo-primary);
+  color: #fff;
+}
+
+.bo-pl__step--done .bo-pl__stepnum {
+  border-color: var(--bo-accent);
+  color: var(--bo-accent);
+}
+
+.bo-pl__steptitle {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--bo-text);
+}
+
+/* Motivo por el que no se puede avanzar: al lado del botón, no escondido. */
+.bo-pl__stepblock {
+  margin: 0;
+  padding: 9px 12px;
+  border-left: 3px solid var(--bo-warning);
+  border-radius: 0 var(--bo-radius-sm) var(--bo-radius-sm) 0;
+  background: rgba(180, 83, 9, 0.06);
+  font-size: 13px;
+  color: var(--bo-text);
+}
+
+/* ---- Elegir el objetivo ---- */
+
+.bo-pl__choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bo-pl__choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius);
+  background: var(--bo-surface);
+  cursor: pointer;
+}
+
+.bo-pl__choice:hover {
+  border-color: var(--bo-accent);
+}
+
+.bo-pl__choice--on {
+  border-color: var(--bo-primary);
+  box-shadow: 0 0 0 3px var(--bo-focus-ring);
+}
+
+.bo-pl__choice > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bo-pl__choicelabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bo-text);
+}
+
+/* ---- Datos variables ---- */
+
+.bo-pl__varrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.bo-pl__varrow .bo-pl__input {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
+.bo-pl__vartag {
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(13, 148, 136, 0.12);
+  color: var(--bo-accent-hover);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bo-pl__inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---- Revisión ---- */
+
+.bo-pl__review {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.bo-pl__review dt {
+  font-weight: 600;
+  color: var(--bo-text-muted);
+}
+
+.bo-pl__review dd {
+  margin: 0;
+  color: var(--bo-text);
+  word-break: break-word;
+}
+
+/* Empuja las acciones de la derecha, dejando las de modo a la izquierda. */
+.bo-pl__spacer {
+  flex: 1;
+}
+
+.bo-pl__formactions {
+  align-items: center;
+}
+
+/*
+ * Celda de acciones: alinea con la primera línea de la fila, no con el tope de la
+ * celda más alta. Sin esto los botones flotaban por encima del nombre y el borde
+ * inferior de la fila se veía quebrado.
+ */
+.bo-pl__actionscell {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.bo-pl__actionscell .bo-pl__btn {
+  margin-right: 6px;
+}
+
+.bo-pl__actionscell .bo-pl__btn:last-child {
+  margin-right: 0;
+}
+
+/* ---- Archivo de ejemplo del encabezado ---- */
+
+.bo-pl__file {
+  padding: 8px;
+  border: 1px dashed var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-bg);
+  font: inherit;
+  font-size: 13px;
+  color: var(--bo-text);
+}
+
+.bo-pl__file:disabled {
+  opacity: 0.6;
+}
+
+.bo-pl__filedone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-surface);
+  font-size: 13px;
+}
+
+.bo-pl__fileok {
+  color: var(--bo-success);
+  font-weight: 700;
+}
+
+.bo-pl__filename {
+  flex: 1;
+  overflow-wrap: anywhere;
+  color: var(--bo-text);
+}
+
+/* ---- JSON plegable ---- */
+
+.bo-pl__json {
+  margin-top: 14px;
+}
+
+.bo-pl__jsontoggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--bo-accent);
+  cursor: pointer;
+}
+
+.bo-pl__jsontoggle:hover {
+  text-decoration: underline;
+}
+
+.bo-pl__jsoncaret {
+  font-size: 11px;
+}
+
+.bo-pl__jsonbody {
+  margin: 8px 0 0;
+  padding: 12px;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-bg);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--bo-text);
+  white-space: pre;
+  tab-size: 2;
 }

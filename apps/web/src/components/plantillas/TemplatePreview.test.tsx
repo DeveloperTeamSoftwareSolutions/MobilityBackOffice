@@ -94,4 +94,42 @@ describe('TemplatePreview', () => {
     expect(container.textContent).toContain('Mensaje fijo');
     expect(container.querySelectorAll('.bo-pl__var')).toHaveLength(0);
   });
+  it('aplica el formato de WhatsApp', () => {
+    // WhatsApp interpreta *negrita*, _cursiva_ y ~tachado~ en el mensaje real: si acá se
+    // mostraran los asteriscos, la vista previa mentiría.
+    const { container } = render(
+      <TemplatePreview
+        template={template({ bodyText: 'Hola *María*, tu _turno_ fue ~cancelado~.' })}
+      />,
+    );
+    expect(container.querySelector('strong')?.textContent).toBe('María');
+    expect(container.querySelector('em')?.textContent).toBe('turno');
+    expect(container.querySelector('s')?.textContent).toBe('cancelado');
+  });
+
+  it('no deja los asteriscos a la vista', () => {
+    const { container } = render(
+      <TemplatePreview template={template({ bodyText: 'Hola *María*' })} />,
+    );
+    expect(container.textContent).not.toContain('*');
+  });
+
+  it('dibuja la burbuja sobre el fondo del chat', () => {
+    // Sin el fondo, un mensaje claro no se distingue del blanco de la tarjeta.
+    const { container } = render(<TemplatePreview template={template()} />);
+    expect(container.querySelector('.bo-pl__chat')).not.toBeNull();
+    expect(container.querySelector('.bo-pl__bubble')).not.toBeNull();
+  });
+
+  it('los botones van fuera de la burbuja, como los dibuja WhatsApp', () => {
+    const { container } = render(
+      <TemplatePreview
+        template={template({
+          buttons: [{ type: 'QUICK_REPLY', text: 'Confirmar', url: null, phoneNumber: null }],
+        })}
+      />,
+    );
+    expect(container.querySelector('.bo-pl__bubble .bo-pl__buttons')).toBeNull();
+    expect(container.querySelector('.bo-pl__chat > .bo-pl__buttons')).not.toBeNull();
+  });
 });

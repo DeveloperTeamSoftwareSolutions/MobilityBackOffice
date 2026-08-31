@@ -1,6 +1,6 @@
 # Plantillas de WhatsApp — especificacion
 
-> Ultima actualizacion: 2026-08-31 · Version: 2.17.0
+> Ultima actualizacion: 2026-08-31 · Version: 2.18.0
 >
 > Seccion "Templates de WhatsApp" (rol Marketing). Consulta, crea y edita las plantillas
 > del panel WABA sin abrirlo y sin un segundo login.
@@ -127,16 +127,88 @@ filtrar: entonces la UI avisa sola.
 
 ## 6. Crear y editar
 
-Los endpoints nuevos de WABA **reusan `templateService`**, que es donde vive el dialogo
-con META. No hay una segunda integracion que mantener sincronizada:
+Los endpoints de WABA **reusan `templateService`**, que es donde vive el dialogo con
+META. No hay una segunda integracion que mantener sincronizada:
 
 ```
-GET    /api/templates/:id    detalle + politica de edicion
-POST   /api/templates        crear y enviar a aprobacion
-PUT    /api/templates/:id    editar y reenviar
-DELETE /api/templates/:id    borrar (META y local)
-POST   /api/templates/sync   traer de META lo que cambio alla
+GET    /api/templates/:id                 detalle + politica de edicion
+POST   /api/templates                     crear y enviar a aprobacion
+PUT    /api/templates/:id                 editar y reenviar
+DELETE /api/templates/:id                 borrar (META y local; un borrador, solo local)
+POST   /api/templates/sync                traer de META lo que cambio alla
+POST   /api/templates/validate            el JSON que se le mandaria a META (no escribe nada)
+POST   /api/templates/upload-sample       el archivo de ejemplo del encabezado multimedia
+POST   /api/templates/drafts              guardar el avance sin mandar nada a META
+GET    /api/templates/drafts/:id          recuperar un borrador
+POST   /api/templates/drafts/:id/submit   recien aca el borrador se manda a META
 ```
+
+> Orden de rutas: las literales (`status`, `sync`, `validate`, `upload-sample`,
+> `drafts`) van **antes** de `:id`, si no entran como identificador.
+
+### Dos modos, un solo estado
+
+Igual que WABA, hay **asistente** y **modo avanzado**, y se alterna entre los dos sin
+perder lo cargado.
+
+| | Asistente | Modo avanzado |
+|---|---|---|
+| Pregunta | el **objetivo** ("avisar algo a un cliente") | la **categoria** de META (`UTILITY`) |
+| Nombre tecnico | se propone desde el titulo | se escribe |
+| Forma | 6 pasos, cada uno con lo que falta explicado | todo junto |
+| Para | armar desde cero | corregir algo puntual, o editar |
+
+**El estado vive en `TemplateEditor`**, no en cada modo: alternar cambia que se dibuja,
+no los datos. WABA hace lo mismo por otra via —guarda un borrador y redirige, porque son
+dos paginas del servidor—; aca es una sola pantalla y el cambio es inmediato.
+
+Aun asi el borrador **tambien** se guarda al alternar, como en WABA: el estado en memoria
+se pierde si se cierra la pestaña. Si ese guardado falla, se cambia de modo igual y queda
+el aviso — perder el modo por un error de red seria peor que quedarse sin borrador,
+porque los datos siguen en pantalla.
+
+**Editar entra directo al modo avanzado**: el asistente pregunta el objetivo y propone el
+nombre tecnico, dos cosas que en una plantilla existente ya estan decididas y META no
+deja cambiar.
+
+### Borradores
+
+Una plantilla se arma en varias sesiones —hay que conseguir el texto aprobado, el arte
+del encabezado—. Sin borradores lo unico posible era enviarla o perderla.
+
+- `POST /drafts` sin `draftId` crea; **con** `draftId` actualiza ese mismo. El id se
+  guarda en una `ref`, no en estado: dos guardados seguidos leyendo un valor viejo
+  dejarian un borrador duplicado por cada uno.
+- Un borrador nunca llego a META. Se borra solo local, y su `status` es `DRAFT`.
+- Solo en alta: **lo que ya existe en META no es un borrador**, asi que en edicion el
+  boton no aparece.
+
+### El archivo de ejemplo del encabezado
+
+META **exige ver el medio** para revisar una plantilla con encabezado de imagen, video o
+documento. Es la confusion mas probable de la pantalla, asi que esta dicha explicitamente:
+*no es el archivo que se envia a los clientes* — ese lo elige quien manda cada mensaje.
+
+El archivo va a WABA, que es quien tiene la credencial de META; BackOffice no habla con
+META. WABA usa la **Resumable Upload API** (contra el App ID, no contra el
+`phone_number_id`) y devuelve un `handle`. Lo que se guarda es el handle: el archivo no
+vuelve a viajar, ni siquiera al reenviar la plantilla.
+
+Los tipos se cortan en los dos lados (JPG/PNG, MP4/3GP, PDF) y el tamaño en 25 MB, para
+no subir algo que va a rebotar del otro lado.
+
+### El JSON, plegado
+
+Se puede ver el payload exacto que recibe META, y el de los botones por separado. Sirve
+para dos cosas: entender un rechazo —el mensaje de META habla de
+`components[1].parameters`, no de "el boton de abajo"— y pegarle el payload a quien
+integra.
+
+**No se arma en el front.** Lo genera WABA con el mismo codigo del envio real
+(`buildMetaComponents`), asi lo que se muestra es exactamente lo que viaja. Una segunda
+version en el front podria desincronizarse en silencio y mostrar algo que no es. Va
+cerrado por defecto y se vuelve a pedir si el formulario cambio mientras estaba abierto:
+un JSON viejo seria peor que ninguno.
 
 ### Tres cosas que la pantalla deja explicitas
 
@@ -149,8 +221,9 @@ En edicion van bloqueados y el `PUT` ni siquiera los lee.
 
 **AUTHENTICATION es otra cosa.** Ahi META **escribe el texto** y lo traduce: no hay
 mensaje, ni encabezado, ni botones que configurar. Solo la advertencia de seguridad, la
-validez del codigo (1 a 90 minutos) y el boton de copiar. El formulario cambia entero al
-elegir esa categoria, y no muestra vista previa porque el texto todavia no existe.
+validez del codigo (1 a 90 minutos) y el boton de copiar. El asistente reemplaza los
+pasos de contenido por el del codigo, y no muestra vista previa porque el texto todavia
+no existe.
 
 ### La validacion corre en dos lugares, y no es duplicacion
 
@@ -164,35 +237,61 @@ muestra tal cual. Lo que evita es el viaje de ida y vuelta por algo que ya se sa
 esta mal — una variable salteada, un texto de mas, cuatro botones de respuesta rapida.
 
 La regla que mas se rompe: **las variables tienen que ir `{{1}}, {{2}}, {{3}}` sin
-saltos**. META numera los ejemplos por posicion y un hueco es rechazo.
+saltos**, y el encabezado numera aparte del cuerpo. META numera los ejemplos por posicion
+y un hueco es rechazo.
 
 ### Los errores del servidor se muestran, no se tapan
 
-El client traduce los 4xx de WABA a errores de Nest conservando el mensaje: son cosas
-que quien escribe la plantilla puede corregir. Un `409` es el caso mas claro — "esta en
+El client traduce los 4xx de WABA a errores de Nest conservando el mensaje: son cosas que
+quien escribe la plantilla puede corregir. Un `409` es el caso mas claro — "esta en
 revision, no se puede editar ahora" no es una falla del servidor.
 
+En un **5xx tambien se conserva el motivo** cuando WABA lo mando en su sobre JSON. No es
+un stack trace: WABA lo arma con `friendlyError`, que ya extrajo el mensaje de META y le
+**enmascaro el access token** —META lo devuelve completo cuando es invalido—. Tirarlo
+convertia un problema configurable ("Malformed access token") en un 503 mudo, imposible
+de diagnosticar desde la pantalla.
+
 ---
+
 ## 7. Archivos
 
 **Backend** (`apps/api/src/templates/`)
 
 | Archivo | Que hace |
 |---|---|
-| `templates.client.ts` | WABA `/api/templates` con `x-api-key`; traduce sus 4xx conservando el mensaje |
+| `templates.client.ts` | WABA `/api/templates` con `x-api-key`; conserva sus mensajes de error |
 | `templates.util.ts` | Parseo defensivo, variables con fallback, resumen |
-| `templates.service.ts` | Filtra, ordena, pagina; separa el payload de AUTHENTICATION |
-| `templates.controller.ts` | `@Roles(Marketing)`, whitelist de sort y estado, CRUD |
+| `templates.service.ts` | Filtra, ordena, pagina; `aPayloadWaba` es el **unico** armador |
+| `templates.controller.ts` | `@Roles(Marketing)`, whitelist de sort y estado, CRUD, borradores, subida |
 
 **Frontend** (`apps/web/src/components/plantillas/`)
 
 | Archivo | Que hace |
 |---|---|
+| `plantillas.api.ts` | Llamadas al API y `aPayload`: el **unico** armador del lado del front |
 | `plantillas.format.ts` | La traduccion a castellano de estados, categorias e idiomas |
 | `plantillas.validate.ts` | Las reglas de META, para avisar mientras se escribe |
-| `TemplatePreview.tsx` | **Como le llega el mensaje al cliente**, con las variables resaltadas |
-| `TemplateForm.tsx` | Alta y edicion. Cambia entero segun la categoria |
-| `PlantillasPanel.tsx` | Compone: contadores, buscador, tabla, formulario y acciones |
+| `wizard.helpers.ts` | Nombre tecnico, variables, pasos y **el motivo** por el que no se avanza |
+| `TemplatePreview.tsx` | **Como le llega el mensaje al cliente**: burbuja, formato, botones |
+| `TemplateWizard.tsx` | El asistente de 6 pasos |
+| `TemplateForm.tsx` | El modo avanzado, y la edicion |
+| `TemplateEditor.tsx` | Sostiene el estado compartido y el borrador; decide el modo |
+| `HeaderMediaUpload.tsx` | El archivo de ejemplo del encabezado multimedia |
+| `JsonBox.tsx` | El JSON plegado |
+| `PlantillasPanel.tsx` | Compone: filtro, buscador, tabla, editor y acciones |
+
+**En el repo de WABA** (`WhatsAppApiCloud-META-WABA`)
+
+| Archivo | Que cambio |
+|---|---|
+| `routes/apiRoutes.js` | Los endpoints REST nuevos, reusando `templateService` |
+| `services/whatsappService.js` | `friendlyError` se mudo aca, junto al enmascarado de secretos |
+| `controllers/templateController.js` | Usa ese `friendlyError` en vez de su copia |
+
+`GET /api/templates` **sin query params** sigue devolviendo el array plano de aprobadas:
+es lo que consume el selector de plantillas al enviar un mensaje
+(`public/js/sendMessage.js`). Cambiar esa forma rompia el envio.
 
 ---
 
@@ -209,31 +308,60 @@ Van en **`apps/api/.env`**, no en el de la raiz: el API arranca con
 `GET /api/templates/status` existe para que el front distinga **"no hay plantillas"** de
 **"esto no esta configurado"**, que en pantalla se ven igual.
 
+Del lado de WABA, subir el ejemplo del encabezado necesita **App ID y un access token
+valido** en la cuenta. Sin eso, la subida falla con el motivo de META a la vista
+(enmascarado); el resto de la seccion funciona igual.
+
 ---
 
 ## 9. Checklist de verificacion
 
+**Lectura**
+
 - [ ] Sin `WABA_API_URL`/`WABA_API_KEY`, la seccion avisa que falta configurar (no queda en blanco).
 - [ ] Con las variables puestas, se listan las plantillas de la cuenta.
-- [ ] El contador por estado filtra al hacer clic, y no cambia al navegar.
-- [ ] Aparece el aviso de que la fuente publica solo aprobadas.
-- [ ] La vista previa arma el mensaje con las variables **resaltadas**.
+- [ ] El filtro por estado no se pierde al navegar entre paginas.
+- [ ] Aparece el aviso cuando la fuente publica solo aprobadas.
+- [ ] Se ven las plantillas en revision y las rechazadas, no solo las aprobadas.
 - [ ] Una plantilla con `ButtonsJson` roto se lista igual, sin botones y sin romper la pagina.
 - [ ] Una plantilla sin `VariablesJson` igual muestra sus variables (salen del `BodyText`).
 - [ ] Un usuario con rol `Marketing` entra; uno con `Soporte` no.
-- [ ] Se ven las plantillas en revision y las rechazadas, no solo las aprobadas.
+
+**Vista previa**
+
+- [ ] La burbuja se ve sobre el fondo del chat, con hora y doble tilde.
+- [ ] Las variables van resaltadas.
+- [ ] `*negrita*`, `_cursiva_` y `~tachado~` se ven aplicados, sin los simbolos.
+- [ ] Los botones se dibujan **fuera** de la burbuja, apilados.
+
+**Crear**
+
+- [ ] El alta arranca en el asistente; editar entra directo al modo avanzado.
+- [ ] Se alterna entre modos **sin perder** lo cargado.
+- [ ] Al alternar se guarda un borrador; si falla, igual se cambia de modo y avisa.
+- [ ] El segundo guardado **actualiza** el mismo borrador, no crea otro.
+- [ ] En edicion no aparece "Guardar borrador".
+- [ ] El asistente dice **que falta** para avanzar, no deja un boton apagado sin explicacion.
 - [ ] El formulario avisa si las variables van salteadas (`{{1}}` y `{{3}}`).
 - [ ] Al elegir AUTHENTICATION desaparecen mensaje, encabezado y botones.
 - [ ] En edicion, nombre e idioma estan bloqueados.
 - [ ] Una plantilla en revision no se puede editar, y la pantalla lo dice antes de escribir.
 - [ ] Eliminar pide confirmacion: en META no se deshace.
 
+**JSON y archivos**
+
+- [ ] El JSON arranca cerrado y solo se pide al abrirlo.
+- [ ] Al cambiar el formulario con el JSON abierto, se vuelve a pedir.
+- [ ] Con encabezado de imagen/video/documento aparece el campo de archivo.
+- [ ] Un archivo del tipo equivocado se rechaza con el motivo.
+- [ ] Si la subida falla, **no queda** el handle anterior junto al archivo nuevo.
+- [ ] Un fallo de META llega con su motivo (token, tamaño), no como un 503 mudo.
+
 ---
 
 ## 10. Lo que NO se hizo
 
-- **Duplicar el asistente de WABA.** Su wizard tiene validacion en vivo, borradores y
-  carga de ejemplos. Aca hay un formulario directo: para casos complejos, el panel.
+- **Listar los borradores para retomarlos.** Se guardan y se actualizan, pero volver a
+  uno abierto en otra sesion todavia se hace desde el panel de WABA.
 - **Multi-cuenta.** La key resuelve una sola cuenta WABA.
 - **Pasar por el middleware.** Ver §2.
-- **Tocar el repo de WABA.** No se modifico una sola linea.

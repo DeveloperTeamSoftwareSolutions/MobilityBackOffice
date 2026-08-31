@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import {
+  aPayload,
   createTemplate,
   deleteTemplate,
   getStatus,
@@ -10,7 +11,6 @@ import {
   updateTemplate,
 } from './plantillas.api';
 import {
-  CreateTemplatePayload,
   EditPolicy,
   SortableField,
   Template,
@@ -27,7 +27,7 @@ import {
   variablesLabel,
 } from './plantillas.format';
 import { TemplatePreview } from './TemplatePreview';
-import { TemplateForm } from './TemplateForm';
+import { TemplateEditor } from './TemplateEditor';
 import './plantillas.css';
 
 const PAGE_SIZE = 25;
@@ -154,31 +154,6 @@ export function PlantillasPanel() {
     }
   };
 
-  /** El formulario al payload del API. La expresión numérica se convierte acá. */
-  const aPayload = (f: TemplateFormState): CreateTemplatePayload => {
-    const esAuth = f.category === 'AUTHENTICATION';
-    const base = { name: f.name.trim(), language: f.language, category: f.category };
-
-    if (esAuth) {
-      const mins = f.codeExpirationMinutes.trim();
-      return {
-        ...base,
-        addSecurityRecommendation: f.addSecurityRecommendation,
-        codeExpirationMinutes: mins === '' ? null : Number(mins),
-        otpType: f.otpType,
-      };
-    }
-
-    return {
-      ...base,
-      headerType: f.headerType,
-      headerContent: f.headerType === 'TEXT' ? f.headerContent : null,
-      bodyText: f.bodyText,
-      footerText: f.footerText.trim() || null,
-      buttons: f.buttons,
-    };
-  };
-
   const guardar = async (f: TemplateFormState) => {
     setGuardando(true);
     setErroresServidor([]);
@@ -249,7 +224,7 @@ export function PlantillasPanel() {
 
       {configured === true && editando && (
         <div className="bo-card">
-          <TemplateForm
+          <TemplateEditor
             template={editando.template}
             editPolicy={editando.editPolicy}
             onCancel={() => setEditando(null)}
@@ -264,7 +239,13 @@ export function PlantillasPanel() {
         <>
           {aviso && <p className="bo-pl__notice">{aviso}</p>}
 
-          {page && <StatusBar page={page} status={status} onFilter={filtrarPor} />}
+          {page?.onlyApproved && (
+            <p className="bo-pl__notice">
+              El panel de WhatsApp está publicando <strong>solo las plantillas aprobadas</strong>.
+              Las que están en revisión o fueron rechazadas existen, pero desde acá no se ven
+              todavía.
+            </p>
+          )}
 
           <div className="bo-card bo-pl__toolbar">
             <div className="bo-pl__searchbox">
@@ -275,10 +256,32 @@ export function PlantillasPanel() {
                 id="bo-pl-search"
                 type="search"
                 className="bo-pl__input"
-                placeholder="Nombre, texto del mensaje, categoría…"
+                placeholder="Nombre o texto del mensaje…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+            </div>
+
+            <div className="bo-pl__filterbox">
+              <label className="bo-pl__label" htmlFor="bo-pl-status">
+                Estado
+              </label>
+              <select
+                id="bo-pl-status"
+                className="bo-pl__input"
+                value={status ?? ''}
+                onChange={(e) =>
+                  filtrarPor(e.target.value === '' ? null : (e.target.value as TemplateStatus))
+                }
+              >
+                <option value="">Todos</option>
+                <option value="APPROVED">Aprobadas</option>
+                <option value="PENDING">En revisión</option>
+                <option value="REJECTED">Rechazadas</option>
+                <option value="DRAFT">Borradores</option>
+                <option value="PAUSED">Pausadas</option>
+                <option value="DISABLED">Deshabilitadas</option>
+              </select>
             </div>
 
             <div className="bo-pl__actions">
@@ -348,65 +351,6 @@ export function PlantillasPanel() {
             )}
           </div>
         </>
-      )}
-    </>
-  );
-}
-
-/**
- * Cuántas hay en cada estado, y cada contador filtra.
- *
- * Cuando la fuente solo devuelve aprobadas, lo dice: si no, la pantalla daría a entender
- * que no hay ninguna en revisión ni rechazada.
- */
-function StatusBar({
-  page,
-  status,
-  onFilter,
-}: {
-  page: TemplatesPage;
-  status: TemplateStatus | null;
-  onFilter: (s: TemplateStatus | null) => void;
-}) {
-  const estados = Object.keys(page.summary).sort();
-
-  return (
-    <>
-      <div className="bo-pl__summary">
-        <button
-          type="button"
-          className={`bo-pl__card${status === null ? ' bo-pl__card--active' : ''}`}
-          aria-pressed={status === null}
-          onClick={() => onFilter(null)}
-        >
-          <span className="bo-pl__cardvalue">{page.pagination.total}</span>
-          <span className="bo-pl__cardlabel">Todas</span>
-        </button>
-
-        {estados.map((e) => {
-          const s = e as TemplateStatus;
-          const activo = status === s;
-          return (
-            <button
-              key={e}
-              type="button"
-              className={`bo-pl__card bo-pl__card--${statusTone(s)}${activo ? ' bo-pl__card--active' : ''}`}
-              aria-pressed={activo}
-              onClick={() => onFilter(activo ? null : s)}
-            >
-              <span className="bo-pl__cardvalue">{page.summary[e]}</span>
-              <span className="bo-pl__cardlabel">{statusLabel(s)}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {page.onlyApproved && (
-        <p className="bo-pl__notice">
-          El panel de WhatsApp está publicando <strong>solo las plantillas aprobadas</strong>.
-          Las que están en revisión o fueron rechazadas existen, pero desde acá no se ven
-          todavía.
-        </p>
       )}
     </>
   );
@@ -501,7 +445,7 @@ function TemplatesTable({
                     {hint && <span className="bo-pl__statushint">{hint}</span>}
                   </td>
                   <td>{variablesLabel(t)}</td>
-                  <td className="bo-pl__rowactions">
+                  <td className="bo-pl__actionscell">
                     <button
                       type="button"
                       className="bo-pl__btn bo-pl__btn--sm"

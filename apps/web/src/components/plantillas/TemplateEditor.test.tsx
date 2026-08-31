@@ -1,0 +1,137 @@
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { TemplateEditor } from './TemplateEditor';
+import { httpClient } from '../../api/httpClient';
+
+/** Se intercepta el cliente HTTP: así el test recorre el `saveDraft` real. */
+function interceptarBorrador(draftId: number | null = 60) {
+  return vi
+    .spyOn(httpClient, 'post')
+    .mockResolvedValue({ data: { success: true, draftId } } as never);
+}
+
+function montar(over: Partial<Parameters<typeof TemplateEditor>[0]> = {}) {
+  return render(
+    <TemplateEditor
+      template={null}
+      editPolicy={null}
+      onCancel={vi.fn()}
+      onSubmit={vi.fn()}
+      saving={false}
+      serverErrors={[]}
+      {...over}
+    />,
+  );
+}
+
+/**
+ * El estado vive en el contenedor, así que alternar de modo no pierde nada. Además se
+ * guarda un borrador al alternar —como hace WABA—, porque el estado en memoria se pierde
+ * si se cierra la pestaña y el borrador sobrevive.
+ */
+describe('TemplateEditor', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('el alta arranca en el asistente', () => {
+    montar();
+    expect(screen.getByText('Crear plantilla con asistente')).toBeInTheDocument();
+  });
+
+  it('editar entra directo al modo avanzado', () => {
+    // El asistente pregunta el objetivo y propone el nombre técnico: dos cosas que en una
+    // plantilla existente ya están decididas y META no deja cambiar.
+    montar({
+      template: {
+        id: 7,
+        name: 'promo_navidad',
+        language: 'es_MX',
+        category: 'MARKETING',
+        status: 'APPROVED',
+        headerType: 'NONE',
+        headerContent: null,
+        bodyText: 'Hola',
+        footerText: null,
+        buttons: [],
+        variables: [],
+      },
+    });
+    expect(screen.getByText('Editar promo_navidad')).toBeInTheDocument();
+  });
+
+  it('guarda un borrador al pasar al modo avanzado', async () => {
+    const post = interceptarBorrador();
+    montar();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Modo avanzado' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    expect(post.mock.calls[0][0]).toBe('/api/templates/drafts');
+    expect(screen.getByText('Nueva plantilla — modo avanzado')).toBeInTheDocument();
+  });
+
+  it('el segundo guardado actualiza el mismo borrador en vez de crear otro', async () => {
+    // Sin reusar el id, cada ida y vuelta entre modos dejaría un borrador huérfano.
+    const post = interceptarBorrador(60);
+    montar();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Modo avanzado' }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Volver al asistente' }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+
+    expect((post.mock.calls[0][1] as { draftId: number | null }).draftId).toBeNull();
+    expect((post.mock.calls[1][1] as { draftId: number | null }).draftId).toBe(60);
+  });
+
+  it('si el borrador falla igual se cambia de modo', async () => {
+    // Perder el modo por un error de red sería peor que quedarse sin borrador: los datos
+    // siguen en pantalla.
+    vi.spyOn(httpClient, 'post').mockImplementation(() =>
+      Promise.reject(
+        Object.assign(new Error('Request failed'), {
+          response: { data: { message: 'WABA no responde' } },
+        }),
+      ),
+    );
+    montar();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Modo avanzado' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('Nueva plantilla — modo avanzado')).toBeInTheDocument(),
+    );
+  });
+
+  it('en edición no se ofrece guardar borrador', async () => {
+    // Lo que ya existe en META no es un borrador.
+    montar({
+      template: {
+        id: 7,
+        name: 'promo_navidad',
+        language: 'es_MX',
+        category: 'MARKETING',
+        status: 'APPROVED',
+        headerType: 'NONE',
+        headerContent: null,
+        bodyText: 'Hola',
+        footerText: null,
+        buttons: [],
+        variables: [],
+      },
+    });
+    expect(screen.queryByRole('button', { name: 'Guardar borrador' })).toBeNull();
+  });
+
+  it('el botón de borrador avisa que no se envió nada a META', async () => {
+    interceptarBorrador();
+    montar();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar borrador' }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/No se envió nada a META/)).toBeInTheDocument(),
+    );
+  });
+});

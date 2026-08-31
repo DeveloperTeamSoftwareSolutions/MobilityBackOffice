@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
-import { EditPolicy, Template, TemplateFormState } from './plantillas.types';
+import { EditPolicy, Template, TemplateDraft, TemplateFormState } from './plantillas.types';
 import { aPayload, mensajesDeError, saveDraft } from './plantillas.api';
-import { estadoInicial, TemplateForm } from './TemplateForm';
+import { estadoDesdeBorrador, estadoInicial, TemplateForm } from './TemplateForm';
 import { TemplateWizard } from './TemplateWizard';
 
 /**
@@ -25,6 +25,7 @@ import { TemplateWizard } from './TemplateWizard';
 export function TemplateEditor({
   template,
   editPolicy,
+  draft,
   onCancel,
   onSubmit,
   saving,
@@ -33,6 +34,14 @@ export function TemplateEditor({
   /** `null` = alta. Con plantilla = edición. */
   template: Template | null;
   editPolicy: EditPolicy | null;
+  /**
+   * El borrador guardado, cuando lo que se abre es un borrador.
+   *
+   * Se rehidrata de aca y no del detalle de la plantilla: el detalle no tiene el titulo,
+   * ni el archivo, ni el **ejemplo de cada variable** —solo los numeros—, y META exige
+   * los ejemplos. `null` si no se pudo traer: se arma con lo que haya.
+   */
+  draft: TemplateDraft | null;
   onCancel: () => void;
   onSubmit: (form: TemplateFormState) => void;
   saving: boolean;
@@ -50,7 +59,9 @@ export function TemplateEditor({
    */
   const esBorrador = template?.status === 'DRAFT';
   const puedeGuardarBorrador = !esEdicion || esBorrador;
-  const [form, setForm] = useState<TemplateFormState>(() => estadoInicial(template));
+  const [form, setForm] = useState<TemplateFormState>(() =>
+    draft ? estadoDesdeBorrador(draft) : estadoInicial(template),
+  );
   // Crear y editar arrancan igual: en el asistente. Es la forma en la que la pantalla
   // explica cada paso, y no hay motivo para negarsela a quien corrige una plantilla.
   const [modo, setModo] = useState<'wizard' | 'avanzado'>('wizard');

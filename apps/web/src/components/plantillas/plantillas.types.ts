@@ -85,6 +85,34 @@ export interface EditPolicy {
   /** Avisos que no bloquean. Ya vienen en castellano. */
   warnings: string[];
 }
+/**
+ * Un borrador guardado, listo para rehidratar el formulario.
+ *
+ * Trae **mas** que el detalle de la plantilla: el titulo amigable, el handle del archivo
+ * y las variables **con su nombre y su ejemplo**. El detalle solo devuelve los numeros
+ * (`["1"]`), asi que abrir un borrador por ahi obliga a volver a escribir cada ejemplo
+ * —y META los exige—, lo que convierte "seguir manana" en "empezar de nuevo".
+ */
+export interface TemplateDraft {
+  id: number | null;
+  name: string;
+  language: string;
+  category: string;
+  headerType: string;
+  headerContent: string | null;
+  /** El archivo ya esta en META: esto es la referencia, no el archivo. */
+  headerHandle: string | null;
+  bodyText: string | null;
+  footerText: string | null;
+  buttons: TemplateButton[];
+  variables: TemplateVariable[];
+  friendlyTitle: string;
+  otpType: string;
+  /** `null` = el codigo no vence. Solo aplica a AUTHENTICATION. */
+  codeExpirationMinutes: number | null;
+  addSecurityRecommendation: boolean;
+}
+
 export interface TemplateDetail {
   template: Template;
   editPolicy: EditPolicy | null;

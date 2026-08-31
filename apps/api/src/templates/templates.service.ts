@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { TemplatesClient } from './templates.client';
-import { mapEditPolicy, mapTemplate, summarizeByStatus } from './templates.util';
+import { mapDraft, mapEditPolicy, mapTemplate, summarizeByStatus } from './templates.util';
 import {
   CreateTemplateInput,
   SortableField,
@@ -152,8 +152,15 @@ export class TemplatesService {
     });
   }
 
-  getDraft(id: number) {
-    return this.client.getDraft(id);
+  /**
+   * Un borrador, listo para rehidratar el formulario.
+   *
+   * Trae **mas** que el detalle de la plantilla: el titulo, el handle del archivo y las
+   * variables con su nombre y su ejemplo. Sin eso, reabrir un borrador obliga a volver a
+   * escribir los ejemplos, que META exige.
+   */
+  async getDraft(id: number) {
+    return mapDraft(await this.client.getDraft(id));
   }
 
   /** Recien aca el borrador se manda a META. */

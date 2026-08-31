@@ -105,7 +105,14 @@ export function HeaderMediaUpload({
           <span className="bo-pl__fileok" aria-hidden="true">
             ✓
           </span>
-          <span className="bo-pl__filename">{form.headerFileName || 'Archivo cargado'}</span>
+          {/*
+            * Al reabrir un borrador el archivo esta, pero su nombre no: solo se guarda la
+            * referencia de META. Decir "Archivo cargado" a secas se lee como si no supieramos
+            * cual es; decir donde esta responde la pregunta real.
+            */}
+          <span className="bo-pl__filename">
+            {form.headerFileName || 'Archivo ya subido a META'}
+          </span>
           <button
             type="button"
             className="bo-pl__btn bo-pl__btn--sm"
@@ -115,6 +122,13 @@ export function HeaderMediaUpload({
             Quitar
           </button>
         </div>
+      )}
+
+      {/* Un archivo subido hace mucho puede haber caducado del lado de META. */}
+      {form.headerHandle && !form.headerFileName && !subiendo && (
+        <span className="bo-pl__hint">
+          Si al enviar META lo rechaza, subilo de nuevo.
+        </span>
       )}
 
       {error && <p className="bo-pl__warn">{error}</p>}

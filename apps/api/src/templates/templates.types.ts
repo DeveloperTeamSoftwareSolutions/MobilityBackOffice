@@ -155,6 +155,60 @@ export interface EditPolicy {
   warnings: string[];
 }
 
+
+/**
+ * Lo que devuelve WABA en `GET /api/templates/drafts/:id`.
+ *
+ * Es **mas** que el detalle de la plantilla: trae el titulo amigable, el handle del
+ * archivo y las variables **con su nombre y su ejemplo**. Ese detalle es el que reabre un
+ * borrador donde quedo, en vez de con los campos a medias.
+ *
+ * OJO: WABA completa `otpType`, `expirationEnabled`, `codeExpirationMinutes` y
+ * `addSecurityRecommendation` con valores por defecto **aunque la plantilla no sea de
+ * autenticacion**. Aplicarlos sin mirar la categoria le prende opciones a un borrador de
+ * marketing que nunca las tuvo.
+ */
+export interface WabaDraftRow {
+  id?: number;
+  name?: string | null;
+  language?: string | null;
+  category?: string | null;
+  headerType?: string | null;
+  headerContent?: string | null;
+  /** Handle del archivo de ejemplo, ya subido a META. */
+  headerHandle?: string | null;
+  bodyText?: string | null;
+  footerText?: string | null;
+  /** JSON dentro de una columna de texto, como el resto de las colecciones de WABA. */
+  buttonsJson?: string | null;
+  variables?: unknown;
+  friendlyTitle?: string | null;
+  otpType?: string | null;
+  expirationEnabled?: boolean;
+  codeExpirationMinutes?: number | null;
+  addSecurityRecommendation?: boolean;
+}
+
+/** El borrador, listo para rehidratar el formulario. */
+export interface TemplateDraft {
+  id: number | null;
+  name: string;
+  language: string;
+  category: string;
+  headerType: string;
+  headerContent: string | null;
+  headerHandle: string | null;
+  bodyText: string | null;
+  footerText: string | null;
+  buttons: TemplateButton[];
+  variables: TemplateVariable[];
+  friendlyTitle: string;
+  otpType: string;
+  /** `null` = el codigo no vence. Solo aplica a AUTHENTICATION. */
+  codeExpirationMinutes: number | null;
+  addSecurityRecommendation: boolean;
+}
+
 /** Detalle de una plantilla + si se puede editar. */
 export interface TemplateDetail {
   template: Template;

@@ -8,7 +8,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import FormData from 'form-data';
-import { WabaEditPolicy, WabaTemplateRow } from './templates.types';
+import { WabaDraftRow, WabaEditPolicy, WabaTemplateRow } from './templates.types';
 
 /**
  * Cliente hacia la API REST del panel WABA.
@@ -310,12 +310,12 @@ export class TemplatesClient {
   }
 
   /** Recupera un borrador. `null` si no existe o es de otra cuenta. */
-  async getDraft(id: number): Promise<Record<string, unknown> | null> {
+  async getDraft(id: number): Promise<WabaDraftRow | null> {
     this.assertConfigured();
 
     try {
       const res = await firstValueFrom(
-        this.http.get<{ data?: Record<string, unknown> }>(
+        this.http.get<{ data?: WabaDraftRow }>(
           `${this.base()}${TEMPLATES_PATH}/drafts/${encodeURIComponent(String(id))}`,
           { headers: this.headers(), timeout: 20000 },
         ),

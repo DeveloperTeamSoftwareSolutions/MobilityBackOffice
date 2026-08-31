@@ -3,6 +3,9 @@ import {
   isTemplateStatus,
   Template,
   TemplateButton,
+  TemplateDraft,
+  TemplateVariable,
+  WabaDraftRow,
   WabaEditPolicy,
   WabaTemplateRow,
 } from './templates.types';
@@ -123,6 +126,74 @@ export function summarizeByStatus(templates: Template[]): Record<string, number>
     out[key] = (out[key] ?? 0) + 1;
   }
   return out;
+}
+
+
+/**
+ * Las variables de un borrador, con su nombre y su ejemplo.
+ *
+ * Es lo que distingue reabrir un borrador de reabrir una plantilla: el detalle solo tiene
+ * los numeros (`["1"]`), y con eso hay que volver a escribir cada ejemplo. **META los
+ * exige**, asi que perderlos convierte "seguir manana" en "empezar de nuevo".
+ *
+ * Se normaliza fila por fila porque el JSON lo escribio otra aplicacion y puede venir de
+ * una version anterior: una fila rota se descarta en vez de tumbar el borrador entero.
+ */
+function parseDraftVariables(raw: unknown): TemplateVariable[] {
+  if (!Array.isArray(raw)) return [];
+
+  const out: TemplateVariable[] = [];
+  for (const v of raw) {
+    const o = (v ?? {}) as Record<string, unknown>;
+    const index = Number(o.index);
+    if (!Number.isInteger(index) || index < 1) continue;
+
+    out.push({
+      index,
+      // El encabezado admite una sola y numera aparte del cuerpo.
+      target: o.target === 'header' ? 'header' : 'body',
+      label: typeof o.label === 'string' ? o.label : '',
+      example: typeof o.example === 'string' ? o.example : '',
+    });
+  }
+  return out;
+}
+
+/**
+ * El borrador de WABA, listo para rehidratar el formulario.
+ *
+ * Las opciones del codigo OTP solo se aplican si la plantilla **es** de autenticacion:
+ * WABA las completa con valores por defecto en todos los borradores, y copiarlas sin
+ * mirar la categoria le prende la advertencia de seguridad y un vencimiento de 10 minutos
+ * a un borrador de marketing que nunca los tuvo.
+ */
+export function mapDraft(row: WabaDraftRow | null | undefined): TemplateDraft | null {
+  if (!row) return null;
+
+  const category = (row.category ?? '').trim().toUpperCase() || 'MARKETING';
+  const esAuth = category === 'AUTHENTICATION';
+  const venceElCodigo = esAuth && row.expirationEnabled !== false;
+
+  return {
+    id: Number.isFinite(row.id) ? Number(row.id) : null,
+    name: (row.name ?? '').trim(),
+    language: (row.language ?? '').trim() || 'es_MX',
+    category,
+    headerType: (row.headerType ?? '').trim().toUpperCase() || 'NONE',
+    headerContent: text(row.headerContent),
+    headerHandle: text(row.headerHandle),
+    bodyText: text(row.bodyText),
+    footerText: text(row.footerText),
+    buttons: parseButtons(row.buttonsJson),
+    variables: parseDraftVariables(row.variables),
+    friendlyTitle: (row.friendlyTitle ?? '').trim(),
+    otpType: (row.otpType ?? '').trim() || 'COPY_CODE',
+    codeExpirationMinutes:
+      venceElCodigo && Number.isFinite(row.codeExpirationMinutes)
+        ? Number(row.codeExpirationMinutes)
+        : null,
+    addSecurityRecommendation: esAuth && row.addSecurityRecommendation === true,
+  };
 }
 
 /**

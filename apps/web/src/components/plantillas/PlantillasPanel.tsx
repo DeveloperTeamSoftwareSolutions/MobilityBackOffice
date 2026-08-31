@@ -4,6 +4,7 @@ import {
   createTemplate,
   deleteTemplate,
   getStatus,
+  getDraft,
   getTemplateDetail,
   getTemplates,
   mensajesDeError,
@@ -15,6 +16,7 @@ import {
   EditPolicy,
   SortableField,
   Template,
+  TemplateDraft,
   TemplateFormState,
   TemplatesPage,
   TemplateStatus,
@@ -57,6 +59,8 @@ export function PlantillasPanel() {
   const [editando, setEditando] = useState<{
     template: Template | null;
     editPolicy: EditPolicy | null;
+    /** Presente solo cuando lo que se abre es un borrador. */
+    draft: TemplateDraft | null;
   } | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [erroresServidor, setErroresServidor] = useState<string[]>([]);
@@ -134,7 +138,7 @@ export function PlantillasPanel() {
   const abrirAlta = () => {
     setErroresServidor([]);
     setAviso(null);
-    setEditando({ template: null, editPolicy: null });
+    setEditando({ template: null, editPolicy: null, draft: null });
   };
 
   /**
@@ -143,6 +147,11 @@ export function PlantillasPanel() {
    * Se consulta antes de mostrar el formulario para traer la política de META: si la
    * plantilla está en revisión no se puede editar, y es mejor decirlo de entrada que
    * dejar que alguien escriba y falle al guardar.
+   *
+   * Si es un **borrador**, además se pide el borrador entero. El detalle no alcanza: no
+   * tiene el título, ni el archivo del encabezado, ni el **ejemplo de cada variable**
+   * —solo los números—, y META exige los ejemplos. Reabrir por el detalle convertía
+   * "seguir mañana" en "reescribir todo".
    */
   const abrirEdicion = async (t: Template) => {
     if (t.id === null) return;
@@ -161,10 +170,23 @@ export function PlantillasPanel() {
         return;
       }
 
-      setEditando({ template: detalle.template, editPolicy: detalle.editPolicy });
+      // Un borrador se rehidrata de su propio endpoint. Si falla, se abre igual con lo
+      // que hay: quedarse sin poder abrirlo sería peor que abrirlo incompleto.
+      let draft: TemplateDraft | null = null;
+      if (detalle.template.status === 'DRAFT' && detalle.template.id !== null) {
+        try {
+          draft = await getDraft(detalle.template.id);
+        } catch {
+          setAviso(
+            'No se pudo recuperar todo el borrador. Revisá los ejemplos de las variables antes de enviarlo.',
+          );
+        }
+      }
+
+      setEditando({ template: detalle.template, editPolicy: detalle.editPolicy, draft });
     } catch {
       // Sin el detalle se abre igual: el servidor rechazará si no corresponde.
-      setEditando({ template: t, editPolicy: null });
+      setEditando({ template: t, editPolicy: null, draft: null });
     }
   };
 
@@ -255,11 +277,14 @@ export function PlantillasPanel() {
         </div>
       )}
 
+      {configured === true && aviso && <p className="bo-pl__notice">{aviso}</p>}
+
       {configured === true && editando && (
         <div className="bo-card">
           <TemplateEditor
             template={editando.template}
             editPolicy={editando.editPolicy}
+            draft={editando.draft}
             onCancel={() => setEditando(null)}
             onSubmit={guardar}
             saving={guardando}
@@ -270,8 +295,6 @@ export function PlantillasPanel() {
 
       {configured === true && !editando && (
         <>
-          {aviso && <p className="bo-pl__notice">{aviso}</p>}
-
           {page?.onlyApproved && (
             <p className="bo-pl__notice">
               El panel de WhatsApp está publicando <strong>solo las plantillas aprobadas</strong>.

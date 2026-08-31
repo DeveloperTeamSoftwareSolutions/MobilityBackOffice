@@ -3,6 +3,7 @@ import {
   CreateTemplatePayload,
   Template,
   TemplateDetail,
+  TemplateDraft,
   TemplateFormState,
   TemplatesPage,
   TemplatesQuery,
@@ -200,8 +201,9 @@ export async function saveDraft(
   return res.data.draftId;
 }
 
-export async function getDraft(id: number): Promise<Record<string, unknown>> {
-  const res = await httpClient.get<ApiData<Record<string, unknown>>>(`/api/templates/drafts/${id}`);
+/** El borrador guardado, con el titulo, el archivo y los ejemplos de las variables. */
+export async function getDraft(id: number): Promise<TemplateDraft> {
+  const res = await httpClient.get<ApiData<TemplateDraft>>(`/api/templates/drafts/${id}`);
   return res.data.data;
 }
 

@@ -1,6 +1,6 @@
 # Plantillas de WhatsApp — especificacion
 
-> Ultima actualizacion: 2026-08-31 · Version: 2.21.0
+> Ultima actualizacion: 2026-08-31 · Version: 2.22.0
 >
 > Seccion "Templates de WhatsApp" (rol Marketing). Consulta, crea y edita las plantillas
 > del panel WABA sin abrirlo y sin un segundo login.
@@ -270,6 +270,30 @@ cambio de modo creaba un borrador nuevo y dejaba el original sin tocar — se ve
 Y el boton dice **"Enviar a revision"**, no "reenviar": un borrador nunca estuvo en
 revision.
 
+### Reabrir un borrador lo devuelve donde quedo
+
+Un borrador se abre con `GET /api/templates/drafts/:id`, **no** con el detalle de la
+plantilla. El detalle no alcanza, y lo que le falta no se nota hasta que hace falta:
+
+| | Detalle (`/templates/:id`) | Borrador (`/drafts/:id`) |
+|---|---|---|
+| Titulo amigable | — no viaja a META | si |
+| Archivo del encabezado | vuelve en `headerContent`, que el formulario ignora | `headerHandle` |
+| Variables | `["1", "2"]` | nombre y **ejemplo** de cada una |
+
+Los ejemplos son lo mas caro de perder: **META los exige**, y son lo unico que hay que
+escribir a mano. Reabrir por el detalle convertia "seguir manana" en "empezar de
+nuevo", y ademas era silencioso — la plantilla se veia completa.
+
+Si el borrador no se puede traer, el formulario **se abre igual** con lo que haya y lo
+avisa: quedarse sin poder abrirlo seria peor que abrirlo incompleto.
+
+Una trampa del dato: WABA completa `otpType`, `expirationEnabled`,
+`codeExpirationMinutes` y `addSecurityRecommendation` con valores por defecto en
+**todos** los borradores, sea cual sea la categoria. `mapDraft` los aplica solo si la
+plantilla es de autenticacion; copiarlos sin mirar le prende la advertencia de
+seguridad y un vencimiento de 10 minutos a un borrador de marketing que nunca los tuvo.
+
 ### El archivo de ejemplo del encabezado
 
 META **exige ver el medio** para revisar una plantilla con encabezado de imagen, video o
@@ -280,6 +304,16 @@ El archivo va a WABA, que es quien tiene la credencial de META; BackOffice no ha
 META. WABA usa la **Resumable Upload API** (contra el App ID, no contra el
 `phone_number_id`) y devuelve un `handle`. Lo que se guarda es el handle: el archivo no
 vuelve a viajar, ni siquiera al reenviar la plantilla.
+
+La subida ocurre **al elegir el archivo**, no al enviar la plantilla. Asi que el archivo
+ya esta en META antes de guardar el borrador, y el handle viaja con el: quien deja una
+plantilla a medias y vuelve al otro dia **no tiene que subirlo de nuevo**. Lo que no se
+guarda es el **nombre** del archivo —solo servia para mostrarlo mientras se subia—, asi
+que al reabrir dice "Archivo ya subido a META" en vez del nombre original.
+
+> Cuanto le dura el handle a META no esta documentado del lado de WABA. Si caduca, el
+> envio falla y hay que volver a subirlo; la pantalla lo dice cuando muestra un archivo
+> que viene de un borrador.
 
 Los tipos se cortan en los dos lados (JPG/PNG, MP4/3GP, PDF) y el tamaño en 25 MB, para
 no subir algo que va a rebotar del otro lado.
@@ -482,6 +516,10 @@ valido** en la cuenta. Sin eso, la subida falla con el motivo de META a la vista
 - [ ] Con encabezado de imagen/video/documento aparece el campo de archivo.
 - [ ] Un archivo del tipo equivocado se rechaza con el motivo.
 - [ ] Si la subida falla, **no queda** el handle anterior junto al archivo nuevo.
+- [ ] Reabrir un borrador trae el titulo, el archivo y **los ejemplos** de las variables.
+- [ ] Reabrir una plantilla que no es borrador no pide el endpoint de borradores.
+- [ ] Si el borrador no se puede traer, se abre igual y avisa (el aviso se ve con el editor abierto).
+- [ ] Un borrador de marketing no vuelve con la advertencia de seguridad prendida.
 - [ ] Un fallo de META llega con su motivo (token, tamaño), no como un 503 mudo.
 
 ---

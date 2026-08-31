@@ -169,3 +169,148 @@ describe('PlantillasPanel — lo que META no deja editar', () => {
     expect(screen.queryByRole('button', { name: /Revisión/ })).toBeNull();
   });
 });
+
+/**
+ * Reabrir un borrador tiene que devolverlo donde quedó.
+ *
+ * El detalle de la plantilla no alcanza: no trae el título, ni el archivo del encabezado,
+ * ni el ejemplo de cada variable —solo los números—. Y META **exige** los ejemplos, así
+ * que perderlos convierte "seguir mañana" en "escribir todo de nuevo".
+ */
+describe('PlantillasPanel — reabrir un borrador', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const borrador = {
+    id: 62,
+    name: 'promo_navidad',
+    language: 'es_MX',
+    category: 'MARKETING',
+    headerType: 'IMAGE',
+    headerContent: null,
+    headerHandle: '4::aW1h:abc123',
+    bodyText: 'Hola {{1}}, te esperamos el {{2}}.',
+    footerText: 'Duwest',
+    buttons: [],
+    variables: [
+      { index: 1, target: 'body' as const, label: 'nombre', example: 'María' },
+      { index: 2, target: 'body' as const, label: 'fecha', example: '12 de marzo' },
+    ],
+    friendlyTitle: 'Promo de navidad',
+    otpType: 'COPY_CODE',
+    codeExpirationMinutes: null,
+    addSecurityRecommendation: false,
+  };
+
+  /** Como `interceptar`, pero respondiendo también el endpoint del borrador. */
+  function interceptarConBorrador(draft: unknown = borrador) {
+    const plantillaDraft = plantilla({
+      id: 62,
+      name: 'promo_navidad',
+      status: 'DRAFT',
+      headerType: 'IMAGE',
+      bodyText: 'Hola {{1}}, te esperamos el {{2}}.',
+      // El detalle solo trae los números: es justamente lo que no alcanza.
+      variables: ['1', '2'],
+    });
+
+    const get = vi.spyOn(httpClient, 'get').mockImplementation((url: string) => {
+      if (url === '/api/templates/status') {
+        return Promise.resolve({ data: { success: true, configured: true } }) as never;
+      }
+      if (url === '/api/templates') {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: [plantillaDraft],
+            pagination: { total: 1, page: 1, limit: 25, totalPages: 1 },
+            summary: {},
+            onlyApproved: false,
+          },
+        }) as never;
+      }
+      if (url === '/api/templates/drafts/62') {
+        if (draft === null) return Promise.reject(new Error('no anda')) as never;
+        return Promise.resolve({ data: { success: true, data: draft } }) as never;
+      }
+      return Promise.resolve({
+        data: { success: true, template: plantillaDraft, editPolicy: politica({ requiresMeta: false }) },
+      }) as never;
+    });
+
+    return { get };
+  }
+
+  async function abrirBorrador() {
+    const fila = (await screen.findByText('promo_navidad')).closest('tr') as HTMLElement;
+    await userEvent.click(within(fila).getByRole('button', { name: 'Editar' }));
+  }
+
+  it('pide el borrador, no solo el detalle', async () => {
+    const { get } = interceptarConBorrador();
+    render(<PlantillasPanel />);
+
+    await abrirBorrador();
+
+    await waitFor(() =>
+      expect(get).toHaveBeenCalledWith('/api/templates/drafts/62'),
+    );
+  });
+
+  it('vuelve con el título que se le había puesto', async () => {
+    interceptarConBorrador();
+    render(<PlantillasPanel />);
+
+    await abrirBorrador();
+    // El título vive en el paso "Nombre".
+    await userEvent.click(await screen.findByRole('button', { name: /\d\s*Nombre/ }));
+
+    expect(screen.getByDisplayValue('Promo de navidad')).toBeInTheDocument();
+  });
+
+  it('vuelve con los ejemplos de las variables', async () => {
+    // Lo más caro de perder: META los exige, y son lo único que hay que reescribir a mano.
+    interceptarConBorrador();
+    render(<PlantillasPanel />);
+
+    await abrirBorrador();
+    await userEvent.click(await screen.findByRole('button', { name: /\d\s*Mensaje/ }));
+
+    expect(screen.getByDisplayValue('María')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('12 de marzo')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('nombre')).toBeInTheDocument();
+  });
+
+  it('vuelve con el archivo del encabezado ya subido', async () => {
+    interceptarConBorrador();
+    render(<PlantillasPanel />);
+
+    await abrirBorrador();
+    await userEvent.click(await screen.findByRole('button', { name: /\d\s*Extras/ }));
+
+    expect(screen.getByText('Archivo ya subido a META')).toBeInTheDocument();
+  });
+
+  it('una plantilla que no es borrador no pide el borrador', async () => {
+    const { get } = interceptar([plantilla({ id: 7, status: 'APPROVED' })]);
+    render(<PlantillasPanel />);
+
+    const fila = (await screen.findByText('promo_navidad')).closest('tr') as HTMLElement;
+    await userEvent.click(within(fila).getByRole('button', { name: 'Editar' }));
+
+    await screen.findByRole('button', { name: /\d\s*Revisión/ });
+    expect(get).not.toHaveBeenCalledWith(expect.stringContaining('/drafts/'));
+  });
+
+  it('si el borrador no se puede traer, se abre igual y avisa', async () => {
+    // Quedarse sin poder abrirlo sería peor que abrirlo incompleto.
+    interceptarConBorrador(null);
+    render(<PlantillasPanel />);
+
+    await abrirBorrador();
+
+    expect(
+      await screen.findByText(/No se pudo recuperar todo el borrador/),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /\d\s*Mensaje/ })).toBeInTheDocument();
+  });
+});

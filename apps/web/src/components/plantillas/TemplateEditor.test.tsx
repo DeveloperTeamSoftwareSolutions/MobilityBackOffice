@@ -35,6 +35,7 @@ function montar(over: Partial<Parameters<typeof TemplateEditor>[0]> = {}) {
     <TemplateEditor
       template={null}
       editPolicy={null}
+      draft={null}
       onCancel={vi.fn()}
       onSubmit={vi.fn()}
       saving={false}

@@ -3,6 +3,7 @@ import {
   EditPolicy,
   Template,
   TemplateButton,
+  TemplateDraft,
   TemplateFormState,
 } from './plantillas.types';
 import { aPayload, mensajesDeError, validateTemplate } from './plantillas.api';
@@ -74,6 +75,41 @@ export function estadoInicial(template?: Template | null): TemplateFormState {
     codeExpirationMinutes: '',
     otpType: 'COPY_CODE',
     variables: [],
+  };
+}
+
+/**
+ * El formulario, tal como quedó el borrador.
+ *
+ * Es la diferencia entre "seguir mañana" y "empezar de nuevo". Reabrir por el detalle de
+ * la plantilla pierde tres cosas que no se ven hasta que hacen falta:
+ *
+ * - el **título** amigable, que no viaja a META y por eso no está en el detalle;
+ * - el **archivo** del encabezado — está en META y su referencia guardada, pero el
+ *   detalle la devuelve en otro campo que el formulario ignora;
+ * - el **nombre y el ejemplo de cada variable**. El detalle solo trae los números, y META
+ *   exige los ejemplos: sin ellos hay que reescribirlos todos.
+ */
+export function estadoDesdeBorrador(draft: TemplateDraft): TemplateFormState {
+  return {
+    friendlyTitle: draft.friendlyTitle || tituloDesdeNombre(draft.name),
+    name: draft.name,
+    language: draft.language,
+    category: draft.category,
+    headerType: draft.headerType,
+    headerContent: draft.headerContent ?? '',
+    headerHandle: draft.headerHandle ?? '',
+    // El nombre del archivo no se guarda: solo servía para mostrarlo mientras se subía.
+    headerFileName: '',
+    bodyText: draft.bodyText ?? '',
+    footerText: draft.footerText ?? '',
+    buttons: draft.buttons.map((b) => ({ ...b })),
+    addSecurityRecommendation: draft.addSecurityRecommendation,
+    // El formulario los maneja como texto: vacío es "no vence".
+    codeExpirationMinutes:
+      draft.codeExpirationMinutes === null ? '' : String(draft.codeExpirationMinutes),
+    otpType: draft.otpType,
+    variables: draft.variables.map((v) => ({ ...v })),
   };
 }
 

@@ -211,6 +211,19 @@ export function PlantillasPanel() {
    *   a META no había llegado nada.
    * - Plantilla que ya existe en META: `PUT`, que la devuelve a revisión.
    */
+  /**
+   * Cierra el editor y vuelve a pedir la lista.
+   *
+   * Recargar no es opcional: mientras el editor estuvo abierto se pudieron guardar
+   * borradores, y la lista solo se refrescaba al **enviar** una plantilla. El borrador
+   * quedaba creado del lado del servidor y no aparecia en pantalla, que se lee como
+   * "no se guardo".
+   */
+  const cerrarEditor = () => {
+    setEditando(null);
+    load();
+  };
+
   const guardar = async (f: TemplateFormState) => {
     setGuardando(true);
     setErroresServidor([]);
@@ -310,7 +323,7 @@ export function PlantillasPanel() {
             template={editando.template}
             editPolicy={editando.editPolicy}
             draft={editando.draft}
-            onCancel={() => setEditando(null)}
+            onCancel={cerrarEditor}
             onSubmit={guardar}
             saving={guardando}
             serverErrors={erroresServidor}

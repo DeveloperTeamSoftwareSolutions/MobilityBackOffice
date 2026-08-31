@@ -350,3 +350,66 @@ describe('PlantillasPanel — configurado vs caído', () => {
     expect(container.querySelector('.bo-pl__warn')).toBeNull();
   });
 });
+
+/**
+ * Guardar un borrador crea la plantilla del lado del servidor, pero la lista solo se
+ * refrescaba al **enviar**. El borrador quedaba creado y no aparecía en pantalla — que
+ * desde afuera se lee como "no se guardó".
+ */
+describe('PlantillasPanel — la lista después de guardar un borrador', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('cerrar el editor vuelve a pedir la lista', async () => {
+    const { get } = interceptar([plantilla()]);
+    render(<PlantillasPanel />);
+    await screen.findByText('promo_navidad');
+
+    const pedidosAntes = get.mock.calls.filter((c) => c[0] === '/api/templates').length;
+
+    await userEvent.click(screen.getByRole('button', { name: 'Nueva plantilla' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+    await waitFor(() => {
+      const pedidosDespues = get.mock.calls.filter((c) => c[0] === '/api/templates').length;
+      expect(pedidosDespues).toBeGreaterThan(pedidosAntes);
+    });
+  });
+
+  it('el borrador guardado aparece al cerrar', async () => {
+    // La prueba de fuego: se guarda uno y tiene que estar en la lista sin recargar la página.
+    const conBorrador = plantilla({ id: 71, name: 'recien_guardado', status: 'DRAFT' });
+    let primeraVuelta = true;
+
+    vi.spyOn(httpClient, 'get').mockImplementation((url: string) => {
+      if (url === '/api/templates/status') {
+        return Promise.resolve({ data: { success: true, configured: true } }) as never;
+      }
+      if (url === '/api/templates') {
+        // La segunda vez ya existe: es lo que devolvería el servidor tras guardarlo.
+        const data = primeraVuelta ? [] : [conBorrador];
+        primeraVuelta = false;
+        return Promise.resolve({
+          data: {
+            success: true,
+            data,
+            pagination: { total: data.length, page: 1, limit: 25, totalPages: 1 },
+            summary: {},
+            onlyApproved: false,
+          },
+        }) as never;
+      }
+      return Promise.resolve({ data: { success: true } }) as never;
+    });
+    vi.spyOn(httpClient, 'post').mockResolvedValue({
+      data: { success: true, draftId: 71 },
+    } as never);
+
+    render(<PlantillasPanel />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Nueva plantilla' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar borrador' }));
+    await screen.findByText(/No se envió nada a META/);
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+    expect(await screen.findByText('recien_guardado')).toBeInTheDocument();
+  });
+});

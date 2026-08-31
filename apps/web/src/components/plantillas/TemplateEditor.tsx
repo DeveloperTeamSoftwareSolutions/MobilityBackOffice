@@ -18,9 +18,9 @@ import { TemplateWizard } from './TemplateWizard';
  * memoria se pierde si se cierra la pestaña, y el borrador sobrevive. Que falle no
  * bloquea el cambio de modo — sería cambiar una molestia por otra peor.
  *
- * **Editar entra directo al modo avanzado.** El asistente está pensado para armar desde
- * cero: pregunta el objetivo y propone el nombre técnico, dos cosas que en una plantilla
- * existente ya están decididas y META no deja cambiar.
+ * **Editar tambien arranca en el asistente**, igual que crear. Lo que cambia es que el
+ * nombre y el idioma quedan bloqueados: META los toma como identidad de la plantilla y
+ * no los deja cambiar. El resto se recorre igual, y se puede pasar al modo avanzado.
  */
 export function TemplateEditor({
   template,
@@ -40,7 +40,9 @@ export function TemplateEditor({
 }) {
   const esEdicion = template !== null;
   const [form, setForm] = useState<TemplateFormState>(() => estadoInicial(template));
-  const [modo, setModo] = useState<'wizard' | 'avanzado'>(esEdicion ? 'avanzado' : 'wizard');
+  // Crear y editar arrancan igual: en el asistente. Es la forma en la que la pantalla
+  // explica cada paso, y no hay motivo para negarsela a quien corrige una plantilla.
+  const [modo, setModo] = useState<'wizard' | 'avanzado'>('wizard');
 
   const [guardandoBorrador, setGuardandoBorrador] = useState(false);
   const [avisoBorrador, setAvisoBorrador] = useState<string | null>(null);
@@ -107,18 +109,14 @@ export function TemplateEditor({
     onSaveDraft: esEdicion ? null : () => guardarBorrador(form),
     savingDraft: guardandoBorrador,
     draftNotice: avisoBorrador,
+    // El asistente y el modo avanzado necesitan saberlo para bloquear nombre e idioma.
+    template,
+    editPolicy,
   };
 
   if (modo === 'wizard') {
     return <TemplateWizard {...comun} onAdvanced={() => cambiarModo('avanzado')} />;
   }
 
-  return (
-    <TemplateForm
-      {...comun}
-      template={template}
-      editPolicy={editPolicy}
-      onWizard={esEdicion ? null : () => cambiarModo('wizard')}
-    />
-  );
+  return <TemplateForm {...comun} onWizard={() => cambiarModo('wizard')} />;
 }

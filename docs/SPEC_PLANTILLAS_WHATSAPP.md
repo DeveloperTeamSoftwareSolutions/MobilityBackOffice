@@ -1,6 +1,6 @@
 # Plantillas de WhatsApp — especificacion
 
-> Ultima actualizacion: 2026-08-31 · Version: 2.18.0
+> Ultima actualizacion: 2026-08-31 · Version: 2.19.0
 >
 > Seccion "Templates de WhatsApp" (rol Marketing). Consulta, crea y edita las plantillas
 > del panel WABA sin abrirlo y sin un segundo login.
@@ -167,9 +167,52 @@ se pierde si se cierra la pestaña. Si ese guardado falla, se cambia de modo igu
 el aviso — perder el modo por un error de red seria peor que quedarse sin borrador,
 porque los datos siguen en pantalla.
 
-**Editar entra directo al modo avanzado**: el asistente pregunta el objetivo y propone el
-nombre tecnico, dos cosas que en una plantilla existente ya estan decididas y META no
-deja cambiar.
+**Editar tambien arranca en el asistente**, igual que crear: es la forma en la que la
+pantalla explica cada paso, y no hay motivo para negarsela a quien corrige una plantilla.
+Lo que cambia es que el **nombre y el idioma quedan bloqueados** —META los toma como
+identidad— y que el titulo amigable se reconstruye del nombre tecnico
+(`promo_navidad_2026` -> `Promo navidad 2026`), porque no se guarda en META y sin el el
+asistente se trabaria pidiendo algo que ya esta decidido.
+
+### Que se puede editar, y cuando
+
+Las reglas son de META. Las evalua WABA (`services/templateEditPolicy.js`) y viajan con
+el detalle; BackOffice las traduce y las muestra, **no las vuelve a decidir**.
+
+| Estado | Se puede editar | Cupo |
+|---|---|---|
+| `DRAFT` | si, sin llamar a META (no vive alla) | sin limite |
+| `APPROVED` | si | 10 cada 30 dias, 1 por dia |
+| `REJECTED` | si — corregir y reenviar | sin limite |
+| `PAUSED` / `DISABLED` | si | sin limite |
+| `PENDING` | **no**: hay una revision en curso | — |
+
+Editar una aprobada **la devuelve a revision**, y mientras tanto podria no poder
+enviarse. Se avisa antes de escribir, no al guardar.
+
+> Los numeros del cupo **no estan en la documentacion de META**: WABA los toma de
+> terceros que integran la misma API y coinciden entre si. Por eso se muestran como aviso
+> y **nunca bloquean** — la ultima palabra la tiene META. Ademas el conteo es propio: si
+> alguien edita desde el Business Manager de Meta, el numero queda desactualizado, y la
+> pantalla lo dice.
+
+**Dos traducciones que hay que hacer y no son opcionales**, las dos en `mapEditPolicy`
+(`templates.util.ts`):
+
+1. **WABA manda `allowed`, no `canEdit`.** Leer la propiedad equivocada daba `undefined`,
+   y `undefined === false` es falso: la pantalla dejaba editar una plantilla en revision y
+   el rechazo aparecia recien al guardar, con el formulario ya completo.
+2. **`reason` y `warnings` son claves i18n** (`templates.edit.blockedInReview`), no
+   frases: el panel de WABA las resuelve con su diccionario. Los textos se copian de
+   `locales/es.json` para que las dos aplicaciones digan lo mismo.
+
+Sin politica se asume que **no** se puede editar: es lo unico honesto cuando no se sabe.
+
+La pantalla lo aplica en tres lugares, de menos a mas caro de descubrir: el boton
+**Editar** de la fila viene apagado si el estado no admite edicion; abrir el detalle
+confirma contra la politica y no abre el formulario si META lo bloquea; y el formulario
+—en los dos modos— muestra el cupo, la espera y el aviso de que vuelve a revision.
+
 
 ### Borradores
 
@@ -217,7 +260,7 @@ lo decide META, tarda, y puede rechazarla. Por eso `status` nunca se acepta como
 entrada y el boton dice "Enviar a revision de META", no "Guardar".
 
 **El nombre y el idioma no se cambian.** META los toma como identidad de la plantilla.
-En edicion van bloqueados y el `PUT` ni siquiera los lee.
+En edicion van bloqueados en los dos modos y el `PUT` ni siquiera los lee.
 
 **AUTHENTICATION es otra cosa.** Ahi META **escribe el texto** y lo traduce: no hay
 mensaje, ni encabezado, ni botones que configurar. Solo la advertencia de seguridad, la
@@ -261,7 +304,7 @@ de diagnosticar desde la pantalla.
 | Archivo | Que hace |
 |---|---|
 | `templates.client.ts` | WABA `/api/templates` con `x-api-key`; conserva sus mensajes de error |
-| `templates.util.ts` | Parseo defensivo, variables con fallback, resumen |
+| `templates.util.ts` | Parseo defensivo, variables con fallback, resumen, `mapEditPolicy` |
 | `templates.service.ts` | Filtra, ordena, pagina; `aPayloadWaba` es el **unico** armador |
 | `templates.controller.ts` | `@Roles(Marketing)`, whitelist de sort y estado, CRUD, borradores, subida |
 
@@ -279,6 +322,7 @@ de diagnosticar desde la pantalla.
 | `TemplateEditor.tsx` | Sostiene el estado compartido y el borrador; decide el modo |
 | `HeaderMediaUpload.tsx` | El archivo de ejemplo del encabezado multimedia |
 | `JsonBox.tsx` | El JSON plegado |
+| `EditPolicyNotice.tsx` | Que permite META ahora: bloqueo, cupo y espera |
 | `PlantillasPanel.tsx` | Compone: filtro, buscador, tabla, editor y acciones |
 
 **En el repo de WABA** (`WhatsAppApiCloud-META-WABA`)
@@ -321,6 +365,8 @@ valido** en la cuenta. Sin eso, la subida falla con el motivo de META a la vista
 - [ ] Sin `WABA_API_URL`/`WABA_API_KEY`, la seccion avisa que falta configurar (no queda en blanco).
 - [ ] Con las variables puestas, se listan las plantillas de la cuenta.
 - [ ] El filtro por estado no se pierde al navegar entre paginas.
+- [ ] **Cada estado tiene su color**: en revision y borrador no se confunden.
+- [ ] La columna de variables dice "2 variables", no "2 variables a completar".
 - [ ] Aparece el aviso cuando la fuente publica solo aprobadas.
 - [ ] Se ven las plantillas en revision y las rechazadas, no solo las aprobadas.
 - [ ] Una plantilla con `ButtonsJson` roto se lista igual, sin botones y sin romper la pagina.
@@ -336,7 +382,10 @@ valido** en la cuenta. Sin eso, la subida falla con el motivo de META a la vista
 
 **Crear**
 
-- [ ] El alta arranca en el asistente; editar entra directo al modo avanzado.
+- [ ] Crear y editar **arrancan los dos en el asistente**.
+- [ ] Al editar, nombre e idioma estan bloqueados en los dos modos.
+- [ ] Al editar, el asistente arranca con el contenido que ya tiene la plantilla.
+- [ ] Editar no crea borradores: alternar de modo no guarda nada.
 - [ ] Se alterna entre modos **sin perder** lo cargado.
 - [ ] Al alternar se guarda un borrador; si falla, igual se cambia de modo y avisa.
 - [ ] El segundo guardado **actualiza** el mismo borrador, no crea otro.
@@ -344,8 +393,11 @@ valido** en la cuenta. Sin eso, la subida falla con el motivo de META a la vista
 - [ ] El asistente dice **que falta** para avanzar, no deja un boton apagado sin explicacion.
 - [ ] El formulario avisa si las variables van salteadas (`{{1}}` y `{{3}}`).
 - [ ] Al elegir AUTHENTICATION desaparecen mensaje, encabezado y botones.
-- [ ] En edicion, nombre e idioma estan bloqueados.
-- [ ] Una plantilla en revision no se puede editar, y la pantalla lo dice antes de escribir.
+- [ ] Una plantilla **en revision** tiene el boton Editar apagado, con el motivo en el tooltip.
+- [ ] Si igual se intenta abrir, la pantalla avisa y **no** abre el formulario.
+- [ ] Al editar una aprobada se ve el cupo (10 al mes) y el aviso de que vuelve a revision.
+- [ ] La espera entre ediciones se dice en horas, no como fecha ISO.
+- [ ] Una rechazada se puede editar las veces que haga falta, sin cupo.
 - [ ] Eliminar pide confirmacion: en META no se deshace.
 
 **JSON y archivos**

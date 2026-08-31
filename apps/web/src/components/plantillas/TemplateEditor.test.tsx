@@ -3,12 +3,31 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TemplateEditor } from './TemplateEditor';
 import { httpClient } from '../../api/httpClient';
+import { Template } from './plantillas.types';
 
 /** Se intercepta el cliente HTTP: así el test recorre el `saveDraft` real. */
 function interceptarBorrador(draftId: number | null = 60) {
   return vi
     .spyOn(httpClient, 'post')
     .mockResolvedValue({ data: { success: true, draftId } } as never);
+}
+
+/** Una plantilla que ya existe en META. */
+function plantilla(over: Partial<Template> = {}): Template {
+  return {
+    id: 7,
+    name: 'promo_navidad',
+    language: 'es_MX',
+    category: 'MARKETING',
+    status: 'APPROVED',
+    headerType: 'NONE',
+    headerContent: null,
+    bodyText: 'Hola, te esperamos.',
+    footerText: null,
+    buttons: [],
+    variables: [],
+    ...over,
+  };
 }
 
 function montar(over: Partial<Parameters<typeof TemplateEditor>[0]> = {}) {
@@ -38,25 +57,13 @@ describe('TemplateEditor', () => {
     expect(screen.getByText('Crear plantilla con asistente')).toBeInTheDocument();
   });
 
-  it('editar entra directo al modo avanzado', () => {
-    // El asistente pregunta el objetivo y propone el nombre técnico: dos cosas que en una
-    // plantilla existente ya están decididas y META no deja cambiar.
+  it('editar también arranca en el asistente', () => {
+    // Crear y editar arrancan igual. Lo que cambia es que el nombre y el idioma quedan
+    // bloqueados: META los toma como identidad de la plantilla.
     montar({
-      template: {
-        id: 7,
-        name: 'promo_navidad',
-        language: 'es_MX',
-        category: 'MARKETING',
-        status: 'APPROVED',
-        headerType: 'NONE',
-        headerContent: null,
-        bodyText: 'Hola',
-        footerText: null,
-        buttons: [],
-        variables: [],
-      },
+      template: plantilla(),
     });
-    expect(screen.getByText('Editar promo_navidad')).toBeInTheDocument();
+    expect(screen.getByText('Editar promo_navidad con asistente')).toBeInTheDocument();
   });
 
   it('guarda un borrador al pasar al modo avanzado', async () => {
@@ -107,19 +114,7 @@ describe('TemplateEditor', () => {
   it('en edición no se ofrece guardar borrador', async () => {
     // Lo que ya existe en META no es un borrador.
     montar({
-      template: {
-        id: 7,
-        name: 'promo_navidad',
-        language: 'es_MX',
-        category: 'MARKETING',
-        status: 'APPROVED',
-        headerType: 'NONE',
-        headerContent: null,
-        bodyText: 'Hola',
-        footerText: null,
-        buttons: [],
-        variables: [],
-      },
+      template: plantilla(),
     });
     expect(screen.queryByRole('button', { name: 'Guardar borrador' })).toBeNull();
   });
@@ -133,5 +128,65 @@ describe('TemplateEditor', () => {
     await waitFor(() =>
       expect(screen.getByText(/No se envió nada a META/)).toBeInTheDocument(),
     );
+  });
+  it('al editar, el nombre y el idioma quedan bloqueados', async () => {
+    // META los toma como identidad de la plantilla: cambiarlos no es editar, es crear otra.
+    montar({ template: plantilla() });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+
+    expect(screen.getByLabelText(/Nombre técnico/)).toBeDisabled();
+    expect(screen.getByLabelText('Idioma')).toBeDisabled();
+    expect(screen.getAllByText(/no se pueden cambiar/).length).toBeGreaterThan(0);
+  });
+
+  it('al editar se puede pasar al modo avanzado y volver', async () => {
+    interceptarBorrador();
+    montar({ template: plantilla() });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Modo avanzado' }));
+    expect(screen.getByText('Editar promo_navidad')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Volver al asistente' }));
+    expect(screen.getByText('Editar promo_navidad con asistente')).toBeInTheDocument();
+  });
+
+  it('editar no crea borradores', async () => {
+    // Lo que ya existe en META no es un borrador: alternar de modo no debe guardar nada.
+    const post = interceptarBorrador();
+    montar({ template: plantilla() });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Modo avanzado' }));
+
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('si META no la deja editar, no se ofrece enviar', async () => {
+    montar({
+      template: plantilla({ status: 'PENDING' }),
+      editPolicy: {
+        canEdit: false,
+        reason: 'META está revisando esta plantilla.',
+        requiresMeta: true,
+        limited: false,
+        used: 0,
+        remaining: null,
+        cooldownUntil: null,
+        warnings: [],
+      },
+    });
+
+    expect(screen.getByText(/Todavía no se puede editar/)).toBeInTheDocument();
+  });
+
+  it('el asistente parte del contenido que ya tiene la plantilla', async () => {
+    // Si arrancara vacío, editar seria reescribir todo.
+    montar({ template: plantilla() });
+
+    // Objetivo -> Nombre -> Mensaje
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+
+    expect(screen.getByDisplayValue('Hola, te esperamos.')).toBeInTheDocument();
   });
 });

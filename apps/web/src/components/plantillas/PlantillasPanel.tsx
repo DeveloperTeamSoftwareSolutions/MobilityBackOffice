@@ -20,6 +20,8 @@ import {
 } from './plantillas.types';
 import {
   categoryLabel,
+  editableSegunEstado,
+  motivoNoEditable,
   languageLabel,
   statusHint,
   statusLabel,
@@ -147,6 +149,17 @@ export function PlantillasPanel() {
     setAviso(null);
     try {
       const detalle = await getTemplateDetail(t.id);
+
+      // Si META no la deja editar, no se abre el formulario: completar algo que va a
+      // ser rechazado es peor que no poder empezar.
+      if (detalle.editPolicy && detalle.editPolicy.canEdit === false) {
+        setAviso(
+          detalle.editPolicy.reason ??
+            'META no permite editar esta plantilla en este momento.',
+        );
+        return;
+      }
+
       setEditando({ template: detalle.template, editPolicy: detalle.editPolicy });
     } catch {
       // Sin el detalle se abre igual: el servidor rechazará si no corresponde.
@@ -446,10 +459,19 @@ function TemplatesTable({
                   </td>
                   <td>{variablesLabel(t)}</td>
                   <td className="bo-pl__actionscell">
+                    {/*
+                      * Una plantilla en revision no se ofrece para editar: META no acepta
+                      * cambios hasta que termine. Es solo el estado; la autoridad es la
+                      * politica que trae el detalle, que ademas sabe del cupo.
+                      */}
                     <button
                       type="button"
                       className="bo-pl__btn bo-pl__btn--sm"
                       onClick={() => onEdit(t)}
+                      disabled={!editableSegunEstado(t.status)}
+                      title={
+                        editableSegunEstado(t.status) ? undefined : motivoNoEditable(t.status)
+                      }
                     >
                       Editar
                     </button>

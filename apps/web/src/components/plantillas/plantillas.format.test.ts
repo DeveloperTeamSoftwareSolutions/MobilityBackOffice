@@ -9,7 +9,17 @@ import {
   statusTone,
   variablesLabel,
 } from './plantillas.format';
-import { Template } from './plantillas.types';
+import { Template, TemplateStatus } from './plantillas.types';
+
+/** Los seis estados que puede tener una plantilla en META. */
+const STATUSES: TemplateStatus[] = [
+  'APPROVED',
+  'PENDING',
+  'REJECTED',
+  'PAUSED',
+  'DISABLED',
+  'DRAFT',
+];
 
 function template(over: Partial<Template> = {}): Template {
   return {
@@ -56,11 +66,22 @@ describe('statusLabel y statusHint', () => {
 });
 
 describe('statusTone', () => {
-  it('separa lo usable de lo que no', () => {
-    expect(statusTone('APPROVED')).toBe('ok');
-    expect(statusTone('PENDING')).toBe('warn');
-    expect(statusTone('REJECTED')).toBe('bad');
-    expect(statusTone('DISABLED')).toBe('bad');
+  /**
+   * Un tono por estado. Si dos comparten color, la columna deja de responder de un
+   * vistazo la unica pregunta que importa: si se puede usar, si hay que esperar, o si
+   * hay algo que corregir.
+   */
+  it('le da un tono distinto a cada estado', () => {
+    const tonos = STATUSES.map((s) => statusTone(s));
+    expect(new Set(tonos).size).toBe(STATUSES.length);
+  });
+
+  it('en revision y borrador no se confunden', () => {
+    // Eran los dos iguales y no habia forma de distinguirlos en la lista.
+    expect(statusTone('PENDING')).not.toBe(statusTone('DRAFT'));
+  });
+
+  it('un estado desconocido no rompe la fila', () => {
     expect(statusTone(null)).toBe('neutral');
   });
 });
@@ -108,12 +129,17 @@ describe('headerLabel', () => {
 
 describe('variablesLabel', () => {
   /**
-   * Importa porque una plantilla con variables NO se puede enviar sin completarlas, y
-   * eso no se ve mirando el cuerpo de reojo.
+   * Dice cuantas hay, no que falte algo. Decia "a completar" y se leia como que la
+   * plantilla estaba incompleta: los ejemplos ya se cargaron al crearla, y el valor
+   * real se completa al enviar cada mensaje, no en esta pantalla.
    */
-  it('avisa cuantas hay que completar', () => {
-    expect(variablesLabel(template({ variables: ['1'] }))).toBe('1 variable a completar');
-    expect(variablesLabel(template({ variables: ['1', '2'] }))).toBe('2 variables a completar');
+  it('cuenta las variables, sin sugerir que falte algo', () => {
+    expect(variablesLabel(template({ variables: ['1'] }))).toBe('1 variable');
+    expect(variablesLabel(template({ variables: ['1', '2'] }))).toBe('2 variables');
+  });
+
+  it('no sugiere que haya algo pendiente', () => {
+    expect(variablesLabel(template({ variables: ['1'] }))).not.toMatch(/completar/);
   });
 
   it('sin variables lo dice', () => {

@@ -197,22 +197,39 @@
   white-space: nowrap;
 }
 
+/*
+ * Un color por estado. Si "En revision" y "Borrador" comparten tono, la columna deja de
+ * responder de un vistazo la unica pregunta que importa: si la plantilla se puede usar,
+ * si hay que esperar, o si hay algo que corregir.
+ */
 .bo-pl__status--ok {
   color: var(--bo-success);
   border-color: var(--bo-success);
 }
-.bo-pl__status--warn {
-  color: var(--bo-warning);
-  border-color: var(--bo-warning);
+.bo-pl__status--review {
+  color: var(--bo-state-review);
+  border-color: var(--bo-state-review);
 }
-.bo-pl__status--bad {
+.bo-pl__status--draft {
+  color: var(--bo-state-draft);
+  border-color: var(--bo-state-draft);
+  border-style: dashed; /* todavia no salio de aca */
+}
+.bo-pl__status--rejected {
   color: var(--bo-danger);
   border-color: var(--bo-danger);
+}
+.bo-pl__status--paused {
+  color: var(--bo-state-paused);
+  border-color: var(--bo-state-paused);
+}
+.bo-pl__status--disabled {
+  color: var(--bo-state-disabled);
+  border-color: var(--bo-state-disabled);
 }
 .bo-pl__status--neutral {
   color: var(--bo-text-muted);
 }
-
 .bo-pl__statushint {
   display: block;
   margin-top: 3px;
@@ -931,4 +948,18 @@
   color: var(--bo-text);
   white-space: pre;
   tab-size: 2;
+}
+
+/* ---- Cupo de ediciones ---- */
+
+.bo-pl__quota {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--bo-text);
+}
+
+/* El descargo va abajo y en tono menor: el numero manda, la salvedad acompaña. */
+.bo-pl__quota .bo-pl__hint {
+  display: block;
+  margin-top: 4px;
 }

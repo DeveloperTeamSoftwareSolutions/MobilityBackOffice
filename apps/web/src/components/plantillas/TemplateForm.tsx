@@ -6,6 +6,7 @@ import {
   TemplateFormState,
 } from './plantillas.types';
 import { aPayload, mensajesDeError, validateTemplate } from './plantillas.api';
+import { EditPolicyNotice } from './EditPolicyNotice';
 import { HeaderMediaUpload } from './HeaderMediaUpload';
 import { JsonBox } from './JsonBox';
 import { LIMITS, validateForm, variableNumbers } from './plantillas.validate';
@@ -55,7 +56,9 @@ const TIPOS_BOTON = [
 
 export function estadoInicial(template?: Template | null): TemplateFormState {
   return {
-    friendlyTitle: '',
+    // Al editar se completa desde el nombre tecnico: sin titulo, el asistente se traba
+    // en el paso del nombre pidiendo algo que en una plantilla existente ya esta decidido.
+    friendlyTitle: template ? tituloDesdeNombre(template.name) : '',
     name: template?.name ?? '',
     language: template?.language ?? 'es_MX',
     category: template?.category ?? 'MARKETING',
@@ -72,6 +75,18 @@ export function estadoInicial(template?: Template | null): TemplateFormState {
     otpType: 'COPY_CODE',
     variables: [],
   };
+}
+
+/**
+ * `promo_navidad_2026` -> `Promo navidad 2026`.
+ *
+ * El titulo amigable no se guarda en META, asi que al editar no existe. Se reconstruye
+ * del nombre tecnico, que es lo mas cerca que hay de como la llama la gente.
+ */
+function tituloDesdeNombre(nombre: string): string {
+  const limpio = (nombre || '').replace(/_+/g, ' ').trim();
+  if (!limpio) return '';
+  return limpio.charAt(0).toUpperCase() + limpio.slice(1);
 }
 
 /** El estado del formulario, visto como plantilla, para la vista previa en vivo. */
@@ -168,18 +183,7 @@ export function TemplateForm({
         </p>
       </div>
 
-      {bloqueado && (
-        <p className="bo-pl__warn">
-          <strong>Esta plantilla no se puede editar ahora.</strong>{' '}
-          {editPolicy?.reason ?? 'META tiene una revisión en curso.'}
-        </p>
-      )}
-
-      {editPolicy?.warnings?.length ? (
-        <p className="bo-pl__notice">
-          {editPolicy.warnings.join(' · ')}
-        </p>
-      ) : null}
+      <EditPolicyNotice policy={esEdicion ? editPolicy : null} />
 
       {serverErrors.length > 0 && (
         <div className="bo-pl__warn">

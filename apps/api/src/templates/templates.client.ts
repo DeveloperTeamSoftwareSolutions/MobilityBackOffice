@@ -8,7 +8,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import FormData from 'form-data';
-import { EditPolicy, WabaTemplateRow } from './templates.types';
+import { WabaEditPolicy, WabaTemplateRow } from './templates.types';
 
 /**
  * Cliente hacia la API REST del panel WABA.
@@ -115,13 +115,13 @@ export class TemplatesClient {
   /** Detalle + politica de edicion. `null` si no existe o es de otra cuenta. */
   async getById(id: number): Promise<{
     template: WabaTemplateRow;
-    editPolicy: EditPolicy | null;
+    editPolicy: WabaEditPolicy | null;
   } | null> {
     this.assertConfigured();
 
     try {
       const res = await firstValueFrom(
-        this.http.get<{ data?: { template?: WabaTemplateRow; editPolicy?: EditPolicy } }>(
+        this.http.get<{ data?: { template?: WabaTemplateRow; editPolicy?: WabaEditPolicy } }>(
           `${this.base()}${TEMPLATES_PATH}/${encodeURIComponent(String(id))}`,
           { headers: this.headers(), timeout: 20000 },
         ),

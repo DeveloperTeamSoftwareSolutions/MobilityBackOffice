@@ -1,7 +1,9 @@
 import {
+  EditPolicy,
   isTemplateStatus,
   Template,
   TemplateButton,
+  WabaEditPolicy,
   WabaTemplateRow,
 } from './templates.types';
 
@@ -121,4 +123,65 @@ export function summarizeByStatus(templates: Template[]): Record<string, number>
     out[key] = (out[key] ?? 0) + 1;
   }
   return out;
+}
+
+/**
+ * Textos de la politica de edicion.
+ *
+ * WABA devuelve **claves i18n** (`templates.edit.blockedInReview`), no frases: su panel
+ * las resuelve con su propio diccionario. Se copian de `locales/es.json` para que las
+ * dos aplicaciones digan lo mismo — que alguien lea una explicacion distinta segun por
+ * donde entro seria peor que no explicar nada.
+ */
+const TEXTOS_POLITICA: Record<string, string> = {
+  'templates.edit.blockedInReview':
+    'META está revisando esta plantilla. Hasta que termine la revisión no acepta cambios. Suele tardar hasta 24 horas.',
+  'templates.edit.blockedStatus': 'META no permite editar una plantilla en este estado.',
+  'templates.edit.blockedNoMetaId':
+    'Esta plantilla no tiene identificador de META, así que no se puede editar allá. Sincronizá primero para vincularla.',
+  'templates.edit.warnBackToReview':
+    'Al guardar, la plantilla vuelve a revisión de META. Mientras tanto podría no estar disponible para enviar.',
+  'templates.edit.warnQuotaLow': 'Te quedan pocas ediciones este mes.',
+  'templates.edit.warnQuotaExhausted':
+    'Según nuestro registro ya usaste las 10 ediciones del mes. Podés intentar igual: la última palabra la tiene META.',
+  'templates.edit.warnCooldown':
+    'Editaste esta plantilla hace menos de 24 horas. META suele permitir una edición por día.',
+};
+
+/** Una clave i18n de WABA a su texto. Si no se reconoce, se devuelve tal cual. */
+function texto(clave: string | null | undefined): string | null {
+  if (!clave) return null;
+  return TEXTOS_POLITICA[clave] ?? clave;
+}
+
+/**
+ * La politica de edicion de WABA, ya legible.
+ *
+ * Dos cosas que hay que hacer aca y no mas adelante:
+ *
+ * 1. **`allowed` no es `canEdit`.** Leer la propiedad equivocada daba `undefined`, y
+ *    `undefined === false` es falso: la pantalla dejaba editar una plantilla en revision
+ *    y el rechazo aparecia recien al guardar, con el formulario ya completo.
+ * 2. **`reason` y `warnings` son claves i18n**, no frases. Mostrarlas sin traducir le
+ *    pone al usuario `templates.edit.blockedInReview` en la cara.
+ *
+ * Sin politica (`null`) se asume que **no** se puede editar: es lo unico honesto cuando
+ * no se sabe, y evita el formulario que va a fallar.
+ */
+export function mapEditPolicy(raw: WabaEditPolicy | null | undefined): EditPolicy {
+  const p = raw ?? {};
+
+  return {
+    canEdit: p.allowed === true,
+    reason: texto(p.reason),
+    // Un borrador no vive en META: se edita sin llamarla.
+    requiresMeta: p.requiresMeta !== false,
+    limited: p.limited === true,
+    used: Number.isFinite(p.used) ? Number(p.used) : 0,
+    remaining: typeof p.remaining === 'number' ? p.remaining : null,
+    cooldownUntil: p.cooldownUntil ?? null,
+    warnings: Array.isArray(p.warnings)
+      ? p.warnings.map((w) => texto(w)).filter((w): w is string => w !== null)
+      : [],
+  };
 }

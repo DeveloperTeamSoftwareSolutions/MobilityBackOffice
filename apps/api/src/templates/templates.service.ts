@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { TemplatesClient } from './templates.client';
-import { mapTemplate, summarizeByStatus } from './templates.util';
+import { mapEditPolicy, mapTemplate, summarizeByStatus } from './templates.util';
 import {
   CreateTemplateInput,
   SortableField,
@@ -86,7 +86,8 @@ export class TemplatesService {
     const template = mapTemplate(found.template);
     if (!template) return null;
 
-    return { template, editPolicy: found.editPolicy };
+    // WABA manda `allowed` y claves i18n; la pantalla necesita `canEdit` y texto.
+    return { template, editPolicy: mapEditPolicy(found.editPolicy) };
   }
 
   /**

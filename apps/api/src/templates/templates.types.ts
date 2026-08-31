@@ -102,19 +102,57 @@ export interface TemplatesPage {
 }
 
 /**
- * Si META permite editar la plantilla ahora mismo.
+ * Lo que devuelve WABA en `editPolicy` (`services/templateEditPolicy.js`).
  *
- * Lo resuelve WABA (`templateEditPolicy`) y viaja con el detalle, para que la pantalla
- * pueda deshabilitar la edicion **antes** de que alguien complete un formulario que va a
- * ser rechazado. Una plantilla en revision no se toca.
+ * Se declara tal cual viaja —con `allowed`, no `canEdit`, y con claves i18n en `reason`
+ * y `warnings`— para que el mapeo sea explicito. Suponer otra forma es lo que hacia que
+ * la pantalla **nunca** bloqueara: leia un `canEdit` que no existe, daba `undefined`, y
+ * `undefined === false` es falso.
+ */
+export interface WabaEditPolicy {
+  allowed?: boolean;
+  /** Clave i18n del motivo cuando no se puede. Ej. `templates.edit.blockedInReview`. */
+  reason?: string | null;
+  /** `false` en un borrador: no vive en META, se edita sin llamarla. */
+  requiresMeta?: boolean;
+  /** Solo las APROBADAS tienen cupo. Rechazadas y pausadas son ilimitadas. */
+  limited?: boolean;
+  /** Ediciones en los ultimos 30 dias. */
+  used?: number;
+  /** Ediciones restantes, o `null` si no hay limite. */
+  remaining?: number | null;
+  /** ISO hasta cuando dura la espera de 24 h entre ediciones. */
+  cooldownUntil?: string | null;
+  /** Claves i18n de avisos que NO bloquean. */
+  warnings?: string[];
+}
+
+/**
+ * La politica de edicion, ya legible.
+ *
+ * Las reglas las decide META y las evalua WABA; aca solo se traducen sus claves i18n a
+ * texto, porque la pantalla no tiene por que conocer ese vocabulario.
+ *
+ * Los numeros de limite (10 ediciones cada 30 dias, 1 por dia) **no estan en la
+ * documentacion de META**: WABA los toma de terceros que integran la misma API. Por eso
+ * viajan como aviso y nunca como bloqueo — la ultima palabra la tiene META.
  */
 export interface EditPolicy {
   canEdit: boolean;
-  /** Motivo cuando `canEdit` es `false`. */
-  reason?: string | null;
-  /** Avisos que no bloquean (limite de ediciones, tiempo de espera). */
-  warnings?: string[];
-  [key: string]: unknown;
+  /** Motivo cuando `canEdit` es `false`, ya en castellano. */
+  reason: string | null;
+  /** `false` en un borrador: no vive en META. */
+  requiresMeta: boolean;
+  /** Si aplica el cupo de ediciones (solo las aprobadas). */
+  limited: boolean;
+  /** Ediciones usadas en los ultimos 30 dias. */
+  used: number;
+  /** Ediciones restantes, o `null` si no hay limite. */
+  remaining: number | null;
+  /** ISO hasta cuando dura la espera entre ediciones, o `null`. */
+  cooldownUntil: string | null;
+  /** Avisos que no bloquean, ya en castellano. */
+  warnings: string[];
 }
 
 /** Detalle de una plantilla + si se puede editar. */

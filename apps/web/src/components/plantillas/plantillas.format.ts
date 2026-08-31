@@ -1,5 +1,15 @@
 import { Template, TemplateStatus } from './plantillas.types';
 
+/** Un tono por estado: ninguno se confunde con otro en la lista. */
+export type StatusTone =
+  | 'ok'
+  | 'review'
+  | 'draft'
+  | 'rejected'
+  | 'paused'
+  | 'disabled'
+  | 'neutral';
+
 /** Cómo se lee una plantilla en pantalla. Una sola redacción para toda la sección. */
 
 /** Etiqueta del estado de aprobación de META. */
@@ -47,21 +57,48 @@ export function statusHint(status: TemplateStatus | null): string | null {
   }
 }
 
-/** Tono visual del estado. Separa lo que se puede usar de lo que no. */
-export function statusTone(status: TemplateStatus | null): 'ok' | 'warn' | 'bad' | 'neutral' {
+/**
+ * Tono visual del estado. **Uno distinto por estado**: si dos comparten color, la
+ * columna deja de responder de un vistazo la unica pregunta que importa —si la
+ * plantilla se puede usar, si hay que esperar, o si hay algo que corregir.
+ */
+export function statusTone(status: TemplateStatus | null): StatusTone {
   switch (status) {
     case 'APPROVED':
       return 'ok';
     case 'PENDING':
+      return 'review';
     case 'DRAFT':
-      return 'warn';
+      return 'draft';
     case 'REJECTED':
+      return 'rejected';
     case 'PAUSED':
+      return 'paused';
     case 'DISABLED':
-      return 'bad';
+      return 'disabled';
     default:
       return 'neutral';
   }
+}
+
+/**
+ * Si la plantilla se puede editar, mirando solo el estado.
+ *
+ * Espeja `templateEditPolicy.js` de WABA (`EDITABLE_STATUSES` / `IN_REVIEW_STATUSES`) y
+ * sirve para **no ofrecer** un boton que va a fallar. No decide: la autoridad es la
+ * politica que devuelve el detalle, que ademas sabe del cupo y del identificador de META.
+ */
+export function editableSegunEstado(status: TemplateStatus | null): boolean {
+  return status === 'APPROVED' || status === 'REJECTED' || status === 'PAUSED'
+    || status === 'DISABLED' || status === 'DRAFT';
+}
+
+/** Por que no se ofrece editar. Va en el `title` del boton apagado. */
+export function motivoNoEditable(status: TemplateStatus | null): string {
+  if (status === 'PENDING') {
+    return 'META está revisando esta plantilla. Hasta que termine no acepta cambios.';
+  }
+  return 'META no permite editar una plantilla en este estado.';
 }
 
 /** Categoría de META, en castellano. */
@@ -113,16 +150,17 @@ export function headerLabel(headerType: string | null): string | null {
 }
 
 /**
- * Resumen de las variables.
+ * Cuantos datos variables tiene la plantilla.
  *
- * Importa porque una plantilla con variables **no se puede enviar sin completarlas**, y
- * eso no se ve mirando el cuerpo de reojo.
+ * Dice **cuantos hay**, no que falte algo: decia "a completar" y se leia como que la
+ * plantilla estaba incompleta. Los ejemplos ya se cargaron al crearla; lo que se
+ * completa es el valor real, y eso pasa al enviar cada mensaje, no aca.
  */
 export function variablesLabel(template: Template): string {
   const n = template.variables.length;
   if (n === 0) return 'Sin variables';
-  if (n === 1) return '1 variable a completar';
-  return `${n} variables a completar`;
+  if (n === 1) return '1 variable';
+  return `${n} variables`;
 }
 
 /** Texto del botón para la lista. */

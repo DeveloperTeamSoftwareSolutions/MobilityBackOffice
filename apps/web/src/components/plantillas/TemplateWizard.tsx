@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { TemplateButton, TemplateFormState, TemplateVariable } from './plantillas.types';
+import {
+  EditPolicy,
+  Template,
+  TemplateButton,
+  TemplateFormState,
+  TemplateVariable,
+} from './plantillas.types';
+import { EditPolicyNotice } from './EditPolicyNotice';
 import { aPayload, mensajesDeError, validateTemplate } from './plantillas.api';
 import { HeaderMediaUpload } from './HeaderMediaUpload';
 import { JsonBox } from './JsonBox';
@@ -35,6 +42,8 @@ export function TemplateWizard({
   onSaveDraft,
   savingDraft,
   draftNotice,
+  template,
+  editPolicy,
 }: {
   form: TemplateFormState;
   setForm: (f: TemplateFormState | ((f: TemplateFormState) => TemplateFormState)) => void;
@@ -47,7 +56,15 @@ export function TemplateWizard({
   onSaveDraft: (() => void) | null;
   savingDraft: boolean;
   draftNotice: string | null;
+  /** `null` = alta. Con plantilla = edición: nombre e idioma quedan bloqueados. */
+  template: Template | null;
+  editPolicy: EditPolicy | null;
 }) {
+  const esEdicion = template !== null;
+  // Si META no la deja editar, no se ofrece enviar: el rechazo llegaria igual, pero
+  // despues de completar todo el asistente.
+  const bloqueadaPorMeta = esEdicion && editPolicy ? editPolicy.canEdit === false : false;
+
   const [paso, setPaso] = useState(0);
   const pasos = pasosDe(form.category);
   const nombrePaso = pasos[paso];
@@ -100,11 +117,18 @@ export function TemplateWizard({
   return (
     <div className="bo-pl__wizard">
       <div className="bo-pl__formhead">
-        <h2 className="bo-pl__formtitle">Crear plantilla con asistente</h2>
+        <h2 className="bo-pl__formtitle">
+          {esEdicion ? `Editar ${template.name} con asistente` : 'Crear plantilla con asistente'}
+        </h2>
         <p className="bo-pl__formsub">
-          Nada se envía a META hasta el último paso.
+          {esEdicion
+            ? 'Al guardar, la plantilla vuelve a revisión de META. El nombre y el idioma no se pueden cambiar.'
+            : 'Nada se envía a META hasta el último paso.'}
         </p>
       </div>
+
+      {/* Lo que META permite ahora: se dice antes de que alguien escriba. */}
+      <EditPolicyNotice policy={esEdicion ? editPolicy : null} />
 
       {/* ---- Barra de pasos ---- */}
       <ol className="bo-pl__steps">
@@ -132,8 +156,12 @@ export function TemplateWizard({
 
       <div className="bo-pl__formgrid">
         <div className="bo-pl__formcol">
-          {nombrePaso === 'Objetivo' && <PasoObjetivo form={form} set={set} saving={saving} />}
-          {nombrePaso === 'Nombre' && <PasoNombre form={form} set={set} saving={saving} />}
+          {nombrePaso === 'Objetivo' && (
+            <PasoObjetivo form={form} set={set} saving={saving} esEdicion={esEdicion} />
+          )}
+          {nombrePaso === 'Nombre' && (
+            <PasoNombre form={form} set={set} saving={saving} esEdicion={esEdicion} />
+          )}
           {nombrePaso === 'Mensaje' && (
             <PasoMensaje
               form={form}
@@ -205,9 +233,13 @@ export function TemplateWizard({
             type="button"
             className="bo-pl__btn bo-pl__btn--primary"
             onClick={onSubmit}
-            disabled={saving || erroresFinales.length > 0}
+            disabled={saving || bloqueadaPorMeta || erroresFinales.length > 0}
           >
-            {saving ? 'Enviando…' : 'Enviar a revisión'}
+            {saving
+              ? 'Enviando…'
+              : esEdicion
+                ? 'Guardar y reenviar a revisión'
+                : 'Enviar a revisión'}
           </button>
         ) : (
           <button
@@ -248,7 +280,17 @@ type Set = <K extends keyof TemplateFormState>(k: K, v: TemplateFormState[K]) =>
  * Es la diferencia central con el modo avanzado: se pregunta para qué sirve el mensaje,
  * en lenguaje llano, y de ahí sale la categoría de META.
  */
-function PasoObjetivo({ form, set, saving }: { form: TemplateFormState; set: Set; saving: boolean }) {
+function PasoObjetivo({
+  form,
+  set,
+  saving,
+  esEdicion,
+}: {
+  form: TemplateFormState;
+  set: Set;
+  saving: boolean;
+  esEdicion: boolean;
+}) {
   const opciones = [
     {
       value: 'UTILITY',
@@ -296,6 +338,13 @@ function PasoObjetivo({ form, set, saving }: { form: TemplateFormState; set: Set
         ))}
       </div>
 
+      {esEdicion && (
+        <p className="bo-pl__notice">
+          Cambiar el objetivo de una plantilla que ya existe hace que META la revise de
+          nuevo desde cero, y puede cambiarle el costo por envio.
+        </p>
+      )}
+
       {form.category === 'MARKETING' && (
         <p className="bo-pl__notice">
           Las plantillas promocionales tienen un costo por envío más alto y META es más
@@ -313,18 +362,38 @@ function PasoObjetivo({ form, set, saving }: { form: TemplateFormState; set: Set
 }
 
 /** Paso 2 — un título para reconocerla, y de ahí sale el nombre técnico. */
-function PasoNombre({ form, set, saving }: { form: TemplateFormState; set: Set; saving: boolean }) {
+function PasoNombre({
+  form,
+  set,
+  saving,
+  esEdicion,
+}: {
+  form: TemplateFormState;
+  set: Set;
+  saving: boolean;
+  esEdicion: boolean;
+}) {
   const [tocado, setTocado] = useState(false);
 
   const cambiarTitulo = (v: string) => {
     set('friendlyTitle', v);
-    // Mientras no lo editen a mano, el nombre técnico sigue al título.
-    if (!tocado) set('name', nombreTecnico(v));
+    // Mientras no lo editen a mano, el nombre técnico sigue al título. En edición no:
+    // el nombre ya existe en META y arrastrarlo lo dejaría distinto del real.
+    if (!tocado && !esEdicion) set('name', nombreTecnico(v));
   };
 
   return (
     <>
-      <h3 className="bo-pl__steptitle">¿Cómo querés llamarla?</h3>
+      <h3 className="bo-pl__steptitle">
+        {esEdicion ? 'Nombre e idioma' : '¿Cómo querés llamarla?'}
+      </h3>
+
+      {esEdicion && (
+        <p className="bo-pl__notice">
+          META toma el nombre y el idioma como <strong>identidad</strong> de la plantilla:
+          no se pueden cambiar. Para otro nombre hay que crear una plantilla nueva.
+        </p>
+      )}
 
       <div className="bo-pl__field">
         <label className="bo-pl__label" htmlFor="wz-title">
@@ -348,7 +417,7 @@ function PasoNombre({ form, set, saving }: { form: TemplateFormState; set: Set; 
           id="wz-name"
           className="bo-pl__input"
           value={form.name}
-          disabled={saving}
+          disabled={saving || esEdicion}
           maxLength={LIMITS.NAME_MAX}
           onChange={(e) => {
             setTocado(true);
@@ -356,8 +425,9 @@ function PasoNombre({ form, set, saving }: { form: TemplateFormState; set: Set; 
           }}
         />
         <span className="bo-pl__hint">
-          Es el que usa META. Lo generamos del título. Solo minúsculas, números y guiones
-          bajos. <strong>No se puede cambiar después.</strong>
+          {esEdicion
+            ? 'Es el que usa META como identidad de la plantilla. No se puede cambiar.'
+            : 'Es el que usa META. Lo generamos del título. Solo minúsculas, números y guiones bajos. No se puede cambiar después.'}
         </span>
       </div>
 
@@ -369,7 +439,7 @@ function PasoNombre({ form, set, saving }: { form: TemplateFormState; set: Set; 
           id="wz-lang"
           className="bo-pl__input"
           value={form.language}
-          disabled={saving}
+          disabled={saving || esEdicion}
           onChange={(e) => set('language', e.target.value)}
         >
           <option value="es_MX">Español (MX)</option>
@@ -378,7 +448,9 @@ function PasoNombre({ form, set, saving }: { form: TemplateFormState; set: Set; 
           <option value="en_US">Inglés (US)</option>
           <option value="pt_BR">Portugués (BR)</option>
         </select>
-        <span className="bo-pl__hint">Tampoco se puede cambiar después.</span>
+        <span className="bo-pl__hint">
+          {esEdicion ? 'Tampoco se puede cambiar.' : 'Tampoco se puede cambiar después.'}
+        </span>
       </div>
     </>
   );

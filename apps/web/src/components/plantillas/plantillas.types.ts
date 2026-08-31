@@ -58,14 +58,33 @@ export interface TemplatesQuery {
   status: TemplateStatus | null;
 }
 
-/** Si META permite editar la plantilla ahora mismo. Lo resuelve WABA. */
+/**
+ * Si META permite editar la plantilla ahora mismo.
+ *
+ * Las reglas las decide META, las evalua WABA (`templateEditPolicy.js`) y el API las
+ * traduce. La pantalla solo las muestra: no vuelve a decidir.
+ *
+ * Los numeros del cupo (10 ediciones cada 30 dias, 1 por dia) **no estan en la
+ * documentacion de META** — WABA los toma de terceros que integran la misma API. Por
+ * eso se avisan y nunca bloquean: la ultima palabra la tiene META.
+ */
 export interface EditPolicy {
   canEdit: boolean;
-  reason?: string | null;
-  warnings?: string[];
-  [key: string]: unknown;
+  /** Motivo cuando `canEdit` es `false`. Ya viene en castellano. */
+  reason: string | null;
+  /** `false` en un borrador: no vive en META. */
+  requiresMeta: boolean;
+  /** Si aplica el cupo de ediciones (solo las aprobadas). */
+  limited: boolean;
+  /** Ediciones usadas en los ultimos 30 dias. */
+  used: number;
+  /** Ediciones restantes, o `null` si no hay limite. */
+  remaining: number | null;
+  /** ISO hasta cuando dura la espera entre ediciones, o `null`. */
+  cooldownUntil: string | null;
+  /** Avisos que no bloquean. Ya vienen en castellano. */
+  warnings: string[];
 }
-
 export interface TemplateDetail {
   template: Template;
   editPolicy: EditPolicy | null;

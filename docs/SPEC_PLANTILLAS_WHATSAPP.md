@@ -1,17 +1,17 @@
 # Plantillas de WhatsApp — especificacion
 
-> Ultima actualizacion: 2026-08-31 · Version: 2.16.0
+> Ultima actualizacion: 2026-08-31 · Version: 2.17.0
 >
-> Seccion "Templates de WhatsApp" (rol Marketing). Consume las plantillas del panel WABA.
-> **Hoy es solo lectura** — ver §6.
+> Seccion "Templates de WhatsApp" (rol Marketing). Consulta, crea y edita las plantillas
+> del panel WABA sin abrirlo y sin un segundo login.
 
 ---
 
 ## 1. Que resuelve
 
-Que el equipo de marketing vea las plantillas aprobadas por META —las que se usan para
-escribirle a un cliente— sin entrar al panel de WhatsApp por afuera, y **sin un segundo
-login**.
+Que el equipo de marketing **arme y administre** las plantillas de WhatsApp —saludos,
+mensajes de fechas especiales, avisos— sin entrar al panel por afuera y sin un segundo
+login.
 
 ### No confundir con "Panel de WhatsApp"
 
@@ -97,83 +97,102 @@ hacerlo pasar por uno conocido.
 
 ---
 
-## 5. La fuente hoy solo publica las APROBADAS
+## 5. Se ven todos los estados
 
-`GET /api/templates` usa `templateModel.findAllApproved()`:
+El `GET /api/templates` de WABA tenia **dos limitaciones** para una pantalla de
+gestion, y las dos se resolvieron agregando endpoints en WABA (rama
+`feature/task-templates-api-rest`):
 
-```sql
-SELECT ... FROM MessageTemplates WHERE Status = 'APPROVED'
-```
+1. Devolvia **solo las aprobadas** (`findAllApproved`). Las PENDING y las rechazadas
+   —las que hay que atender— no llegaban.
+2. **No habia escritura** por API: crear y editar solo existian como rutas HTML con
+   `requireRole`, que la `x-api-key` no satisface.
 
-Las **PENDING** y **REJECTED** no llegan — que son justo las que habria que atender.
+### El GET tiene dos modos, y el viejo NO cambio
 
-El DTO trae `onlyApproved: true` cuando todo lo recibido esta aprobado, y la pantalla lo
-avisa. Es una **inferencia**, no un dato: la fuente no dice si filtro. Cuando WABA
-publique todos los estados, `onlyApproved` pasa a `false` solo y el aviso desaparece **sin
-tocar codigo**.
+| Llamada | Devuelve |
+|---|---|
+| `/api/templates` sin params | Array plano de **aprobadas** — el contrato de siempre |
+| `/api/templates?status=all` | `{ data, pagination }` con **todos** los estados |
 
-> El modelo de WABA ya tiene `findAll()` (sin filtro). Solo hace falta exponerlo.
+La compatibilidad no es un detalle: `public/js/sendMessage.js` del propio panel usa el
+primer modo para el selector de plantillas al enviar un mensaje, y ahi ofrecer una
+rechazada no tendria sentido. Cambiar esa forma habria **roto el envio de mensajes de
+WABA**.
 
----
-
-## 6. Lo que falta: crear y editar
-
-**El objetivo de la seccion incluye crear y editar plantillas** (saludos, mensajes de
-fechas especiales). Hoy no se puede.
-
-La API REST de WABA **solo publica el `GET`**. Todo el alta y la edicion viven en rutas
-**HTML** con `requireRole('admin','editor')` — que **falla con `x-api-key`**, porque
-`requireRole` lee `req.session.user.Role` y la key no crea sesion:
-
-```
-GET  /templates/            POST /templates/wizard/validate
-GET  /templates/wizard      POST /templates/wizard/upload-sample
-POST /templates/wizard      POST /templates/drafts
-GET  /templates/new         POST /templates/drafts/:id/submit
-POST /templates/new         POST /templates/sync
-GET  /templates/:id         POST /templates/:id/edit
-GET  /templates/:id/edit    POST /templates/:id/delete
-```
-
-### Lo que hay que pedirle al equipo de WABA
-
-Exponer como REST lo que su controller ya hace, bajo `requireAuth` y devolviendo JSON con
-su `responseHelper`:
-
-| | | Reusa |
-|---|---|---|
-| `GET` | `/api/templates?status=all` | `templateModel.findAll` (hoy usa `findAllApproved`) |
-| `POST` | `/api/templates` | `templateController.create` |
-| `PUT` | `/api/templates/:id` | `templateController.update` |
-| `DELETE` | `/api/templates/:id` | `templateController.remove` |
-| `POST` | `/api/templates/sync` | `templateController.sync` |
-
-**NO conviene que BackOffice hable con META directamente.** Crear una plantilla no es
-escribir una fila: se manda a META para aprobacion. `whatsappService.js` ya tiene el
-`AccessToken` por cuenta, el manejo de errores de META y el log en `MetaApiLogs`, y hay un
-wizard entero alrededor (validate, upload-sample, drafts, submit). Duplicarlo seria tener
-dos integraciones con META que mantener sincronizadas.
+BackOffice pide `status=all`. `onlyApproved` sigue en el DTO por si la fuente vuelve a
+filtrar: entonces la UI avisa sola.
 
 ---
 
+## 6. Crear y editar
+
+Los endpoints nuevos de WABA **reusan `templateService`**, que es donde vive el dialogo
+con META. No hay una segunda integracion que mantener sincronizada:
+
+```
+GET    /api/templates/:id    detalle + politica de edicion
+POST   /api/templates        crear y enviar a aprobacion
+PUT    /api/templates/:id    editar y reenviar
+DELETE /api/templates/:id    borrar (META y local)
+POST   /api/templates/sync   traer de META lo que cambio alla
+```
+
+### Tres cosas que la pantalla deja explicitas
+
+**Crear no es guardar.** La plantilla se envia a META y queda "En revision". El estado
+lo decide META, tarda, y puede rechazarla. Por eso `status` nunca se acepta como
+entrada y el boton dice "Enviar a revision de META", no "Guardar".
+
+**El nombre y el idioma no se cambian.** META los toma como identidad de la plantilla.
+En edicion van bloqueados y el `PUT` ni siquiera los lee.
+
+**AUTHENTICATION es otra cosa.** Ahi META **escribe el texto** y lo traduce: no hay
+mensaje, ni encabezado, ni botones que configurar. Solo la advertencia de seguridad, la
+validez del codigo (1 a 90 minutos) y el boton de copiar. El formulario cambia entero al
+elegir esa categoria, y no muestra vista previa porque el texto todavia no existe.
+
+### La validacion corre en dos lugares, y no es duplicacion
+
+| Donde | Para que |
+|---|---|
+| `plantillas.validate.ts` (front) | Avisar **mientras se escribe**. Un rechazo de META cuesta horas o dias |
+| `templateValidator.js` (WABA) | La autoridad. Es el **mismo** que usan el asistente y el formulario del panel |
+
+El front no decide nada: si su chequeo pasa pero WABA rechaza, el error de WABA se
+muestra tal cual. Lo que evita es el viaje de ida y vuelta por algo que ya se sabe que
+esta mal — una variable salteada, un texto de mas, cuatro botones de respuesta rapida.
+
+La regla que mas se rompe: **las variables tienen que ir `{{1}}, {{2}}, {{3}}` sin
+saltos**. META numera los ejemplos por posicion y un hueco es rechazo.
+
+### Los errores del servidor se muestran, no se tapan
+
+El client traduce los 4xx de WABA a errores de Nest conservando el mensaje: son cosas
+que quien escribe la plantilla puede corregir. Un `409` es el caso mas claro — "esta en
+revision, no se puede editar ahora" no es una falla del servidor.
+
+---
 ## 7. Archivos
 
 **Backend** (`apps/api/src/templates/`)
 
 | Archivo | Que hace |
 |---|---|
-| `templates.client.ts` | WABA `/api/templates` con `x-api-key` |
+| `templates.client.ts` | WABA `/api/templates` con `x-api-key`; traduce sus 4xx conservando el mensaje |
 | `templates.util.ts` | Parseo defensivo, variables con fallback, resumen |
-| `templates.service.ts` | Filtra, ordena, pagina; infiere `onlyApproved` |
-| `templates.controller.ts` | `@Roles(Marketing)`, whitelist de sort y estado |
+| `templates.service.ts` | Filtra, ordena, pagina; separa el payload de AUTHENTICATION |
+| `templates.controller.ts` | `@Roles(Marketing)`, whitelist de sort y estado, CRUD |
 
 **Frontend** (`apps/web/src/components/plantillas/`)
 
 | Archivo | Que hace |
 |---|---|
 | `plantillas.format.ts` | La traduccion a castellano de estados, categorias e idiomas |
+| `plantillas.validate.ts` | Las reglas de META, para avisar mientras se escribe |
 | `TemplatePreview.tsx` | **Como le llega el mensaje al cliente**, con las variables resaltadas |
-| `PlantillasPanel.tsx` | Compone: contadores por estado, buscador, tabla y paginado |
+| `TemplateForm.tsx` | Alta y edicion. Cambia entero segun la categoria |
+| `PlantillasPanel.tsx` | Compone: contadores, buscador, tabla, formulario y acciones |
 
 ---
 
@@ -202,13 +221,19 @@ Van en **`apps/api/.env`**, no en el de la raiz: el API arranca con
 - [ ] Una plantilla con `ButtonsJson` roto se lista igual, sin botones y sin romper la pagina.
 - [ ] Una plantilla sin `VariablesJson` igual muestra sus variables (salen del `BodyText`).
 - [ ] Un usuario con rol `Marketing` entra; uno con `Soporte` no.
+- [ ] Se ven las plantillas en revision y las rechazadas, no solo las aprobadas.
+- [ ] El formulario avisa si las variables van salteadas (`{{1}}` y `{{3}}`).
+- [ ] Al elegir AUTHENTICATION desaparecen mensaje, encabezado y botones.
+- [ ] En edicion, nombre e idioma estan bloqueados.
+- [ ] Una plantilla en revision no se puede editar, y la pantalla lo dice antes de escribir.
+- [ ] Eliminar pide confirmacion: en META no se deshace.
 
 ---
 
 ## 10. Lo que NO se hizo
 
-- **Crear, editar, borrar y sincronizar.** Ver §6: falta del lado de WABA.
-- **Ver plantillas no aprobadas.** Ver §5: la fuente las filtra.
+- **Duplicar el asistente de WABA.** Su wizard tiene validacion en vivo, borradores y
+  carga de ejemplos. Aca hay un formulario directo: para casos complejos, el panel.
 - **Multi-cuenta.** La key resuelve una sola cuenta WABA.
 - **Pasar por el middleware.** Ver §2.
 - **Tocar el repo de WABA.** No se modifico una sola linea.

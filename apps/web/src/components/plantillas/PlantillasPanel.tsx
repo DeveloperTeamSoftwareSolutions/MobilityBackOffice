@@ -1,8 +1,20 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
-import { getStatus, getTemplates } from './plantillas.api';
 import {
+  createTemplate,
+  deleteTemplate,
+  getStatus,
+  getTemplateDetail,
+  getTemplates,
+  mensajesDeError,
+  syncTemplates,
+  updateTemplate,
+} from './plantillas.api';
+import {
+  CreateTemplatePayload,
+  EditPolicy,
   SortableField,
   Template,
+  TemplateFormState,
   TemplatesPage,
   TemplateStatus,
 } from './plantillas.types';
@@ -15,6 +27,7 @@ import {
   variablesLabel,
 } from './plantillas.format';
 import { TemplatePreview } from './TemplatePreview';
+import { TemplateForm } from './TemplateForm';
 import './plantillas.css';
 
 const PAGE_SIZE = 25;
@@ -36,6 +49,15 @@ export function PlantillasPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [abierta, setAbierta] = useState<string | null>(null);
+
+  // `null` = no hay formulario. `{ template: null }` = alta.
+  const [editando, setEditando] = useState<{
+    template: Template | null;
+    editPolicy: EditPolicy | null;
+  } | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const [erroresServidor, setErroresServidor] = useState<string[]>([]);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -106,6 +128,107 @@ export function PlantillasPanel() {
     setPageNum(1);
   };
 
+  const abrirAlta = () => {
+    setErroresServidor([]);
+    setAviso(null);
+    setEditando({ template: null, editPolicy: null });
+  };
+
+  /**
+   * Abre la edición pidiendo el detalle.
+   *
+   * Se consulta antes de mostrar el formulario para traer la política de META: si la
+   * plantilla está en revisión no se puede editar, y es mejor decirlo de entrada que
+   * dejar que alguien escriba y falle al guardar.
+   */
+  const abrirEdicion = async (t: Template) => {
+    if (t.id === null) return;
+    setErroresServidor([]);
+    setAviso(null);
+    try {
+      const detalle = await getTemplateDetail(t.id);
+      setEditando({ template: detalle.template, editPolicy: detalle.editPolicy });
+    } catch {
+      // Sin el detalle se abre igual: el servidor rechazará si no corresponde.
+      setEditando({ template: t, editPolicy: null });
+    }
+  };
+
+  /** El formulario al payload del API. La expresión numérica se convierte acá. */
+  const aPayload = (f: TemplateFormState): CreateTemplatePayload => {
+    const esAuth = f.category === 'AUTHENTICATION';
+    const base = { name: f.name.trim(), language: f.language, category: f.category };
+
+    if (esAuth) {
+      const mins = f.codeExpirationMinutes.trim();
+      return {
+        ...base,
+        addSecurityRecommendation: f.addSecurityRecommendation,
+        codeExpirationMinutes: mins === '' ? null : Number(mins),
+        otpType: f.otpType,
+      };
+    }
+
+    return {
+      ...base,
+      headerType: f.headerType,
+      headerContent: f.headerType === 'TEXT' ? f.headerContent : null,
+      bodyText: f.bodyText,
+      footerText: f.footerText.trim() || null,
+      buttons: f.buttons,
+    };
+  };
+
+  const guardar = async (f: TemplateFormState) => {
+    setGuardando(true);
+    setErroresServidor([]);
+    try {
+      const payload = aPayload(f);
+      if (editando?.template?.id) {
+        const { name: _n, language: _l, ...resto } = payload;
+        await updateTemplate(editando.template.id, resto);
+        setAviso('Se envió a revisión de META. Puede tardar en aprobarse.');
+      } else {
+        await createTemplate(payload);
+        setAviso('Plantilla enviada a revisión de META. Puede tardar en aprobarse.');
+      }
+      setEditando(null);
+      load();
+    } catch (err) {
+      setErroresServidor(mensajesDeError(err));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const eliminar = async (t: Template) => {
+    if (t.id === null) return;
+    // Borrar en META no se deshace: se pide confirmación explícita.
+    const ok = window.confirm(
+      `¿Eliminar la plantilla "${t.name}"? Se borra también en META y no se puede deshacer.`,
+    );
+    if (!ok) return;
+
+    try {
+      await deleteTemplate(t.id);
+      setAviso('Plantilla eliminada.');
+      load();
+    } catch (err) {
+      setAviso(mensajesDeError(err)[0]);
+    }
+  };
+
+  const sincronizar = async () => {
+    setAviso(null);
+    try {
+      await syncTemplates();
+      setAviso('Sincronizado con META.');
+      load();
+    } catch (err) {
+      setAviso(mensajesDeError(err)[0]);
+    }
+  };
+
   return (
     <>
       <h1 className="bo-page__title">Templates de WhatsApp</h1>
@@ -124,8 +247,23 @@ export function PlantillasPanel() {
         </div>
       )}
 
-      {configured === true && (
+      {configured === true && editando && (
+        <div className="bo-card">
+          <TemplateForm
+            template={editando.template}
+            editPolicy={editando.editPolicy}
+            onCancel={() => setEditando(null)}
+            onSubmit={guardar}
+            saving={guardando}
+            serverErrors={erroresServidor}
+          />
+        </div>
+      )}
+
+      {configured === true && !editando && (
         <>
+          {aviso && <p className="bo-pl__notice">{aviso}</p>}
+
           {page && <StatusBar page={page} status={status} onFilter={filtrarPor} />}
 
           <div className="bo-card bo-pl__toolbar">
@@ -141,6 +279,19 @@ export function PlantillasPanel() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+            </div>
+
+            <div className="bo-pl__actions">
+              <button type="button" className="bo-pl__btn" onClick={sincronizar}>
+                Sincronizar con META
+              </button>
+              <button
+                type="button"
+                className="bo-pl__btn bo-pl__btn--primary"
+                onClick={abrirAlta}
+              >
+                Nueva plantilla
+              </button>
             </div>
           </div>
 
@@ -165,6 +316,8 @@ export function PlantillasPanel() {
                   onSort={sort}
                   abierta={abierta}
                   onToggle={(n) => setAbierta((a) => (a === n ? null : n))}
+                  onEdit={abrirEdicion}
+                  onDelete={eliminar}
                 />
 
                 <div className="bo-pl__pager">
@@ -273,6 +426,8 @@ function TemplatesTable({
   onSort,
   abierta,
   onToggle,
+  onEdit,
+  onDelete,
 }: {
   rows: Template[];
   sortBy: SortableField;
@@ -280,6 +435,8 @@ function TemplatesTable({
   onSort: (f: SortableField) => void;
   abierta: string | null;
   onToggle: (name: string) => void;
+  onEdit: (t: Template) => void;
+  onDelete: (t: Template) => void;
 }) {
   return (
     <div className="bo-pl__tablewrap">
@@ -309,6 +466,9 @@ function TemplatesTable({
               </th>
             ))}
             <th scope="col">Variables</th>
+            <th scope="col">
+              <span className="bo-pl__sr">Acciones</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -341,10 +501,26 @@ function TemplatesTable({
                     {hint && <span className="bo-pl__statushint">{hint}</span>}
                   </td>
                   <td>{variablesLabel(t)}</td>
+                  <td className="bo-pl__rowactions">
+                    <button
+                      type="button"
+                      className="bo-pl__btn bo-pl__btn--sm"
+                      onClick={() => onEdit(t)}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      className="bo-pl__btn bo-pl__btn--sm bo-pl__btn--danger"
+                      onClick={() => onDelete(t)}
+                    >
+                      Eliminar
+                    </button>
+                  </td>
                 </tr>
                 {open && (
                   <tr className="bo-pl__detailrow">
-                    <td colSpan={COLUMNS.length + 2}>
+                    <td colSpan={COLUMNS.length + 3}>
                       <TemplatePreview template={t} />
                     </td>
                   </tr>

@@ -2,10 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { TemplatesClient } from './templates.client';
 import { mapTemplate, summarizeByStatus } from './templates.util';
 import {
+  CreateTemplateInput,
   SortableField,
   Template,
+  TemplateButton,
+  TemplateDetail,
   TemplatesPage,
   TemplatesQuery,
+  UpdateTemplateInput,
 } from './templates.types';
 
 /**
@@ -67,6 +71,107 @@ export class TemplatesService {
     }
     return null;
   }
+
+  /**
+   * Detalle por id, con la politica de edicion.
+   *
+   * La politica viene de WABA y dice si META permite editarla **ahora**: una en revision
+   * no se toca. Viaja con el detalle para que el formulario pueda avisarlo antes de que
+   * alguien escriba, en vez de que se entere al guardar.
+   */
+  async getById(id: number): Promise<TemplateDetail | null> {
+    const found = await this.client.getById(id);
+    if (!found) return null;
+
+    const template = mapTemplate(found.template);
+    if (!template) return null;
+
+    return { template, editPolicy: found.editPolicy };
+  }
+
+  /**
+   * Crea la plantilla y la manda a META.
+   *
+   * No "guarda": la envia a revision. `status` lo decide META, por eso no se acepta como
+   * entrada. La validacion de fondo la hace WABA (`templateValidator`), que es la misma
+   * que usan su asistente y su formulario: no hay dos criterios distintos.
+   */
+  async create(input: CreateTemplateInput): Promise<Template | null> {
+    const category = input.category.trim().toUpperCase();
+
+    // AUTHENTICATION no lleva cuerpo, encabezado ni botones: META escribe el texto y
+    // arma el boton OTP. Mandar esos campos ahi es un rechazo seguro.
+    const payload: Record<string, unknown> =
+      category === 'AUTHENTICATION'
+        ? {
+            addSecurityRecommendation: input.addSecurityRecommendation === true,
+            codeExpirationMinutes: input.codeExpirationMinutes ?? null,
+            otpType: input.otpType ?? 'COPY_CODE',
+          }
+        : {
+            headerType: input.headerType ?? 'NONE',
+            headerContent: input.headerContent ?? null,
+            bodyText: input.bodyText,
+            footerText: input.footerText ?? null,
+            buttonsJson: serializeButtons(input.buttons),
+          };
+
+    const saved = await this.client.create({
+      name: input.name.trim(),
+      language: input.language.trim(),
+      category,
+      ...payload,
+    });
+    return mapTemplate(saved);
+  }
+
+  /**
+   * Edita y reenvia a META.
+   *
+   * `name` y `language` no se aceptan: META los toma como identidad de la plantilla y no
+   * los deja cambiar. Mandarlos daria un rechazo despues de un ciclo de revision.
+   */
+  async update(id: number, input: UpdateTemplateInput): Promise<Template | null> {
+    const saved = await this.client.update(id, {
+      category: input.category ? input.category.trim().toUpperCase() : undefined,
+      headerType: input.headerType ?? undefined,
+      headerContent: input.headerContent ?? null,
+      bodyText: input.bodyText ?? undefined,
+      footerText: input.footerText ?? null,
+      buttonsJson: input.buttons ? serializeButtons(input.buttons) : undefined,
+    });
+    return saved ? mapTemplate(saved) : null;
+  }
+
+  remove(id: number): Promise<void> {
+    return this.client.remove(id);
+  }
+
+  /** Trae de META lo que haya cambiado alla: aprobaciones, rechazos, pausas. */
+  sync(): Promise<unknown> {
+    return this.client.sync();
+  }
+}
+
+/**
+ * Botones al formato que espera WABA: una cadena JSON.
+ *
+ * El front manda un array (que es lo natural); WABA guarda y valida una cadena. La
+ * conversion vive aca y no en la UI, para que el formulario no tenga que saber como
+ * almacena el otro sistema.
+ */
+function serializeButtons(buttons: TemplateButton[] | undefined): string | null {
+  if (!buttons || buttons.length === 0) return null;
+
+  return JSON.stringify(
+    buttons.map((b) => {
+      const out: Record<string, string> = { type: b.type ?? '', text: b.text ?? '' };
+      if (b.url) out.url = b.url;
+      // META lo llama `phone_number`, no `phoneNumber`.
+      if (b.phoneNumber) out.phone_number = b.phoneNumber;
+      return out;
+    }),
+  );
 }
 
 /**

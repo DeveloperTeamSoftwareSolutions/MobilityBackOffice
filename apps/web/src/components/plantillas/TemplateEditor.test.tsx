@@ -25,6 +25,7 @@ function plantilla(over: Partial<Template> = {}): Template {
     bodyText: 'Hola, te esperamos.',
     footerText: null,
     buttons: [],
+    createdAt: null,
     variables: [],
     ...over,
   };

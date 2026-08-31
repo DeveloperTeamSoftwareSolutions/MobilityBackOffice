@@ -15,6 +15,7 @@ function template(over: Partial<Template> = {}): Template {
     bodyText: 'Hola {{1}}, tu cita es el {{2}}.',
     footerText: null,
     buttons: [],
+    createdAt: null,
     variables: ['1', '2'],
     ...over,
   };

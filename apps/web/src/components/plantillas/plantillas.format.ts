@@ -170,3 +170,25 @@ export function buttonLabel(button: Template['buttons'][number]): string {
   if (button.phoneNumber) return `${texto} → ${button.phoneNumber}`;
   return texto;
 }
+
+/**
+ * La fecha, corta y legible.
+ *
+ * La lista viene ordenada por esta columna, así que tiene que poder compararse de un
+ * vistazo. El ISO completo va en el `title` para quien necesite la hora exacta.
+ *
+ * Las plantillas viejas —las que WABA sincronizó de META antes de guardar la columna— no
+ * tienen fecha. Se muestra un guion en vez de inventar una.
+ */
+export function fechaCorta(iso: string | null): string {
+  if (!iso) return '—';
+
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+
+  return d.toLocaleDateString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}

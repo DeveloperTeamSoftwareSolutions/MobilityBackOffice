@@ -26,6 +26,8 @@ export interface Template {
   bodyText: string | null;
   footerText: string | null;
   buttons: TemplateButton[];
+  /** Cuando se creo, en ISO. `null` en las viejas que WABA sincronizo de META. */
+  createdAt: string | null;
   /** Variables del cuerpo (`{{1}}`). Sin completarlas, la plantilla no se puede enviar. */
   variables: string[];
 }
@@ -47,7 +49,7 @@ export interface TemplatesPage {
   onlyApproved: boolean;
 }
 
-export type SortableField = 'name' | 'language' | 'category' | 'status';
+export type SortableField = 'createdAt' | 'name' | 'language' | 'category' | 'status';
 
 export interface TemplatesQuery {
   page: number;

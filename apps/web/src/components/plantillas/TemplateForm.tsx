@@ -138,6 +138,8 @@ function comoPlantilla(form: TemplateFormState): Template {
     bodyText: form.bodyText,
     footerText: form.footerText,
     buttons: form.buttons,
+    // Lo que se esta armando todavia no existe en ningun lado: no tiene fecha.
+    createdAt: null,
     variables: variableNumbers(form.bodyText).map(String),
   };
 }

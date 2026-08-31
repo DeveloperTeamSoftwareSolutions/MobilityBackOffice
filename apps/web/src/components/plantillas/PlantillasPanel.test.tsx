@@ -17,6 +17,7 @@ function plantilla(over: Partial<Template> = {}): Template {
     bodyText: 'Hola, te esperamos.',
     footerText: null,
     buttons: [],
+    createdAt: null,
     variables: [],
     ...over,
   };
@@ -191,6 +192,7 @@ describe('PlantillasPanel — reabrir un borrador', () => {
     bodyText: 'Hola {{1}}, te esperamos el {{2}}.',
     footerText: 'Duwest',
     buttons: [],
+    createdAt: null,
     variables: [
       { index: 1, target: 'body' as const, label: 'nombre', example: 'María' },
       { index: 2, target: 'body' as const, label: 'fecha', example: '12 de marzo' },
@@ -411,5 +413,58 @@ describe('PlantillasPanel — la lista después de guardar un borrador', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
 
     expect(await screen.findByText('recien_guardado')).toBeInTheDocument();
+  });
+});
+
+describe('PlantillasPanel — el orden de la lista', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('arranca por fecha de creación, lo más nuevo primero', async () => {
+    // En una lista que crece, lo último que se hizo es lo que se viene a buscar.
+    const { get } = interceptar([plantilla()]);
+    render(<PlantillasPanel />);
+    await screen.findByText('promo_navidad');
+
+    const params = get.mock.calls.find((c) => c[0] === '/api/templates')?.[1] as {
+      params: { sortBy: string; sortDir: string };
+    };
+    expect(params.params.sortBy).toBe('createdAt');
+    expect(params.params.sortDir).toBe('DESC');
+  });
+
+  it('muestra la fecha, porque es el criterio del orden', async () => {
+    // Una lista ordenada por algo que no se ve parece desordenada.
+    interceptar([plantilla({ createdAt: '2026-08-30T10:00:00Z' })]);
+    render(<PlantillasPanel />);
+
+    await screen.findByText('promo_navidad');
+    expect(screen.getByRole('button', { name: /Creada/ })).toBeInTheDocument();
+    expect(screen.getByText('30/08/2026')).toBeInTheDocument();
+  });
+
+  it('una plantilla sin fecha muestra un guion, no una fecha inventada', async () => {
+    interceptar([plantilla({ createdAt: null })]);
+    render(<PlantillasPanel />);
+
+    await screen.findByText('promo_navidad');
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('al ordenar por nombre arranca alfabético, no al revés', async () => {
+    // Por fecha se quiere lo más nuevo; por texto, la A primero.
+    const { get } = interceptar([plantilla()]);
+    render(<PlantillasPanel />);
+    await screen.findByText('promo_navidad');
+
+    await userEvent.click(screen.getByRole('button', { name: /Nombre/ }));
+
+    await waitFor(() => {
+      const ultima = get.mock.calls.filter((c) => c[0] === '/api/templates').pop() as [
+        string,
+        { params: { sortBy: string; sortDir: string } },
+      ];
+      expect(ultima[1].params.sortBy).toBe('name');
+      expect(ultima[1].params.sortDir).toBe('ASC');
+    });
   });
 });

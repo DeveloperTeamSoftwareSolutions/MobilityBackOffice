@@ -1079,3 +1079,10 @@
 .bo-pl__notice--tight {
   margin: 0 0 10px;
 }
+
+/* La fecha del orden por defecto: alineada para poder compararla de un vistazo. */
+.bo-pl__date {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--bo-text-muted);
+}

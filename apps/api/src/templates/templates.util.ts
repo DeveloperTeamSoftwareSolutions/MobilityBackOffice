@@ -114,6 +114,7 @@ export function mapTemplate(row: WabaTemplateRow): Template | null {
     bodyText: text(row.BodyText),
     footerText: text(row.FooterText),
     buttons: parseButtons(row.ButtonsJson),
+    createdAt: text(row.CreatedAt),
     variables: parseVariables(row.VariablesJson, row.BodyText),
   };
 }

@@ -1,7 +1,7 @@
 # Auditoria — Mobility BackOffice
 
 > Ultima actualizacion: 2026-08-31
-> Version: 2.23.0
+> Version: 2.24.0
 
 Toda accion relevante deja traza en `AuditLogs`, la tabla **central compartida** con ITManager
 y MobilityManager. BackOffice escribe sus filas con `AppId='MobilityBackOffice'`.
@@ -103,14 +103,18 @@ significa nada para quien lee la auditoria desde ITManager.
 
 | Action | Cuando | Detail |
 |---|---|---|
+| `TEMPLATE_DRAFT_CREATE` | se crea un borrador (la **primera** vez que se guarda) | que todavia no salio, y el id del borrador |
 | `TEMPLATE_CREATE` | se crea y envia a META | categoria e idioma |
 | `TEMPLATE_UPDATE` | se edita una que ya existe alla | que vuelve a revision |
 | `TEMPLATE_SUBMIT` | se envia un borrador | de que borrador salio |
 | `TEMPLATE_DELETE` | se elimina | aviso de que en META no se deshace |
 | `TEMPLATE_SYNC` | se sincroniza con META | — |
 
-**Guardar un borrador no se audita**: no sale de la aplicacion, se guarda muchas veces por
-plantilla, y llenaria la traza de ruido hasta tapar lo que importa.
+**Crear** un borrador si se audita; **guardarlo de nuevo, no**. La primera vez dice algo
+—quien empezo esto— y ademas cierra el ciclo: borrar un borrador ya se auditaba, asi que
+sin esto la traza podia decir "fulano borro la plantilla X" sin ningun registro de que X
+hubiera sido creada. Los guardados siguientes no aportan: el asistente guarda solo cada
+vez que se alterna de modo, y una plantilla generaria veinte filas mientras se arma.
 
 Al **borrar** se consulta el nombre antes de la baja: despues ya no existe, y sin nombre la
 traza diria que se borro algo pero no que. Si esa consulta falla, se borra igual y se
@@ -118,12 +122,12 @@ registra el id — perder la traza es malo, no poder borrar por eso es peor.
 
 ## Lo que NO se audita
 
-Las lecturas no: nadie audita que alguien miro una lista. De las escrituras quedan cuatro
+Las lecturas no: nadie audita que alguien miro una lista. De las escrituras quedan estas
 afuera, y solo una es una decision pendiente:
 
 | Que | Por que |
 |---|---|
-| Guardar un borrador | No sale de la aplicacion, y se guarda solo cada vez que se alterna de modo: una plantilla puede generar veinte filas mientras se arma. Cuando se envia, eso si queda (`TEMPLATE_SUBMIT`) |
+| Guardar de nuevo un borrador que ya existe | La **creacion** si se audita (`TEMPLATE_DRAFT_CREATE`). Los guardados siguientes no: el asistente guarda solo al alternar de modo, y una plantilla generaria veinte filas mientras se arma |
 | `POST /templates/upload-sample` | **Pendiente de decidir.** A diferencia del borrador, esto **si** sale: queda un archivo en los servidores de META. Es el unico caso con efecto afuera que quedo sin traza |
 | `POST /auth/logout` | Solo limpia una cookie del navegador; no hay sesion del lado del servidor que cerrar |
 | `POST /templates/validate` | Es un ensayo: arma el payload y no escribe nada, ni aca ni en META |

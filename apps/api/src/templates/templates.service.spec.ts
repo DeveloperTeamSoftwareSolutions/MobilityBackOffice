@@ -329,16 +329,52 @@ describe('TemplatesService — auditoría', () => {
     expect(audited[0].action).toBe('TEMPLATE_SYNC');
   });
 
-  it('guardar un borrador NO se audita', async () => {
-    // No sale de la aplicación y se guarda muchas veces por plantilla: llenaría la traza
-    // de ruido hasta tapar lo que importa.
+  it('crear un borrador queda registrado, aunque no salga hacia META', async () => {
+    // Borrarlo si se audita: sin esto la traza podia decir "fulano borro la plantilla X"
+    // sin ningun registro de que X hubiera sido creada.
     const { service, client, audited } = makeService([]);
-    client.saveDraft.mockResolvedValue(62);
+    client.saveDraft.mockResolvedValue(71);
 
-    await service.saveDraft({ ...ALTA, draftId: null });
+    await service.saveDraft({ ...ALTA, draftId: null }, ACTOR);
+
+    expect(audited).toHaveLength(1);
+    expect(audited[0]).toMatchObject({
+      action: 'TEMPLATE_DRAFT_CREATE',
+      entityId: 'promo_navidad',
+      category: AuditCategory.Templates,
+      actorEmail: 'marketing@duwest.com',
+    });
+    expect(audited[0].detail).toContain('borrador=71');
+  });
+
+  it('los guardados siguientes NO se registran', async () => {
+    // El asistente guarda solo cada vez que se alterna de modo: una plantilla generaria
+    // veinte filas que no dicen nada que la primera no diga ya.
+    const { service, client, audited } = makeService([]);
+    client.saveDraft.mockResolvedValue(71);
+
+    await service.saveDraft({ ...ALTA, draftId: 71 }, ACTOR);
 
     expect(audited).toHaveLength(0);
   });
+
+  it('el ciclo de un borrador queda completo', async () => {
+    // Crear y enviar dejan una fila cada uno; los guardados del medio, ninguna.
+    const { service, client, audited } = makeService([]);
+    client.saveDraft.mockResolvedValue(71);
+    client.submitDraft.mockResolvedValue(row({ Name: 'promo_navidad' }));
+
+    await service.saveDraft({ ...ALTA, draftId: null }, ACTOR);
+    await service.saveDraft({ ...ALTA, draftId: 71 }, ACTOR);
+    await service.saveDraft({ ...ALTA, draftId: 71 }, ACTOR);
+    await service.submitDraft(71, ALTA, ACTOR);
+
+    expect(audited.map((a) => a.action)).toEqual([
+      'TEMPLATE_DRAFT_CREATE',
+      'TEMPLATE_SUBMIT',
+    ]);
+  });
+
 
   it('usa el modo que no propaga errores', async () => {
     // La plantilla ya salió hacia META: un fallo del audit central no puede revertirla ni
@@ -357,5 +393,75 @@ describe('TemplatesService — auditoría', () => {
     expect(audit.safeRecord).toHaveBeenCalled();
     expect(audit.record).not.toHaveBeenCalled();
     expect(service).toBeDefined();
+  });
+});
+
+/**
+ * La lista arranca por fecha de creación, lo más nuevo arriba: en una lista que crece, lo
+ * último que se hizo es lo que se viene a buscar.
+ */
+describe('TemplatesService — orden por fecha de creación', () => {
+  const conFecha = (name: string, createdAt: string | null) =>
+    row({ Name: name, CreatedAt: createdAt });
+
+  it('ordena de la más nueva a la más vieja', async () => {
+    const { service } = makeService([
+      conFecha('vieja', '2026-01-01T10:00:00Z'),
+      conFecha('nueva', '2026-08-30T10:00:00Z'),
+      conFecha('media', '2026-05-15T10:00:00Z'),
+    ]);
+
+    const res = await service.getAll(query({ sortBy: 'createdAt', sortDir: 'DESC' }));
+    expect(res.data.map((t) => t.name)).toEqual(['nueva', 'media', 'vieja']);
+  });
+
+  it('compara como fechas, no como texto', async () => {
+    // WABA mezcla lo que creó su panel con lo que sincronizó de META, y los formatos ISO
+    // solo ordenan bien alfabéticamente mientras sean idénticos.
+    const { service } = makeService([
+      conFecha('con_offset', '2026-08-30T10:00:00-03:00'),
+      conFecha('con_zeta', '2026-08-30T09:00:00Z'),
+    ]);
+
+    // 10:00 en -03:00 son las 13:00 Z: es la más nueva aunque el texto diga lo contrario.
+    const res = await service.getAll(query({ sortBy: 'createdAt', sortDir: 'DESC' }));
+    expect(res.data.map((t) => t.name)).toEqual(['con_offset', 'con_zeta']);
+  });
+
+  it('las que no tienen fecha van al final, en cualquier dirección', async () => {
+    // Son las viejas, sincronizadas antes de que WABA guardara la columna. Arriba
+    // taparían justo lo que se buscaba al ordenar por fecha.
+    const filas = [
+      conFecha('sin_fecha', null),
+      conFecha('con_fecha', '2026-08-30T10:00:00Z'),
+    ];
+
+    const { service } = makeService(filas);
+    const desc = await service.getAll(query({ sortBy: 'createdAt', sortDir: 'DESC' }));
+    expect(desc.data.map((t) => t.name)).toEqual(['con_fecha', 'sin_fecha']);
+
+    const asc = await service.getAll(query({ sortBy: 'createdAt', sortDir: 'ASC' }));
+    expect(asc.data.map((t) => t.name)).toEqual(['con_fecha', 'sin_fecha']);
+  });
+
+  it('una fecha rota se trata como sin fecha', async () => {
+    const { service } = makeService([
+      conFecha('rota', 'no-es-una-fecha'),
+      conFecha('buena', '2026-08-30T10:00:00Z'),
+    ]);
+
+    const res = await service.getAll(query({ sortBy: 'createdAt', sortDir: 'DESC' }));
+    expect(res.data.map((t) => t.name)).toEqual(['buena', 'rota']);
+  });
+
+  it('dos de la misma fecha desempatan por nombre', async () => {
+    // Sin desempate bailan entre recargas.
+    const { service } = makeService([
+      conFecha('zeta', '2026-08-30T10:00:00Z'),
+      conFecha('alfa', '2026-08-30T10:00:00Z'),
+    ]);
+
+    const res = await service.getAll(query({ sortBy: 'createdAt', sortDir: 'DESC' }));
+    expect(res.data.map((t) => t.name)).toEqual(['alfa', 'zeta']);
   });
 });

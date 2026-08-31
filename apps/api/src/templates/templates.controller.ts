@@ -107,8 +107,12 @@ export class TemplatesController {
       limit: intInRange(limit, DEFAULT_LIMIT, MAX_LIMIT),
       search: (search ?? '').trim(),
       // Whitelist: lo que no este declarado cae al default en vez de viajar al sort.
-      sortBy: isSortableField(requestedSort) ? (requestedSort as SortableField) : 'name',
-      sortDir: sortDir === 'DESC' ? 'DESC' : 'ASC',
+      //
+      // Por defecto, las mas nuevas arriba: en una lista que crece, lo ultimo que se
+      // hizo es lo que se viene a buscar. Alfabetico dejaba lo recien creado en
+      // cualquier lado.
+      sortBy: isSortableField(requestedSort) ? (requestedSort as SortableField) : 'createdAt',
+      sortDir: sortDirPorDefecto(sortDir, requestedSort),
       status: isTemplateStatus(requestedStatus)
         ? (requestedStatus as TemplateStatus)
         : null,
@@ -169,8 +173,14 @@ export class TemplatesController {
   // seguir despues, y alternar de modo sin perder lo cargado.
   @Post('drafts')
   @HttpCode(200)
-  async saveDraft(@Body() body: CreateTemplateInput & { draftId?: number | null }) {
-    const draftId = await this.templates.saveDraft(body ?? ({} as CreateTemplateInput));
+  async saveDraft(
+    @Body() body: CreateTemplateInput & { draftId?: number | null },
+    @Req() req: AuthedRequest,
+  ) {
+    const draftId = await this.templates.saveDraft(
+      body ?? ({} as CreateTemplateInput),
+      actorFrom(req),
+    );
     return { success: true, draftId };
   }
 
@@ -267,6 +277,19 @@ export class TemplatesController {
     await this.templates.remove(parseId(id), actorFrom(req));
     return { success: true };
   }
+}
+
+/**
+ * La direccion del orden.
+ *
+ * Por fecha el default es descendente —lo mas nuevo arriba— y por texto, ascendente:
+ * una lista alfabetica al reves no la espera nadie. Lo que el usuario pida explicitamente
+ * manda sobre las dos.
+ */
+function sortDirPorDefecto(sortDir: string | undefined, sortBy: string): 'ASC' | 'DESC' {
+  if (sortDir === 'DESC') return 'DESC';
+  if (sortDir === 'ASC') return 'ASC';
+  return sortBy === 'createdAt' || !sortBy ? 'DESC' : 'ASC';
 }
 
 /** Id numerico. Un id invalido es 400, no un 500 al llegar a WABA. */

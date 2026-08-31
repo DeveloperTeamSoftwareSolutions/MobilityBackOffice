@@ -53,6 +53,8 @@ export interface WabaTemplateRow {
   ButtonsJson?: string | null;
   ComponentsJson?: string | null;
   VariablesJson?: string | null;
+  /** Cuando se creo en WABA. ISO. */
+  CreatedAt?: string | null;
 }
 
 /** Plantilla ya normalizada para la UI. */
@@ -67,6 +69,8 @@ export interface Template {
   bodyText: string | null;
   footerText: string | null;
   buttons: TemplateButton[];
+  /** Cuando se creo, en ISO. `null` en las viejas que WABA sincronizo de META. */
+  createdAt: string | null;
   /**
    * Nombres de las variables del cuerpo (`{{1}}`, `{{nombre}}`).
    *
@@ -311,7 +315,7 @@ export const VALID_CATEGORIES = ['MARKETING', 'UTILITY', 'AUTHENTICATION'] as co
 export const VALID_HEADER_TYPES = ['NONE', 'TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT'] as const;
 export const VALID_BUTTON_TYPES = ['QUICK_REPLY', 'URL', 'PHONE_NUMBER'] as const;
 
-export const SORTABLE_FIELDS = ['name', 'language', 'category', 'status'] as const;
+export const SORTABLE_FIELDS = ['createdAt', 'name', 'language', 'category', 'status'] as const;
 export type SortableField = (typeof SORTABLE_FIELDS)[number];
 
 export function isSortableField(value: string): value is SortableField {

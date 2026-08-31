@@ -24,6 +24,7 @@ import {
 import {
   categoryLabel,
   editableSegunEstado,
+  fechaCorta,
   motivoNoEditable,
   languageLabel,
   statusHint,
@@ -44,9 +45,8 @@ const PAGE_SIZE = 25;
  * pantalla propia, igual que hace MobilityManager con las conversaciones. No hay iframe
  * ni segundo login.
  *
- * **Todavía es solo lectura.** Crear y editar necesita endpoints REST que WABA aún no
- * expone (su alta y edición viven en rutas HTML con control de rol). Ver
- * `docs/SPEC_PLANTILLAS_WHATSAPP.md`.
+ * Crear, editar y enviar a META tambien pasan por aca: los endpoints REST se agregaron
+ * del lado de WABA. Ver `docs/SPEC_PLANTILLAS_WHATSAPP.md`.
  */
 export function PlantillasPanel() {
   /**
@@ -78,8 +78,10 @@ export function PlantillasPanel() {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [pageNum, setPageNum] = useState(1);
-  const [sortBy, setSortBy] = useState<SortableField>('name');
-  const [sortDir, setSortDir] = useState<'ASC' | 'DESC'>('ASC');
+  // Las mas nuevas arriba: en una lista que crece, lo ultimo que se hizo es lo que se
+  // viene a buscar.
+  const [sortBy, setSortBy] = useState<SortableField>('createdAt');
+  const [sortDir, setSortDir] = useState<'ASC' | 'DESC'>('DESC');
   const [status, setStatus] = useState<TemplateStatus | null>(null);
 
   useEffect(() => {
@@ -135,7 +137,9 @@ export function PlantillasPanel() {
     if (field === sortBy) setSortDir((d) => (d === 'ASC' ? 'DESC' : 'ASC'));
     else {
       setSortBy(field);
-      setSortDir('ASC');
+      // Por fecha se arranca de lo mas nuevo; por texto, alfabetico: una lista de
+      // nombres al reves no la espera nadie.
+      setSortDir(field === 'createdAt' ? 'DESC' : 'ASC');
     }
     setPageNum(1);
   };
@@ -455,6 +459,10 @@ const COLUMNS: { key: SortableField; label: string }[] = [
   { key: 'category', label: 'Categoría' },
   { key: 'language', label: 'Idioma' },
   { key: 'status', label: 'Estado' },
+  // Al final: la lista se lee de izquierda a derecha por lo que identifica la plantilla,
+  // y la fecha es contexto. Pero tiene que estar, porque es el orden por defecto y una
+  // lista ordenada por algo que no se ve parece desordenada.
+  { key: 'createdAt', label: 'Creada' },
 ];
 
 function TemplatesTable({
@@ -539,6 +547,9 @@ function TemplatesTable({
                     {hint && <span className="bo-pl__statushint">{hint}</span>}
                   </td>
                   <td>{variablesLabel(t)}</td>
+                  <td className="bo-pl__date" title={t.createdAt ?? undefined}>
+                    {fechaCorta(t.createdAt)}
+                  </td>
                   <td className="bo-pl__actionscell">
                     {/*
                       * Una plantilla en revision no se ofrece para editar: META no acepta

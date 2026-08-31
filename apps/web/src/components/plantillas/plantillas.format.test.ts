@@ -33,6 +33,7 @@ function template(over: Partial<Template> = {}): Template {
     bodyText: 'Hola {{1}}',
     footerText: null,
     buttons: [],
+    createdAt: null,
     variables: ['1'],
     ...over,
   };

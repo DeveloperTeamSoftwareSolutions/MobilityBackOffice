@@ -162,12 +162,37 @@ export class TemplatesService {
    * Es lo que permite cerrar y seguir despues, y alternar entre el asistente y el
    * modo avanzado sin perder lo cargado.
    */
-  saveDraft(input: CreateTemplateInput & { draftId?: number | null }) {
-    return this.client.saveDraft({
+  async saveDraft(
+    input: CreateTemplateInput & { draftId?: number | null },
+    actor: Actor,
+  ): Promise<number | null> {
+    const esNuevo = !input.draftId;
+
+    const draftId = await this.client.saveDraft({
       ...aPayloadWaba(input),
       draftId: input.draftId ?? null,
       friendlyTitle: input.friendlyTitle ?? null,
     });
+
+    /*
+     * Solo la PRIMERA vez.
+     *
+     * Un borrador no sale hacia META, asi que por el criterio general no se auditaria.
+     * Pero borrarlo si se audita —entra por el mismo endpoint que borrar una plantilla
+     * real—, y sin esto la traza podia decir "fulano borro la plantilla X" sin que
+     * existiera ningun registro de que X hubiera sido creada.
+     *
+     * Los guardados siguientes no: el asistente guarda solo cada vez que se alterna de
+     * modo, y esas filas no dicen nada que la primera no diga ya.
+     */
+    if (esNuevo) {
+      await this.auditar(actor, 'TEMPLATE_DRAFT_CREATE', input.name, [
+        'todavia no se envio a META',
+        ...(draftId !== null ? [`borrador=${draftId}`] : []),
+      ]);
+    }
+
+    return draftId;
   }
 
   /**
@@ -345,10 +370,37 @@ function sortTemplates(
   const dir = sortDir === 'DESC' ? -1 : 1;
 
   list.sort((a, b) => {
-    const cmp = (a[sortBy] ?? '')
-      .toString()
-      .localeCompare((b[sortBy] ?? '').toString());
+    if (sortBy === 'createdAt') {
+      const ta = tiempo(a.createdAt);
+      const tb = tiempo(b.createdAt);
+
+      /*
+       * Las que no tienen fecha van **al final en las dos direcciones**, asi que su
+       * comparacion queda fuera del multiplicador: si entrara, invertir el orden las
+       * traeria arriba y taparia justo lo que se buscaba al ordenar por fecha.
+       *
+       * Son las viejas, sincronizadas de META antes de que WABA guardara la columna.
+       */
+      if (ta === null || tb === null) {
+        if (ta === null && tb === null) return a.name.localeCompare(b.name);
+        return ta === null ? 1 : -1;
+      }
+
+      // Como fechas y no como texto: los ISO ordenan bien alfabeticamente solo mientras
+      // compartan formato, y WABA mezcla lo que creo su panel con lo que trajo de META.
+      const cmp = ta - tb;
+      return cmp !== 0 ? cmp * dir : a.name.localeCompare(b.name);
+    }
+
+    const cmp = (a[sortBy] ?? '').toString().localeCompare((b[sortBy] ?? '').toString());
     // Sin desempate, dos plantillas del mismo idioma bailan entre recargas.
     return cmp !== 0 ? cmp * dir : a.name.localeCompare(b.name);
   });
+}
+
+/** Una fecha ISO a milisegundos. `null` si falta o no se entiende. */
+function tiempo(iso: string | null): number | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? null : t;
 }

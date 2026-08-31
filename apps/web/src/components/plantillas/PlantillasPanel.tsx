@@ -49,7 +49,16 @@ const PAGE_SIZE = 25;
  * `docs/SPEC_PLANTILLAS_WHATSAPP.md`.
  */
 export function PlantillasPanel() {
-  const [configured, setConfigured] = useState<boolean | null>(null);
+  /**
+   * Si la seccion puede funcionar.
+   *
+   * Cuatro estados y no dos, porque "WABA no esta configurado" y "el API no contesta"
+   * se arreglan de formas muy distintas y antes se veian igual: cualquier fallo caia en
+   * 'sin-configurar' y mandaba a alguien a revisar un `.env` que estaba bien.
+   */
+  const [configured, setConfigured] = useState<
+    'cargando' | 'ok' | 'sin-configurar' | 'sin-respuesta'
+  >('cargando');
   const [page, setPage] = useState<TemplatesPage | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,8 +85,9 @@ export function PlantillasPanel() {
   useEffect(() => {
     let active = true;
     getStatus()
-      .then((c) => active && setConfigured(c))
-      .catch(() => active && setConfigured(false));
+      .then((c) => active && setConfigured(c ? 'ok' : 'sin-configurar'))
+      // El API no contesto: no se sabe si WABA esta configurado o no.
+      .catch(() => active && setConfigured('sin-respuesta'));
     return () => {
       active = false;
     };
@@ -93,7 +103,7 @@ export function PlantillasPanel() {
   }, [search]);
 
   const load = useCallback(() => {
-    if (configured !== true) return;
+    if (configured !== 'ok') return;
     let active = true;
     setLoading(true);
     setError(null);
@@ -267,7 +277,7 @@ export function PlantillasPanel() {
         panel de WhatsApp de la empresa.
       </p>
 
-      {configured === false && (
+      {configured === 'sin-configurar' && (
         <div className="bo-card">
           <p className="bo-pl__warn">
             La conexión con el panel de WhatsApp <strong>no está configurada</strong>. Faltan
@@ -277,9 +287,24 @@ export function PlantillasPanel() {
         </div>
       )}
 
-      {configured === true && aviso && <p className="bo-pl__notice">{aviso}</p>}
+      {/*
+        * No es lo mismo que lo anterior: acá no sabemos si WABA está configurado, porque
+        * el API ni siquiera contestó. Decir "falta configurar" mandaría a revisar un
+        * archivo que probablemente esté bien.
+        */}
+      {configured === 'sin-respuesta' && (
+        <div className="bo-card">
+          <p className="bo-pl__warn">
+            <strong>El servidor no responde.</strong> No se pudo consultar el estado de la
+            sección. Si el problema sigue, revisá que el API esté corriendo y volvé a
+            cargar la página.
+          </p>
+        </div>
+      )}
 
-      {configured === true && editando && (
+      {configured === 'ok' && aviso && <p className="bo-pl__notice">{aviso}</p>}
+
+      {configured === 'ok' && editando && (
         <div className="bo-card">
           <TemplateEditor
             template={editando.template}
@@ -293,7 +318,7 @@ export function PlantillasPanel() {
         </div>
       )}
 
-      {configured === true && !editando && (
+      {configured === 'ok' && !editando && (
         <>
           {page?.onlyApproved && (
             <p className="bo-pl__notice">

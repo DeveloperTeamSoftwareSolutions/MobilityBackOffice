@@ -314,3 +314,39 @@ describe('PlantillasPanel — reabrir un borrador', () => {
     expect(await screen.findByRole('button', { name: /\d\s*Mensaje/ })).toBeInTheDocument();
   });
 });
+
+/**
+ * "WABA no está configurado" y "el API no contesta" se arreglan de formas muy distintas:
+ * uno mandando a revisar un `.env`, el otro levantando un proceso. Antes se veían igual,
+ * y eso mandó a revisar un archivo que estaba bien.
+ */
+describe('PlantillasPanel — configurado vs caído', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('si WABA no está configurado, lo dice y nombra las variables', async () => {
+    vi.spyOn(httpClient, 'get').mockResolvedValue({
+      data: { success: true, configured: false },
+    } as never);
+    render(<PlantillasPanel />);
+
+    expect(await screen.findByText(/no está configurada/)).toBeInTheDocument();
+    expect(screen.getByText('WABA_API_URL')).toBeInTheDocument();
+  });
+
+  it('si el API no responde, NO dice que falte configurar', async () => {
+    // Es el error que confundió: cualquier fallo caía en "falta configurar".
+    vi.spyOn(httpClient, 'get').mockRejectedValue(new Error('Network Error'));
+    render(<PlantillasPanel />);
+
+    expect(await screen.findByText(/El servidor no responde/)).toBeInTheDocument();
+    expect(screen.queryByText(/no está configurada/)).toBeNull();
+  });
+
+  it('mientras carga no acusa a nadie', async () => {
+    // Un aviso que parpadea antes de saber la respuesta es peor que ninguno.
+    vi.spyOn(httpClient, 'get').mockReturnValue(new Promise(() => {}) as never);
+    const { container } = render(<PlantillasPanel />);
+
+    expect(container.querySelector('.bo-pl__warn')).toBeNull();
+  });
+});

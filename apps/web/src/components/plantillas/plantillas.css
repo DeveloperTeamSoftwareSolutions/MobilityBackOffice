@@ -1,0 +1,1088 @@
+/* Plantillas de WhatsApp. Prefijo bo-pl__ para no chocar con las otras secciones. */
+
+.bo-pl__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.bo-pl__searchbox {
+  min-width: 280px;
+  flex: 1 1 280px;
+}
+
+.bo-pl__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--bo-text-muted);
+}
+
+.bo-pl__input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  font: inherit;
+  font-size: 14px;
+  color: var(--bo-text);
+  background: var(--bo-surface);
+}
+
+.bo-pl__input:focus {
+  outline: none;
+  border-color: var(--bo-accent);
+  box-shadow: 0 0 0 3px var(--bo-focus-ring);
+}
+
+/* ---- Contadores por estado ---- */
+
+.bo-pl__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.bo-pl__card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 16px;
+  border: 1px solid var(--bo-border);
+  border-left: 3px solid var(--bo-border);
+  border-radius: var(--bo-radius);
+  background: var(--bo-surface);
+  box-shadow: var(--bo-shadow);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.bo-pl__card:hover {
+  border-color: var(--bo-accent);
+}
+
+.bo-pl__card--active {
+  border-color: var(--bo-accent);
+  box-shadow: 0 0 0 3px var(--bo-focus-ring);
+}
+
+.bo-pl__card--ok {
+  border-left-color: var(--bo-success);
+}
+.bo-pl__card--warn {
+  border-left-color: var(--bo-warning);
+}
+.bo-pl__card--bad {
+  border-left-color: var(--bo-danger);
+}
+
+.bo-pl__cardvalue {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--bo-text);
+}
+
+.bo-pl__cardlabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bo-text-muted);
+}
+
+/* ---- Aviso de que la fuente filtra ---- */
+
+/*
+ * Tres niveles, y se distinguen a simple vista. Tenian todos el mismo ambar, asi que
+ * "el boton 1 necesita un telefono" y "al enviarla queda en revision" se leian igual:
+ * uno hay que corregirlo y el otro solo hay que saberlo.
+ *
+ *   .bo-pl__warn            algo esta mal y frena  -> rojo
+ *   .bo-pl__notice--warn    conviene saberlo antes -> ambar
+ *   .bo-pl__notice          informacion            -> azul
+ */
+.bo-pl__notice {
+  position: relative;
+  margin: 0 0 20px;
+  padding: 10px 14px 10px 38px;
+  border-left: 3px solid var(--bo-primary);
+  border-radius: 0 var(--bo-radius-sm) var(--bo-radius-sm) 0;
+  background: rgba(44, 82, 130, 0.06);
+  font-size: 13px;
+  color: var(--bo-text);
+}
+
+/* La marca deja claro el nivel aunque el color no se distinga (daltonismo, impresion). */
+.bo-pl__notice::before {
+  content: 'i';
+  position: absolute;
+  left: 13px;
+  top: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bo-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  font-style: italic;
+}
+
+.bo-pl__notice--warn {
+  border-left-color: var(--bo-warning);
+  background: rgba(180, 83, 9, 0.06);
+}
+
+.bo-pl__notice--warn::before {
+  content: '!';
+  background: var(--bo-warning);
+  font-style: normal;
+}
+
+/* ---- Tabla ---- */
+
+.bo-pl__tablewrap {
+  overflow-x: auto;
+}
+
+.bo-pl__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.bo-pl__table th,
+.bo-pl__table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--bo-border);
+  vertical-align: top;
+}
+
+.bo-pl__table th {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--bo-text-muted);
+  white-space: nowrap;
+}
+
+.bo-pl__thexpand {
+  width: 40px;
+}
+
+.bo-pl__sortbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.bo-pl__sortbtn:hover {
+  color: var(--bo-accent);
+}
+
+.bo-pl__sortdir {
+  font-size: 9px;
+}
+
+.bo-pl__name {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bo-text);
+  word-break: break-all;
+}
+
+.bo-pl__expand {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--bo-border);
+  border-radius: 6px;
+  background: var(--bo-surface);
+  font-size: 15px;
+  line-height: 1;
+  color: var(--bo-text-muted);
+  cursor: pointer;
+}
+
+.bo-pl__expand:hover {
+  border-color: var(--bo-accent);
+  color: var(--bo-accent);
+}
+
+.bo-pl__status {
+  display: inline-block;
+  padding: 1px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--bo-border);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/*
+ * Un color por estado. Si "En revision" y "Borrador" comparten tono, la columna deja de
+ * responder de un vistazo la unica pregunta que importa: si la plantilla se puede usar,
+ * si hay que esperar, o si hay algo que corregir.
+ */
+.bo-pl__status--ok {
+  color: var(--bo-success);
+  border-color: var(--bo-success);
+}
+.bo-pl__status--review {
+  color: var(--bo-state-review);
+  border-color: var(--bo-state-review);
+}
+.bo-pl__status--draft {
+  color: var(--bo-state-draft);
+  border-color: var(--bo-state-draft);
+  border-style: dashed; /* todavia no salio de aca */
+}
+.bo-pl__status--rejected {
+  color: var(--bo-danger);
+  border-color: var(--bo-danger);
+}
+.bo-pl__status--paused {
+  color: var(--bo-state-paused);
+  border-color: var(--bo-state-paused);
+}
+.bo-pl__status--disabled {
+  color: var(--bo-state-disabled);
+  border-color: var(--bo-state-disabled);
+}
+.bo-pl__status--neutral {
+  color: var(--bo-text-muted);
+}
+.bo-pl__statushint {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--bo-text-muted);
+}
+
+/* ---- Vista previa: cómo le llega al cliente ---- */
+
+.bo-pl__detailrow td {
+  background: var(--bo-bg);
+}
+
+/* ---- Vista previa: la burbuja como la dibuja WhatsApp ---- */
+
+.bo-pl__preview {
+  max-width: 380px;
+  padding: 8px 0;
+}
+
+/*
+ * El fondo del chat. Da el contexto que hace legible la burbuja: sobre el fondo blanco
+ * de la tarjeta, un mensaje claro no se distingue de la pantalla.
+ */
+.bo-pl__chat {
+  padding: 14px 12px;
+  border-radius: var(--bo-radius-sm);
+  border: 1px solid var(--bo-border);
+  background-color: #ece5dd;
+  background-image: radial-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+  background-size: 14px 14px;
+}
+
+.bo-pl__bubble {
+  position: relative;
+  padding: 8px 10px 6px;
+  border-radius: 8px 8px 8px 2px;
+  background: #ffffff;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.16);
+  font-size: 14px;
+  line-height: 1.45;
+  color: #111b21;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bo-pl__header {
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.bo-pl__body {
+  min-height: 20px;
+}
+
+/* El hueco del multimedia: la plantilla define el espacio, no el archivo. */
+.bo-pl__media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 96px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  background: #dfe5e7;
+  color: #54656f;
+}
+
+.bo-pl__mediaicon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.bo-pl__headermedia {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.bo-pl__footer {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #667781;
+}
+
+.bo-pl__notext {
+  color: #8696a0;
+  font-style: italic;
+}
+
+/* La hora y el doble tilde: sin eso la burbuja no se lee como un mensaje. */
+.bo-pl__meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #667781;
+}
+
+.bo-pl__ticks {
+  color: #53bdeb;
+  letter-spacing: -2px;
+}
+
+/* La variable se resalta: sin completarla, la plantilla no se puede enviar. */
+.bo-pl__var {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: rgba(0, 128, 105, 0.14);
+  color: #00806a;
+  font-weight: 600;
+}
+
+/* WhatsApp dibuja los botones fuera de la burbuja, apilados. */
+.bo-pl__buttons {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.bo-pl__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.16);
+  font-size: 13px;
+  color: #00a5f4;
+}
+
+.bo-pl__buttonicon {
+  font-size: 12px;
+}
+
+.bo-pl__buttonlabel {
+  overflow-wrap: anywhere;
+}
+
+/* ---- Paginador ---- */
+
+.bo-pl__pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.bo-pl__pagerinfo {
+  font-size: 13px;
+  color: var(--bo-text-muted);
+}
+
+.bo-pl__pagerbtns {
+  display: flex;
+  gap: 8px;
+}
+
+.bo-pl__pagerbtn {
+  padding: 7px 14px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-surface);
+  font: inherit;
+  font-size: 13px;
+  color: var(--bo-text);
+  cursor: pointer;
+}
+
+.bo-pl__pagerbtn:hover:not(:disabled) {
+  border-color: var(--bo-accent);
+  color: var(--bo-accent);
+}
+
+.bo-pl__pagerbtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---- Estados ---- */
+
+.bo-pl__empty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--bo-text-muted);
+}
+
+/* Algo esta mal y hay que corregirlo antes de seguir. No es lo mismo que un aviso. */
+.bo-pl__warn {
+  position: relative;
+  margin: 0;
+  padding: 12px 14px 12px 38px;
+  border-left: 3px solid var(--bo-danger);
+  border-radius: 0 var(--bo-radius-sm) var(--bo-radius-sm) 0;
+  background: rgba(197, 48, 48, 0.06);
+  font-size: 14px;
+  color: var(--bo-text);
+}
+
+.bo-pl__warn::before {
+  content: '!';
+  position: absolute;
+  left: 13px;
+  top: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bo-danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.bo-pl__warn code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bo-surface);
+  border: 1px solid var(--bo-border);
+  font-size: 12px;
+}
+
+.bo-pl__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- Acciones ---- */
+
+.bo-pl__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+  padding-bottom: 1px;
+}
+
+.bo-pl__rowactions {
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+  /*
+   * La celda alinea al tope (conviene para los textos largos de otras columnas),
+   * pero los botones tienen que quedar a la altura del nombre. Sin esto se van
+   * arriba y el borde inferior de la fila se ve quebrado.
+   */
+  align-items: flex-start;
+  padding-top: 0;
+}
+
+/* Los botones de acción no estiran la fila más que el texto. */
+.bo-pl__rowactions .bo-pl__btn--sm {
+  line-height: 1.35;
+}
+
+.bo-pl__btn {
+  padding: 8px 14px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-surface);
+  font: inherit;
+  font-size: 13px;
+  color: var(--bo-text);
+  cursor: pointer;
+}
+
+.bo-pl__btn:hover:not(:disabled) {
+  border-color: var(--bo-accent);
+  color: var(--bo-accent);
+}
+
+.bo-pl__btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.bo-pl__btn--primary {
+  background: var(--bo-primary);
+  border-color: var(--bo-primary);
+  color: #fff;
+}
+
+.bo-pl__btn--primary:hover:not(:disabled) {
+  background: var(--bo-primary-dark);
+  border-color: var(--bo-primary-dark);
+  color: #fff;
+}
+
+.bo-pl__btn--danger:hover:not(:disabled) {
+  border-color: var(--bo-danger);
+  color: var(--bo-danger);
+}
+
+.bo-pl__btn--sm {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+/* ---- Formulario ---- */
+
+.bo-pl__form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.bo-pl__formhead {
+  border-bottom: 1px solid var(--bo-border);
+  padding-bottom: 14px;
+}
+
+.bo-pl__formtitle {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--bo-text);
+}
+
+.bo-pl__formsub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--bo-text-muted);
+}
+
+.bo-pl__formgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 32px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .bo-pl__formgrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bo-pl__formcol {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.bo-pl__field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.bo-pl__textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--bo-text);
+  background: var(--bo-surface);
+  resize: vertical;
+}
+
+.bo-pl__textarea:focus,
+.bo-pl__input:focus {
+  outline: none;
+  border-color: var(--bo-accent);
+  box-shadow: 0 0 0 3px var(--bo-focus-ring);
+}
+
+.bo-pl__input--sm {
+  padding: 6px 9px;
+  font-size: 13px;
+}
+
+.bo-pl__hint {
+  font-size: 12px;
+  color: var(--bo-text-muted);
+}
+
+.bo-pl__hint code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bo-bg);
+  border: 1px solid var(--bo-border);
+  font-size: 11px;
+}
+
+.bo-pl__opt {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--bo-text-muted);
+}
+
+.bo-pl__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--bo-text);
+  cursor: pointer;
+}
+
+.bo-pl__btnrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.bo-pl__btnrow .bo-pl__input {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.bo-pl__formactions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--bo-border);
+  padding-top: 16px;
+}
+
+.bo-pl__errlist {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.bo-pl__errlist li {
+  margin-bottom: 3px;
+}
+
+.bo-pl__filterbox {
+  min-width: 170px;
+  flex: 0 1 170px;
+}
+
+/* ---- Asistente ---- */
+
+.bo-pl__wizard {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Barra de pasos: dónde estoy y cuánto falta. */
+.bo-pl__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0 0 14px;
+  list-style: none;
+  border-bottom: 1px solid var(--bo-border);
+}
+
+.bo-pl__stepitem {
+  display: flex;
+}
+
+/*
+ * Cada paso es un boton: se puede volver a uno ya completo con un clic, en vez de
+ * apretar "Anterior" tres veces. Los que todavia no se pueden alcanzar van apagados,
+ * con el motivo en el tooltip.
+ */
+.bo-pl__step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px 5px 6px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--bo-text-muted);
+  cursor: pointer;
+}
+
+.bo-pl__step:hover:not(:disabled) {
+  background: var(--bo-bg);
+  color: var(--bo-text);
+}
+
+.bo-pl__step:hover:not(:disabled) .bo-pl__stepnum {
+  border-color: var(--bo-accent);
+}
+
+.bo-pl__step:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.bo-pl__stepnum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--bo-border);
+  background: var(--bo-surface);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.bo-pl__step--now {
+  background: var(--bo-bg);
+  color: var(--bo-text);
+  font-weight: 600;
+}
+
+.bo-pl__step--now .bo-pl__stepnum {
+  border-color: var(--bo-primary);
+  background: var(--bo-primary);
+  color: #fff;
+}
+
+.bo-pl__step--done .bo-pl__stepnum {
+  border-color: var(--bo-accent);
+  color: var(--bo-accent);
+}
+
+.bo-pl__steptitle {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--bo-text);
+}
+
+/* Motivo por el que no se puede avanzar: al lado del botón, no escondido. */
+.bo-pl__stepblock {
+  margin: 0;
+  padding: 9px 12px;
+  border-left: 3px solid var(--bo-warning);
+  border-radius: 0 var(--bo-radius-sm) var(--bo-radius-sm) 0;
+  background: rgba(180, 83, 9, 0.06);
+  font-size: 13px;
+  color: var(--bo-text);
+}
+
+/* ---- Elegir el objetivo ---- */
+
+.bo-pl__choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bo-pl__choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius);
+  background: var(--bo-surface);
+  cursor: pointer;
+}
+
+.bo-pl__choice:hover {
+  border-color: var(--bo-accent);
+}
+
+.bo-pl__choice--on {
+  border-color: var(--bo-primary);
+  box-shadow: 0 0 0 3px var(--bo-focus-ring);
+}
+
+.bo-pl__choice > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bo-pl__choicelabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bo-text);
+}
+
+/* ---- Datos variables ---- */
+
+.bo-pl__varrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.bo-pl__varrow .bo-pl__input {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
+.bo-pl__vartag {
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(13, 148, 136, 0.12);
+  color: var(--bo-accent-hover);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bo-pl__inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---- Revisión ---- */
+
+.bo-pl__review {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.bo-pl__review dt {
+  font-weight: 600;
+  color: var(--bo-text-muted);
+}
+
+.bo-pl__review dd {
+  margin: 0;
+  color: var(--bo-text);
+  word-break: break-word;
+}
+
+/* Empuja las acciones de la derecha, dejando las de modo a la izquierda. */
+.bo-pl__spacer {
+  flex: 1;
+}
+
+.bo-pl__formactions {
+  align-items: center;
+}
+
+/*
+ * Celda de acciones: alinea con la primera línea de la fila, no con el tope de la
+ * celda más alta. Sin esto los botones flotaban por encima del nombre y el borde
+ * inferior de la fila se veía quebrado.
+ */
+.bo-pl__actionscell {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.bo-pl__actionscell .bo-pl__btn {
+  margin-right: 6px;
+}
+
+.bo-pl__actionscell .bo-pl__btn:last-child {
+  margin-right: 0;
+}
+
+/* ---- Archivo de ejemplo del encabezado ---- */
+
+.bo-pl__file {
+  padding: 8px;
+  border: 1px dashed var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-bg);
+  font: inherit;
+  font-size: 13px;
+  color: var(--bo-text);
+}
+
+.bo-pl__file:disabled {
+  opacity: 0.6;
+}
+
+.bo-pl__filedone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-surface);
+  font-size: 13px;
+}
+
+.bo-pl__fileok {
+  color: var(--bo-success);
+  font-weight: 700;
+}
+
+.bo-pl__filename {
+  flex: 1;
+  overflow-wrap: anywhere;
+  color: var(--bo-text);
+}
+
+/* ---- JSON plegable ---- */
+
+.bo-pl__json {
+  margin-top: 14px;
+}
+
+.bo-pl__jsontoggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--bo-accent);
+  cursor: pointer;
+}
+
+.bo-pl__jsontoggle:hover {
+  text-decoration: underline;
+}
+
+.bo-pl__jsoncaret {
+  font-size: 11px;
+}
+
+.bo-pl__jsonbody {
+  margin: 8px 0 0;
+  padding: 12px;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-bg);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--bo-text);
+  white-space: pre;
+  tab-size: 2;
+}
+
+/* ---- Cupo de ediciones ---- */
+
+.bo-pl__quota {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--bo-text);
+}
+
+/* El descargo va abajo y en tono menor: el numero manda, la salvedad acompaña. */
+.bo-pl__quota .bo-pl__hint {
+  display: block;
+  margin-top: 4px;
+}
+
+/*
+ * El aviso del borrador va al lado de su boton: es la respuesta a ese clic, no un aviso
+ * suelto de la pantalla. Suelto, mas abajo, obligaba a buscar que habia pasado.
+ */
+.bo-pl__draftnotice {
+  align-self: center;
+  font-size: 13px;
+  color: var(--bo-success);
+}
+
+/* La categoria de META al lado del objetivo: quien arma piensa en "promocionar", pero
+ * META y el resto del equipo hablan de MARKETING. */
+.bo-pl__catbadge {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--bo-border);
+  background: var(--bo-bg);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--bo-text-muted);
+  vertical-align: middle;
+}
+
+/* Pegado a la botonera que dispara eso mismo: no necesita el aire de un aviso suelto. */
+.bo-pl__notice--tight {
+  margin: 0 0 10px;
+}
+
+/* La fecha del orden por defecto: alineada para poder compararla de un vistazo. */
+.bo-pl__date {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--bo-text-muted);
+}

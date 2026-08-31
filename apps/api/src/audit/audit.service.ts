@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuditClient } from './audit.client';
+import { AuditCategory } from './audit.categories';
 
 /**
  * Entrada de auditoría central (`AuditLogs`, tabla compartida con ITManager y
@@ -11,8 +12,12 @@ import { AuditClient } from './audit.client';
 export interface AuditEntry {
   action: string;
   entity: string;
-  category: string;
+  category: AuditCategory;
   guidUsers?: string | null;
+  /** Cliente dueno de la fila. Sin el, ITManager no la muestra. */
+  guidApiLoginClients?: string | null;
+  /** Email del actor, en su columna propia. */
+  actorEmail?: string | null;
   entityId?: string | null;
   detail?: string | null;
   /** Por defecto toma `itmanager.appId` (config) → 'MobilityBackOffice'. */
@@ -55,6 +60,8 @@ export class AuditService {
     // auditoría era la del proceso que auditaba y no la de la base donde queda la fila.
     await this.client.create({
       guidUsers: entry.guidUsers ?? null,
+      guidApiLoginClients: entry.guidApiLoginClients ?? null,
+      actorEmail: entry.actorEmail ?? null,
       action: entry.action,
       entity: entry.entity,
       entityId: entry.entityId ?? null,

@@ -19,6 +19,13 @@ export interface ItmanagerUser {
 export interface ItmanagerLoginResult {
   token: string;
   user: ItmanagerUser;
+  /**
+   * Cliente al que pertenece el usuario (`ApiLoginClients.Guid`).
+   *
+   * Hace falta para auditar: la pantalla de auditoria de ITManager **filtra por este
+   * campo**, asi que una fila sin el existe en la tabla pero no se ve desde alla.
+   */
+  guidApiLoginClients: string | null;
   roleKeys: string[];
   permissions: string[];
 }
@@ -31,6 +38,7 @@ interface ManageItAccessMatrixEntry {
 }
 interface ManageItLoginResponse {
   user: { guid: string; email: string; name: string; isAdmin: boolean };
+  client?: { guid?: string };
   session: { token: string };
   accessMatrix?: ManageItAccessMatrixEntry[];
 }
@@ -85,6 +93,8 @@ export class ItmanagerClient {
 
     return {
       token: data.session.token,
+      // `CHAR(36)` en la base: puede venir con espacios de relleno.
+      guidApiLoginClients: data.client?.guid?.trim() || null,
       user: {
         guid: data.user.guid,
         email: data.user.email,

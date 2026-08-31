@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { RegionsModule } from './regions/regions.module';
 import { AuthorizersModule } from './authorizers/authorizers.module';
 import { SupportModule } from './support/support.module';
+import { TemplatesModule } from './templates/templates.module';
 import { HealthModule } from './health/health.module';
 
 @Module({
@@ -21,6 +22,7 @@ import { HealthModule } from './health/health.module';
     RegionsModule,
     AuthorizersModule,
     SupportModule,
+    TemplatesModule,
     HealthModule,
   ],
 })

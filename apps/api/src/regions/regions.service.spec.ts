@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { RegionsService } from './regions.service';
+import { AuditCategory } from '../audit/audit.categories';
 import type { RegionsRepository } from './regions.repository';
 import type { AuditService, AuditEntry } from '../audit/audit.service';
 import type { Region } from './regions.types';
@@ -17,7 +18,11 @@ const REGION_CA: Region = {
   cebeCount: 0,
 };
 
-const ACTOR = { email: 'juan@duwest.com', guid: 'guid-usuario' };
+const ACTOR = {
+  email: 'juan@duwest.com',
+  guid: 'guid-usuario',
+  guidApiLoginClients: 'guid-cliente',
+};
 
 function build(repoOverrides: Partial<RegionsRepository> = {}) {
   const audited: AuditEntry[] = [];
@@ -69,8 +74,11 @@ describe('RegionsService.linkCebes', () => {
       action: 'REGION_CEBE_LINK',
       entity: 'ContinentProfitCenter',
       entityId: '1003',
-      category: 'regions',
+      category: AuditCategory.Regions,
       guidUsers: 'guid-usuario',
+      // Sin el cliente la fila no se ve desde ITManager; el email va en su columna.
+      guidApiLoginClients: 'guid-cliente',
+      actorEmail: 'juan@duwest.com',
     });
     expect(audited[0].detail).toContain('region=CA');
     expect(audited[0].detail).toContain('sociedad=2100');

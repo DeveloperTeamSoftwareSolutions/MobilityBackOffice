@@ -25,6 +25,12 @@
   --bo-success: #2f855a;
   --bo-warning: #b45309;
 
+  /* Estados de una plantilla de WhatsApp: uno por estado, ninguno se confunde con otro. */
+  --bo-state-review: #7c3aed;   /* en revision: esperando a META */
+  --bo-state-draft: #475569;    /* borrador: todavia no salio de aca */
+  --bo-state-paused: #b45309;   /* pausada: se puede recuperar */
+  --bo-state-disabled: #94a3b8; /* deshabilitada por META */
+
   /* Sidebar (Slate-900) */
   --bo-sidebar-bg: #0f172a;
   --bo-sidebar-text: rgba(255, 255, 255, 0.66);

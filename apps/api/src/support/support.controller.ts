@@ -13,7 +13,8 @@ import { JwtGuard } from '../auth/jwt.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { BackOfficeRole } from '../auth/backoffice-role.enum';
-import { SupportService, Actor } from './support.service';
+import { SupportService } from './support.service';
+import { actorFrom, AuthedRequest } from '../common/actor';
 import {
   DocumentType,
   isDocumentType,
@@ -32,14 +33,6 @@ import {
 const MAX_LIMIT = 200;
 const DEFAULT_LIMIT = 20;
 
-interface AuthedRequest {
-  user?: { email?: string; guid?: string; sub?: string };
-}
-
-/** Actor (identidad del logueado) para la traza de auditoria. */
-function actor(req: AuthedRequest): Actor {
-  return { email: req.user?.email, guid: req.user?.guid ?? req.user?.sub };
-}
 
 /** `'1'` y `'true'` cuentan como verdadero; cualquier otra cosa es falso. */
 function flag(value?: string): boolean {
@@ -202,7 +195,7 @@ export class SupportController {
       this.parseGuid(guid),
       (action ?? '').trim(),
       reasonNotes,
-      actor(req),
+      actorFrom(req),
       target || null,
     );
     return { success: true, data };
@@ -276,7 +269,7 @@ export class SupportController {
       }
     }
 
-    const who = actor(req);
+    const who = actorFrom(req);
     const data = await this.support.decideItem(
       {
         type: this.parseType(type),
@@ -312,7 +305,7 @@ export class SupportController {
       );
     }
 
-    const who = actor(req);
+    const who = actorFrom(req);
     const data = await this.support.respondItem(
       {
         type: this.parseType(type),
@@ -353,7 +346,7 @@ export class SupportController {
       );
     }
 
-    const who = actor(req);
+    const who = actorFrom(req);
     const data = await this.support.decidePaymentTerms(
       {
         type: this.parseType(type),
@@ -387,7 +380,7 @@ export class SupportController {
       );
     }
 
-    const who = actor(req);
+    const who = actorFrom(req);
     const data = await this.support.respondPaymentTerms(
       {
         type: this.parseType(type),
@@ -411,7 +404,7 @@ export class SupportController {
     const data = await this.support.recompute(
       this.parseType(type),
       this.parseGuid(guid),
-      actor(req),
+      actorFrom(req),
     );
     return { success: true, data };
   }

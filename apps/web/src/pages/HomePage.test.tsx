@@ -52,9 +52,11 @@ describe('HomePage', () => {
     expect(screen.getByRole('link', { name: /Documentación del RAG/ })).toBeInTheDocument();
   });
 
-  it('marca Templates de WhatsApp como Próximamente', () => {
+  it('Templates de WhatsApp ya no esta en Proximamente', () => {
+    // Paso a construida: consume las plantillas del panel WABA.
     renderAs('Marketing');
-    expect(screen.getByText('Próximamente')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Templates de WhatsApp/ })).toBeInTheDocument();
+    expect(screen.queryByText('Próximamente')).not.toBeInTheDocument();
   });
 
   it('la matriz de autorizadores es exclusiva de SuperAdmin', () => {

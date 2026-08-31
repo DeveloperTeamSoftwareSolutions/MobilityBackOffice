@@ -10,6 +10,16 @@ const PATH = '/audit-logs';
 /** Cuerpo del POST, tal como lo valida el middleware (camelCase). */
 export interface MwAuditLogBody {
   guidUsers?: string | null;
+  /**
+   * Cliente dueno de la fila (`ApiLoginClients.Guid`).
+   *
+   * La pantalla de auditoria de ITManager **filtra por este campo**: sin el, la fila se
+   * guarda igual pero no aparece del otro lado. Es el motivo por el que la auditoria de
+   * BackOffice existia y nadie la veia.
+   */
+  guidApiLoginClients?: string | null;
+  /** Email del actor. Va en su columna (`ActorEmail`) para poder filtrar por persona. */
+  actorEmail?: string | null;
   action: string;
   entity: string;
   entityId?: string | null;

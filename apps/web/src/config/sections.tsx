@@ -50,11 +50,11 @@ export const NAV_SECTIONS: NavSection[] = [
     key: 'templates',
     label: 'Templates de WhatsApp',
     description:
-      'Creación y gestión de plantillas de WhatsApp para el equipo de marketing.',
+      'Consultá las plantillas aprobadas por META para escribirle a un cliente.',
     path: '/templates-whatsapp',
     group: 'Marketing',
     roles: ['Marketing'],
-    status: 'soon',
+    status: 'ready',
     icon: <IconChatSquare />,
   },
   {

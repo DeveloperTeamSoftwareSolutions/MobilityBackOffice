@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { RegionsRepository, reconcileLinks, linkKey, parseLinkKey } from './regions.repository';
 import { AuditService } from '../audit/audit.service';
+import { AuditCategory } from '../audit/audit.categories';
+import { Actor } from '../common/actor';
 import { expandRegionCode, listRegionGroups } from './region-groups';
 import {
   Region,
@@ -19,10 +21,6 @@ import {
   SyncResult,
 } from './regions.types';
 
-interface Actor {
-  email?: string;
-  guid?: string;
-}
 
 /**
  * Lógica del módulo de Regiones comerciales por CEBE. Las regiones (CA/CB/AN/NA) son el
@@ -110,11 +108,13 @@ export class RegionsService {
       await this.repo.linkCebe(guid, c.code, c.companyCode, c.name, 'ui', actor.email ?? 'system');
       await this.audit.safeRecord({
         guidUsers: actor.guid ?? null,
+        guidApiLoginClients: actor.guidApiLoginClients ?? null,
+        actorEmail: actor.email ?? null,
         action: 'REGION_CEBE_LINK',
         entity: 'ContinentProfitCenter',
         entityId: c.code,
-        category: 'regions',
-        detail: `${actor.email ?? 'system'} | region=${region.code} | cebe=${c.code} | sociedad=${c.companyCode} | source=ui`,
+        category: AuditCategory.Regions,
+        detail: `region=${region.code} | cebe=${c.code} | sociedad=${c.companyCode} | source=ui`,
       });
     }
     return { linked: list.length };
@@ -131,11 +131,13 @@ export class RegionsService {
     if (!ok) return false;
     await this.audit.safeRecord({
       guidUsers: actor.guid ?? null,
+      guidApiLoginClients: actor.guidApiLoginClients ?? null,
+      actorEmail: actor.email ?? null,
       action: 'REGION_CEBE_UNLINK',
       entity: 'ContinentProfitCenter',
       entityId: cebe,
-      category: 'regions',
-      detail: `${actor.email ?? 'system'} | region=${region.code} | cebe=${cebe} | sociedad=${company} | source=ui`,
+      category: AuditCategory.Regions,
+      detail: `region=${region.code} | cebe=${cebe} | sociedad=${company} | source=ui`,
     });
     return true;
   }
@@ -189,7 +191,7 @@ export class RegionsService {
       action: 'REGION_SYNC',
       entity: 'ContinentProfitCenter',
       entityId: null,
-      category: 'regions',
+      category: AuditCategory.Regions,
       detail: `${actor} | regiones=${regions.length} | altas=${added} | bajas=${removed} | ignoradas=${skipped.length} | source=${source}`,
     });
     return { regions: regions.length, added, removed, skipped };

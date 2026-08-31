@@ -1,7 +1,7 @@
 # APIs y Endpoints Externos — Mobility BackOffice
 
-> Ultima actualizacion: 2026-08-27
-> Version: 2.15.0
+> Ultima actualizacion: 2026-08-31
+> Version: 2.19.0
 
 ## Integraciones activas
 
@@ -59,6 +59,41 @@ MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
 - **Nota de paths**: los path constants del cliente son relativos a `MIDDLEWARE_URL` (que ya
   trae `/api`). Verificado contra el Middleware en vivo.
 
+### WhatsApp WABA Admin — plantillas de WhatsApp
+
+Las plantillas viven en la base `WhatsAppWABA`, que el middleware **no expone**. Se
+consumen directo de la API REST del panel, con el criterio de MobilityManager: se traen
+los DATOS y BackOffice arma su propia pantalla. Ver `docs/SPEC_PLANTILLAS_WHATSAPP.md`.
+
+- **Base URL**: `WABA_API_URL` (dev `http://localhost:3020`)
+- **Autenticacion**: header `x-api-key` (`WABA_API_KEY`) + `x-source-app:
+  MobilityBackOffice`. **La cuenta WABA es implicita en la key**: una key = una cuenta.
+- **Endpoints usados** (todos desde `src/templates/templates.client.ts`):
+
+  | Metodo | Endpoint | Descripcion |
+  |---|---|---|
+  | GET | `/api/templates?status=all&limit=200` | Plantillas de la cuenta, **todos los estados** |
+  | GET | `/api/templates/:id` | Detalle + politica de edicion de META |
+  | POST | `/api/templates` | Crear y enviar a aprobacion |
+  | PUT | `/api/templates/:id` | Editar y reenviar a revision |
+  | DELETE | `/api/templates/:id` | Borrar (META y local; un borrador, solo local) |
+  | POST | `/api/templates/sync` | Traer de META lo que cambio alla |
+  | POST | `/api/templates/validate` | El payload que recibiria META. **No escribe nada** |
+  | POST | `/api/templates/upload-sample` | Ejemplo del encabezado multimedia → `handle` |
+  | POST | `/api/templates/drafts` | Guardar el avance sin mandar nada a META |
+  | GET | `/api/templates/drafts/:id` | Recuperar un borrador |
+  | POST | `/api/templates/drafts/:id/submit` | Recien aca el borrador se manda a META |
+
+- **Compatibilidad**: `GET /api/templates` **sin query params** conserva el contrato
+  viejo (array plano de aprobadas). Es lo que consume el selector de plantillas del
+  propio panel al enviar un mensaje; cambiarlo rompia el envio.
+- **Errores**: WABA responde `{ success, message }` con el mensaje de META ya extraido y
+  **con el access token enmascarado** (`friendlyError`). El client conserva ese texto
+  tanto en 4xx como en 5xx: sin el, un token invalido llega como un 503 sin motivo.
+- **Requiere del lado de WABA**: para `upload-sample`, la cuenta necesita **App ID y un
+  access token valido** — la subida va a la Resumable Upload API de META, contra el App
+  ID y no contra el `phone_number_id`.
+
 ## Integraciones consumidas por terceros
 
 ### Web service de sync de Regiones
@@ -80,8 +115,3 @@ vinculos de forma idempotente.
   `/rag`, seteada en el login) y rol Marketing o SuperAdmin. El RAG no tiene auth propia.
 - **Tenant**: manual — el usuario escribe el CompanyCode en la topbar del RAG.
 - **Archivos**: `src/rag/rag.proxy.ts`, `src/rag/rag-rewrite.ts`. Spec: `docs/SPEC_RAG_EMBED.md`.
-
-## Pendientes (fases futuras)
-
-- **WhatsApp Business (templates)**: el panel de marketing gestionara templates. Se documentara
-  el servicio que los persiste/envia cuando se implemente.

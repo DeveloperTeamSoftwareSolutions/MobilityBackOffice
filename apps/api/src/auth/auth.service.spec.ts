@@ -1,5 +1,6 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { AuditCategory } from '../audit/audit.categories';
 import { RoleResolver } from './role-resolver.service';
 import { BackOfficeRole } from './backoffice-role.enum';
 import type { ItmanagerClient, ItmanagerLoginResult } from './itmanager.client';
@@ -7,6 +8,7 @@ import type { TokenService } from './token.service';
 import type { AuditService, AuditEntry } from '../audit/audit.service';
 
 const ITM_OK: ItmanagerLoginResult = {
+  guidApiLoginClients: 'guid-cliente',
   token: 'token-de-manageit',
   user: {
     guid: 'guid-usuario',
@@ -92,10 +94,13 @@ describe('AuthService.login', () => {
       expect(audited[0]).toMatchObject({
         action: 'LOGIN',
         entity: 'Auth',
-        category: 'auth',
+        category: AuditCategory.Auth,
         guidUsers: 'guid-usuario',
+        // Sin el cliente, la fila se guarda pero ITManager no la muestra.
+        guidApiLoginClients: 'guid-cliente',
+        // El email va en su columna, no escondido en el texto libre.
+        actorEmail: 'juan@duwest.com',
       });
-      expect(audited[0].detail).toContain('juan@duwest.com');
       expect(audited[0].detail).toContain('Administrador');
     });
   });
@@ -168,8 +173,9 @@ describe('AuthService.login', () => {
       expect(audited[0]).toMatchObject({
         action: 'LOGIN_FAILED',
         guidUsers: null,
+        // Se sabe quien intento entrar aunque no se lo haya podido identificar.
+        actorEmail: 'juan@duwest.com',
       });
-      expect(audited[0].detail).toContain('juan@duwest.com');
     });
   });
 });

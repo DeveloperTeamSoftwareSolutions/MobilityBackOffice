@@ -688,14 +688,41 @@
   border-bottom: 1px solid var(--bo-border);
 }
 
+.bo-pl__stepitem {
+  display: flex;
+}
+
+/*
+ * Cada paso es un boton: se puede volver a uno ya completo con un clic, en vez de
+ * apretar "Anterior" tres veces. Los que todavia no se pueden alcanzar van apagados,
+ * con el motivo en el tooltip.
+ */
 .bo-pl__step {
   display: flex;
   align-items: center;
   gap: 7px;
   padding: 5px 12px 5px 6px;
+  border: 0;
   border-radius: 999px;
+  background: none;
+  font: inherit;
   font-size: 13px;
   color: var(--bo-text-muted);
+  cursor: pointer;
+}
+
+.bo-pl__step:hover:not(:disabled) {
+  background: var(--bo-bg);
+  color: var(--bo-text);
+}
+
+.bo-pl__step:hover:not(:disabled) .bo-pl__stepnum {
+  border-color: var(--bo-accent);
+}
+
+.bo-pl__step:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .bo-pl__stepnum {
@@ -962,4 +989,29 @@
 .bo-pl__quota .bo-pl__hint {
   display: block;
   margin-top: 4px;
+}
+
+/*
+ * El aviso del borrador va al lado de su boton: es la respuesta a ese clic, no un aviso
+ * suelto de la pantalla. Suelto, mas abajo, obligaba a buscar que habia pasado.
+ */
+.bo-pl__draftnotice {
+  align-self: center;
+  font-size: 13px;
+  color: var(--bo-success);
+}
+
+/* La categoria de META al lado del objetivo: quien arma piensa en "promocionar", pero
+ * META y el resto del equipo hablan de MARKETING. */
+.bo-pl__catbadge {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--bo-border);
+  background: var(--bo-bg);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--bo-text-muted);
+  vertical-align: middle;
 }

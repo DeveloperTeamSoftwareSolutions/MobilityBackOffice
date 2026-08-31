@@ -1,6 +1,6 @@
 # Plantillas de WhatsApp — especificacion
 
-> Ultima actualizacion: 2026-08-31 · Version: 2.19.0
+> Ultima actualizacion: 2026-08-31 · Version: 2.20.0
 >
 > Seccion "Templates de WhatsApp" (rol Marketing). Consulta, crea y edita las plantillas
 > del panel WABA sin abrirlo y sin un segundo login.
@@ -214,6 +214,28 @@ confirma contra la politica y no abre el formulario si META lo bloquea; y el for
 —en los dos modos— muestra el cupo, la espera y el aviso de que vuelve a revision.
 
 
+### Moverse entre los pasos
+
+Cada paso de la barra es un boton: se llega a uno cuando **todos los anteriores estan
+completos**. La regla sale del formulario, no de por donde paso el usuario, y por eso
+resuelve los dos casos sin tratarlos distinto:
+
+- **Creando**, el formulario arranca vacio: hay que ir en orden. Pero una vez completado
+  el paso 3, se puede volver a el desde el final con un clic, en vez de apretar
+  "Anterior" tres veces.
+- **Editando**, la plantilla ya trae todo cargado, asi que todos los pasos estan
+  disponibles desde el arranque. Obligar a recorrerla en orden no tendria sentido.
+
+Un paso al que todavia no se puede llegar va apagado y **dice que falta** en el tooltip:
+apagado sin motivo deja a la persona adivinando.
+
+### La categoria, a la vista
+
+El asistente pregunta por el objetivo ("promocionar algo"), pero META, el costo por
+envio y el resto del equipo hablan de **MARKETING**. Cada opcion muestra la categoria a
+la que corresponde: sin eso, la traduccion queda en la cabeza de cada uno. El modo
+avanzado ya elige la categoria por su nombre.
+
 ### Borradores
 
 Una plantilla se arma en varias sesiones —hay que conseguir el texto aprobado, el arte
@@ -316,7 +338,7 @@ de diagnosticar desde la pantalla.
 | `plantillas.format.ts` | La traduccion a castellano de estados, categorias e idiomas |
 | `plantillas.validate.ts` | Las reglas de META, para avisar mientras se escribe |
 | `wizard.helpers.ts` | Nombre tecnico, variables, pasos y **el motivo** por el que no se avanza |
-| `TemplatePreview.tsx` | **Como le llega el mensaje al cliente**: burbuja, formato, botones |
+| `TemplatePreview.tsx` | **Como le llega el mensaje al cliente**: burbuja, formato, botones, ejemplos |
 | `TemplateWizard.tsx` | El asistente de 6 pasos |
 | `TemplateForm.tsx` | El modo avanzado, y la edicion |
 | `TemplateEditor.tsx` | Sostiene el estado compartido y el borrador; decide el modo |
@@ -377,6 +399,8 @@ valido** en la cuenta. Sin eso, la subida falla con el motivo de META a la vista
 
 - [ ] La burbuja se ve sobre el fondo del chat, con hora y doble tilde.
 - [ ] Las variables van resaltadas.
+- [ ] Con un ejemplo cargado se ve **el ejemplo** ("Hola María"), no `{{1}}`, y sigue resaltado.
+- [ ] El ejemplo del encabezado no se usa en el cuerpo: META los numera aparte.
 - [ ] `*negrita*`, `_cursiva_` y `~tachado~` se ven aplicados, sin los simbolos.
 - [ ] Los botones se dibujan **fuera** de la burbuja, apilados.
 
@@ -391,6 +415,11 @@ valido** en la cuenta. Sin eso, la subida falla con el motivo de META a la vista
 - [ ] El segundo guardado **actualiza** el mismo borrador, no crea otro.
 - [ ] En edicion no aparece "Guardar borrador".
 - [ ] El asistente dice **que falta** para avanzar, no deja un boton apagado sin explicacion.
+- [ ] Creando, no se puede saltar a un paso sin completar los anteriores.
+- [ ] Editando, se puede ir a cualquier paso desde el arranque.
+- [ ] Desde el ultimo paso se vuelve al 3 con un clic, sin pasar por los del medio.
+- [ ] Cada objetivo muestra su categoria de META (Marketing, Utilidad, Autenticacion).
+- [ ] El aviso del borrador aparece **al lado** de su boton.
 - [ ] El formulario avisa si las variables van salteadas (`{{1}}` y `{{3}}`).
 - [ ] Al elegir AUTHENTICATION desaparecen mensaje, encabezado y botones.
 - [ ] Una plantilla **en revision** tiene el boton Editar apagado, con el motivo en el tooltip.

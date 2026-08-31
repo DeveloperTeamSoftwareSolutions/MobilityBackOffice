@@ -133,3 +133,73 @@ describe('TemplatePreview', () => {
     expect(container.querySelector('.bo-pl__chat > .bo-pl__buttons')).not.toBeNull();
   });
 });
+
+describe('TemplatePreview con ejemplos', () => {
+  const conVariables = () =>
+    template({ bodyText: 'Hola {{1}}, tu cita es el {{2}}.' });
+
+  it('muestra el ejemplo en lugar del {{n}}', () => {
+    // Es la pregunta que responde la vista previa: al cliente no le llega "{{1}}",
+    // le llega un nombre.
+    const { container } = render(
+      <TemplatePreview
+        template={conVariables()}
+        ejemplos={[
+          { index: 1, target: 'body', label: 'nombre', example: 'María' },
+          { index: 2, target: 'body', label: 'fecha', example: '12 de marzo' },
+        ]}
+      />,
+    );
+
+    expect(container.textContent).toContain('Hola María, tu cita es el 12 de marzo.');
+    expect(container.textContent).not.toContain('{{1}}');
+  });
+
+  it('el ejemplo sigue resaltado', () => {
+    // Sin resaltarlo se leería como texto fijo, y ese pedazo cambia en cada envío.
+    const { container } = render(
+      <TemplatePreview
+        template={conVariables()}
+        ejemplos={[{ index: 1, target: 'body', label: '', example: 'María' }]}
+      />,
+    );
+
+    const marcadas = Array.from(container.querySelectorAll('.bo-pl__var')).map(
+      (e) => e.textContent,
+    );
+    expect(marcadas).toContain('María');
+  });
+
+  it('sin ejemplo cargado se sigue viendo el {{n}}', () => {
+    const { container } = render(
+      <TemplatePreview
+        template={conVariables()}
+        ejemplos={[{ index: 1, target: 'body', label: 'nombre', example: '   ' }]}
+      />,
+    );
+    expect(container.textContent).toContain('{{1}}');
+  });
+
+  it('el ejemplo del encabezado no se usa en el cuerpo', () => {
+    // META numera encabezado y cuerpo por separado: los dos tienen un {{1}} distinto.
+    const { container } = render(
+      <TemplatePreview
+        template={template({ headerType: 'TEXT', headerContent: 'Hola {{1}}', bodyText: 'Turno {{1}}' })}
+        ejemplos={[
+          { index: 1, target: 'header', label: '', example: 'María' },
+          { index: 1, target: 'body', label: '', example: 'confirmado' },
+        ]}
+      />,
+    );
+
+    expect(container.textContent).toContain('Hola María');
+    expect(container.textContent).toContain('Turno confirmado');
+  });
+
+  it('sin ejemplos se comporta como antes', () => {
+    // La lista no los tiene: solo llega lo que devuelve WABA.
+    const { container } = render(<TemplatePreview template={conVariables()} />);
+    expect(container.textContent).toContain('{{1}}');
+    expect(container.textContent).toContain('{{2}}');
+  });
+});

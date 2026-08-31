@@ -7,6 +7,7 @@ import {
   TemplateVariable,
 } from './plantillas.types';
 import { EditPolicyNotice } from './EditPolicyNotice';
+import { categoryLabel } from './plantillas.format';
 import { aPayload, mensajesDeError, validateTemplate } from './plantillas.api';
 import { HeaderMediaUpload } from './HeaderMediaUpload';
 import { JsonBox } from './JsonBox';
@@ -96,6 +97,26 @@ export function TemplateWizard({
     if (paso >= pasos.length) setPaso(pasos.length - 1);
   }, [pasos.length, paso]);
 
+  /**
+   * Que falta para poder saltar a un paso, o `null` si ya se puede.
+   *
+   * Se llega a un paso cuando **todos los anteriores estan completos**. No hace falta
+   * recordar por donde paso el usuario: la regla sale del formulario, que es lo que
+   * realmente importa.
+   *
+   * Sale bien en los dos casos sin tratarlos distinto. Creando, el formulario arranca
+   * vacio, asi que hay que ir en orden — pero una vez completado el paso 3, se puede
+   * volver a el desde el final con un clic. Editando, la plantilla ya trae todo, asi que
+   * todos los pasos estan disponibles desde el arranque.
+   */
+  const faltaParaLlegar = (destino: number): string | null => {
+    for (let i = 0; i < destino; i++) {
+      const falta = bloqueoDelPaso(form, i);
+      if (falta) return falta;
+    }
+    return null;
+  };
+
   const bloqueo = bloqueoDelPaso(form, paso);
   const esUltimo = paso === pasos.length - 1;
   const erroresFinales = validateForm(form, false);
@@ -132,15 +153,28 @@ export function TemplateWizard({
 
       {/* ---- Barra de pasos ---- */}
       <ol className="bo-pl__steps">
-        {pasos.map((p, i) => (
-          <li
-            key={p}
-            className={`bo-pl__step${i === paso ? ' bo-pl__step--now' : ''}${i < paso ? ' bo-pl__step--done' : ''}`}
-          >
-            <span className="bo-pl__stepnum">{i + 1}</span>
-            <span className="bo-pl__steplabel">{p}</span>
-          </li>
-        ))}
+        {pasos.map((p, i) => {
+          const falta = faltaParaLlegar(i);
+          const alcanzable = falta === null;
+
+          return (
+            <li key={p} className="bo-pl__stepitem">
+              <button
+                type="button"
+                className={`bo-pl__step${i === paso ? ' bo-pl__step--now' : ''}${
+                  i < paso ? ' bo-pl__step--done' : ''
+                }`}
+                onClick={() => setPaso(i)}
+                disabled={saving || !alcanzable}
+                aria-current={i === paso ? 'step' : undefined}
+                title={falta ?? undefined}
+              >
+                <span className="bo-pl__stepnum">{i + 1}</span>
+                <span className="bo-pl__steplabel">{p}</span>
+              </button>
+            </li>
+          );
+        })}
       </ol>
 
       {serverErrors.length > 0 && (
@@ -189,7 +223,7 @@ export function TemplateWizard({
             </p>
           ) : (
             <>
-              <TemplatePreview template={comoPlantilla(form)} />
+              <TemplatePreview template={comoPlantilla(form)} ejemplos={form.variables} />
               <span className="bo-pl__hint">
                 Vista aproximada. El diseño final lo define WhatsApp.
               </span>
@@ -199,7 +233,6 @@ export function TemplateWizard({
       </div>
 
       {bloqueo && <p className="bo-pl__stepblock">{bloqueo}</p>}
-      {draftNotice && <p className="bo-pl__notice">{draftNotice}</p>}
 
       <div className="bo-pl__formactions">
         <button type="button" className="bo-pl__btn" onClick={onAdvanced} disabled={saving}>
@@ -207,14 +240,18 @@ export function TemplateWizard({
         </button>
         {/* Guardar sin enviar: una plantilla se arma en varias sesiones. */}
         {onSaveDraft && (
-          <button
-            type="button"
-            className="bo-pl__btn"
-            onClick={onSaveDraft}
-            disabled={saving || savingDraft}
-          >
-            {savingDraft ? 'Guardando…' : 'Guardar borrador'}
-          </button>
+          <>
+            <button
+              type="button"
+              className="bo-pl__btn"
+              onClick={onSaveDraft}
+              disabled={saving || savingDraft}
+            >
+              {savingDraft ? 'Guardando…' : 'Guardar borrador'}
+            </button>
+            {/* Al lado del boton: es la respuesta a ese clic, no un aviso de la pantalla. */}
+            {draftNotice && <span className="bo-pl__draftnotice">{draftNotice}</span>}
+          </>
         )}
         <span className="bo-pl__spacer" />
         <button type="button" className="bo-pl__btn" onClick={onCancel} disabled={saving}>
@@ -313,7 +350,8 @@ function PasoObjetivo({
     <>
       <h3 className="bo-pl__steptitle">¿Para qué vas a usar esta plantilla?</h3>
       <p className="bo-pl__hint">
-        Elegí la opción que mejor describa tu mensaje. Esto define cómo la revisa META.
+        Elegí la opción que mejor describa tu mensaje. Define la <strong>categoría</strong>
+        con la que META la revisa, y cuánto cuesta enviarla.
       </p>
 
       <div className="bo-pl__choices">
@@ -331,7 +369,16 @@ function PasoObjetivo({
               onChange={() => set('category', o.value)}
             />
             <span>
-              <span className="bo-pl__choicelabel">{o.label}</span>
+              <span className="bo-pl__choicelabel">
+                {o.label}
+                {/*
+                  * El nombre de la categoria, al lado del objetivo. Quien arma la plantilla
+                  * piensa en "promocionar", pero META, el costo por envio y el resto del
+                  * equipo hablan de MARKETING: si la pantalla no lo dice, la traduccion
+                  * queda en la cabeza de cada uno.
+                  */}
+                <span className="bo-pl__catbadge">{categoryLabel(o.value)}</span>
+              </span>
               <span className="bo-pl__hint">{o.hint}</span>
             </span>
           </label>

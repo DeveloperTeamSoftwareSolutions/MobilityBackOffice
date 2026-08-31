@@ -189,4 +189,17 @@ describe('TemplateEditor', () => {
 
     expect(screen.getByDisplayValue('Hola, te esperamos.')).toBeInTheDocument();
   });
+  it('el aviso del borrador aparece al lado de su botón', async () => {
+    // Suelto y más abajo obligaba a buscar qué había pasado: es la respuesta a ese clic.
+    interceptarBorrador();
+    const { container } = montar();
+
+    const boton = screen.getByRole('button', { name: 'Guardar borrador' });
+    await userEvent.click(boton);
+
+    const aviso = await screen.findByText(/No se envió nada a META/);
+    expect(aviso).toHaveClass('bo-pl__draftnotice');
+    expect(aviso.parentElement).toBe(boton.parentElement);
+    expect(container.querySelector('.bo-pl__formactions')).toContainElement(aviso);
+  });
 });

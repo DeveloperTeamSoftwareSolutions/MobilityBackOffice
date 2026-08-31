@@ -293,14 +293,13 @@ export function TemplateForm({
               idioma. No hay vista previa acá: se ve una vez aprobada.
             </p>
           ) : (
-            <TemplatePreview template={comoPlantilla(form)} />
+            <TemplatePreview template={comoPlantilla(form)} ejemplos={form.variables} />
           )}
         </div>
       </div>
 
       <PayloadBox form={form} />
 
-      {draftNotice && <p className="bo-pl__notice">{draftNotice}</p>}
 
       <div className="bo-pl__formactions">
         {onWizard && (
@@ -310,14 +309,18 @@ export function TemplateForm({
         )}
         {/* Guardar sin enviar: una plantilla se arma en varias sesiones. */}
         {onSaveDraft && (
-          <button
-            type="button"
-            className="bo-pl__btn"
-            onClick={onSaveDraft}
-            disabled={saving || savingDraft}
-          >
-            {savingDraft ? 'Guardando…' : 'Guardar borrador'}
-          </button>
+          <>
+            <button
+              type="button"
+              className="bo-pl__btn"
+              onClick={onSaveDraft}
+              disabled={saving || savingDraft}
+            >
+              {savingDraft ? 'Guardando…' : 'Guardar borrador'}
+            </button>
+            {/* Al lado del boton: es la respuesta a ese clic, no un aviso de la pantalla. */}
+            {draftNotice && <span className="bo-pl__draftnotice">{draftNotice}</span>}
+          </>
         )}
         <span className="bo-pl__spacer" />
         <button type="button" className="bo-pl__btn" onClick={onCancel} disabled={saving}>

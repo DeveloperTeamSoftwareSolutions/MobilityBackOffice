@@ -1,5 +1,5 @@
 import { Fragment, ReactNode } from 'react';
-import { Template } from './plantillas.types';
+import { Template, TemplateVariable } from './plantillas.types';
 import { buttonLabel, headerLabel } from './plantillas.format';
 
 /**
@@ -57,18 +57,57 @@ function aplicarFormato(texto: string): ReactNode[] {
   return partes;
 }
 
-function Texto({ text }: { text: string }) {
+/**
+ * Un `{{n}}` reemplazado por su ejemplo, o el `{{n}}` crudo si todavia no hay ninguno.
+ *
+ * Se reemplaza porque la pregunta que responde la vista previa es **como le llega el
+ * mensaje al cliente**, y al cliente no le llega "{{1}}": le llega un nombre. Igual se
+ * resalta, para que se vea que ese pedazo cambia en cada envio y no es texto fijo.
+ */
+function variableAMostrar(
+  crudo: string,
+  target: Objetivo,
+  ejemplos: TemplateVariable[],
+): { texto: string; esEjemplo: boolean } {
+  const n = Number(crudo.replace(/[^0-9]/g, ''));
+  const v = ejemplos.find((e) => e.index === n && e.target === target);
+  const ejemplo = v ? v.example.trim() : '';
+  return ejemplo ? { texto: ejemplo, esEjemplo: true } : { texto: crudo, esEjemplo: false };
+}
+
+/** Encabezado y cuerpo numeran aparte en META, asi que el ejemplo depende de donde va. */
+type Objetivo = 'body' | 'header';
+
+function Texto({
+  text,
+  target,
+  ejemplos,
+}: {
+  text: string;
+  target: Objetivo;
+  ejemplos: TemplateVariable[];
+}) {
   return (
     <>
-      {splitVariables(text).map((parte, i) =>
-        parte.isVar ? (
-          <span key={i} className="bo-pl__var" title="Variable: se completa al enviar">
-            {parte.text}
+      {splitVariables(text).map((parte, i) => {
+        if (!parte.isVar) {
+          return <Fragment key={i}>{aplicarFormato(parte.text)}</Fragment>;
+        }
+        const { texto, esEjemplo } = variableAMostrar(parte.text, target, ejemplos);
+        return (
+          <span
+            key={i}
+            className="bo-pl__var"
+            title={
+              esEjemplo
+                ? 'Es un ejemplo: al enviar se reemplaza por el dato real'
+                : 'Variable: se completa al enviar'
+            }
+          >
+            {texto}
           </span>
-        ) : (
-          <Fragment key={i}>{aplicarFormato(parte.text)}</Fragment>
-        ),
-      )}
+        );
+      })}
     </>
   );
 }
@@ -87,7 +126,18 @@ function HeaderMedia({ tipo }: { tipo: string }) {
   );
 }
 
-export function TemplatePreview({ template }: { template: Template }) {
+export function TemplatePreview({
+  template,
+  ejemplos = [],
+}: {
+  template: Template;
+  /**
+   * Nombre y ejemplo de cada variable, para mostrar el mensaje **como le llega al
+   * cliente** en vez de con los `{{n}}` crudos. Vacio en la lista, donde solo se tiene
+   * lo que devuelve WABA.
+   */
+  ejemplos?: TemplateVariable[];
+}) {
   const header = headerLabel(template.headerType);
   const esMedia = header !== null && template.headerType !== 'TEXT';
 
@@ -99,13 +149,13 @@ export function TemplatePreview({ template }: { template: Template }) {
 
           {header !== null && template.headerType === 'TEXT' && template.headerContent && (
             <div className="bo-pl__header">
-              <Texto text={template.headerContent} />
+              <Texto text={template.headerContent} target="header" ejemplos={ejemplos} />
             </div>
           )}
 
           <div className="bo-pl__body">
             {template.bodyText ? (
-              <Texto text={template.bodyText} />
+              <Texto text={template.bodyText} target="body" ejemplos={ejemplos} />
             ) : (
               <span className="bo-pl__notext">Sin texto</span>
             )}

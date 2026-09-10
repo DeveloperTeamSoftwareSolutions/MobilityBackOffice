@@ -4,6 +4,12 @@
 > Estado: propuesta, pendiente de aprobación
 > Alcance de este documento: fundación de la aplicación + traslado del módulo de Regiones comerciales.
 > Marketing (templates WhatsApp) y carga del RAG quedan **fuera de esta fase**; se especifican por separado.
+>
+> **2026-09-10 (v2.16.0) — CAYCAR pasó de UNIÓN a INTERSECCIÓN por código de CEBE** (decisión del
+> negocio) y **la regla vive en la base**, no en BackOffice: la vista `dbo.VIEW_RegionGroupProfitCenters`
+> (repo MobilityMiddleWare), servida por el middleware ≥ 1.331.0. `region-groups.ts` se borró.
+> Ver [§3.4](#34-agrupaciones-caycar--intersección-por-código-de-cebe-leída-de-la-base).
+> Orden de deploy: **vista → MW 1.331.0 → BackOffice 2.16.0**.
 
 ---
 
@@ -89,18 +95,20 @@ Se traslada tal cual, preservando el contrato de API completo. Es un módulo aut
 - `Continents` — catálogo de regiones. **Solo lectura.**
 - `ContinentProfitCenters` — mapa M:N región ↔ CEBE, con **clave triple** `(GuidContinents, ProfitCenterCode, CompanyCode)`.
   La sociedad es obligatoria porque hay CEBEs transversales que aparecen en más de una sociedad.
-- `CAYCAR` es una **región virtual** sintetizada en código (`region-groups.ts`: `{CAYCAR: ['CA','CB']}`), no una fila.
+- ~~`CAYCAR` es una **región virtual** sintetizada en código (`region-groups.ts`), no una fila.~~ Desde v2.16.0
+  `CAYCAR` sigue sin fila en `Continents`, pero la define la vista `dbo.VIEW_RegionGroupProfitCenters` y
+  BackOffice la **lee** del middleware (§3.4).
 
 **Contrato de API** — 10 endpoints bajo `/api/regions`, respuestas siempre `{success: true, ...}`:
 
 ```
 GET    /api/regions                                  [Jwt]        listado paginado (page, limit≤200, search, sortBy, sortDir)
-GET    /api/regions/groups                           [Jwt]        regiones virtuales (CAYCAR)
+GET    /api/regions/groups                           [Jwt]        agrupaciones de la base (CAYCAR), conteo = pares de la vista
 GET    /api/regions/cebes/available                  [Jwt]        typeahead de CEBEs (q, limit≤50)
 GET    /api/regions/companies                        [Jwt]        typeahead de sociedades (q, limit≤50)
 GET    /api/regions/diagnostics/unmapped             [Jwt]        CEBEs sin región
 GET    /api/regions/diagnostics/multi                [Jwt]        CEBEs en más de una región
-GET    /api/regions/:code/resolve                    [Jwt]        expande código (incl. grupos) → CEBEs
+GET    /api/regions/:code/resolve                    [Jwt]        código (región o agrupación) → pares, 1 llamada al MW
 GET    /api/regions/:guid                            [Jwt]        detalle + vínculos
 POST   /api/regions/:guid/cebes                      [Jwt+Admin]  vincular  → {success, linked}
 DELETE /api/regions/:guid/cebes/:code/:companyCode   [Jwt+Admin]  desvincular (soft delete)
@@ -126,6 +134,56 @@ typeahead de CEBE + sociedad) y diagnóstico (CEBEs sin región / en varias regi
 
 **Auditoría**: `REGION_CEBE_LINK`, `REGION_CEBE_UNLINK`, `REGION_SYNC`, todas con `category='regions'`,
 `entity='ContinentProfitCenter'`, registrando `GuidUsers` del actor.
+
+### 3.4 Agrupaciones (CAYCAR) — intersección por código de CEBE, leída de la base
+
+**Decisión del negocio (2026-09-10):** CAYCAR son los CEBEs que el negocio opera en **Centroamérica Y en
+Caribe**, no todo lo de una o la otra. Hasta v2.15.0 BackOffice la resolvía como CA ∪ CB (listado y detalle),
+y eso le atribuía a CAYCAR todo lo que es de una sola región.
+
+**La intersección es por CÓDIGO de CEBE, no por par.** Un vínculo es el par (sociedad, CEBE) y ningún par
+pertenece a dos regiones — cada sociedad es de una sola región —, así que intersecar pares daría siempre vacío:
+
+| Paso | Definición |
+|---|---|
+| `codes(R)` | códigos de CEBE con al menos un par (sociedad, CEBE) vinculado a la región R en `ContinentProfitCenters` |
+| códigos CAYCAR | `codes(CA) ∩ codes(CB)` |
+| pares CAYCAR | todo par vinculado a CA **o** a CB cuyo código está en esa intersección |
+
+**Dónde vive la regla: en la base, una sola vez.** La vista **`dbo.VIEW_RegionGroupProfitCenters`** (repo
+MobilityMiddleWare, `sql/`; aplicada en QATEST) es la única definición. El middleware (≥ 1.331.0) la expone y
+BackOffice **no la calcula**:
+
+| Qué necesita BackOffice | De dónde lo lee (MW ≥ 1.331.0) |
+|---|---|
+| Qué agrupaciones hay (código, nombre, miembros, cantidad de pares) — `GET /api/regions/groups` | `GET /mobility/regions/groups` |
+| Los pares de una agrupación (detalle de la sección) — `GET /api/regions/CAYCAR/resolve` | `GET /mobility/regions/resolve?codes=CAYCAR` — el mismo resolver de las regiones atómicas |
+
+- `RegionsService.getGroups()` pide la vista en cada listado (sin caché): el conteo (`cebeCount` = `pairs`)
+  cambia apenas alguien vincula un CEBE, y el detalle sale de la misma vista.
+- `RegionsService.resolve(code)` hace **una** llamada al middleware tanto para una región como para una
+  agrupación; no expande miembros.
+- BackOffice no necesita saber "¿este código es una agrupación?" fuera del listado (el detalle usa el `isGroup`
+  que ya trae la fila), así que no hay caché de agrupaciones.
+- Un middleware anterior a 1.331.0 responde `/regions/groups` con 404 — sin cuerpo, o con `Region not found`
+  porque `/groups` cae en `GET /:guid`. **Todo 404** de ese endpoint se informa como **503 "requiere MW ≥
+  1.331.0"**, nunca como "sin agrupaciones".
+- Hasta v2.15.0 BackOffice tenía su propia copia de la regla (`region-groups.ts`). **Dos definiciones de la
+  misma regla divergen en silencio**: el negocio cambió la regla, la vista la refleja, y la copia local seguía
+  mostrando la unión sin que nada fallara. Por eso se borró, y el tripwire
+  `apps/api/src/regions/region-group-rule.tripwire.spec.ts` falla si reaparece en el código de la API el modo
+  `intersection-by-code` o un arreglo de miembros `['CA','CB']`.
+
+**Medido en QATEST (2026-09-10):**
+
+```
+CAYCAR   2 códigos / 18 pares   1080 Qualicon, 1081 Seguridad
+         cada uno en CA 2000, 2100, 2500, 2600, 2700, 2800, 2900 y en CB 3000, 3400
+```
+
+La unión (lo que mostraba v2.15.0) daba 11 códigos / 38 pares.
+
+**Orden de deploy:** vista `dbo.VIEW_RegionGroupProfitCenters` → MW 1.331.0 → BackOffice 2.16.0.
 
 ## 4. Deuda heredada que se corrige en el traslado
 
@@ -207,7 +265,10 @@ son los candidatos naturales a test unitario; ya existen tests de referencia en 
 4. Se puede vincular un CEBE a una región indicando sociedad, y el vínculo aparece en el detalle.
 5. Vincular sin sociedad devuelve 400.
 6. Desvincular deja la fila con `DeletedTimestamp` seteado, no la borra.
-7. `GET /api/regions/CAYCAR/resolve` devuelve la unión sin duplicados de los CEBEs de `CA` y `CB`.
+7. ~~`GET /api/regions/CAYCAR/resolve` devuelve la unión sin duplicados de los CEBEs de `CA` y `CB`.~~
+   Desde v2.16.0: devuelve los pares que la vista `dbo.VIEW_RegionGroupProfitCenters` le asigna a CAYCAR
+   (códigos comunes a `CA` y `CB`; QATEST: 2 códigos / 18 pares), y coincide con el `cebeCount` de
+   `GET /api/regions/groups`.
 8. Los diagnósticos listan CEBEs sin región y en varias regiones.
 9. Cada vínculo/desvínculo deja registro en `AuditLogs` con el `GuidUsers` del actor y `AppId='MobilityBackOffice'`.
 10. `POST /api/regions/sync` sin `REGIONS_SYNC_API_KEY` configurada responde 403.

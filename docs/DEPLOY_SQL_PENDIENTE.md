@@ -41,6 +41,19 @@ El 005 requiere que la base `[SAPServices]` exista en la instancia (existe en am
 
 Los scripts 002 y 003 son los `004_` y `006_` del repo MobilityManager, renumerados.
 
+### Dependencia de otro repo — agrupaciones de regiones (BackOffice 2.16.0)
+
+No es un script de BackOffice, pero BackOffice 2.16.0 no funciona sin el: la seccion Regiones lee CAYCAR de
+la vista **`dbo.VIEW_RegionGroupProfitCenters`** (repo MobilityMiddleWare, `sql/VIEW_RegionGroupProfitCenters.sql`)
+a traves del middleware ≥ 1.331.0. Se aplica y se registra **en ese repo**, no aca.
+
+| Objeto | Repo | QATEST | PROD |
+|---|---|---|---|
+| `dbo.VIEW_RegionGroupProfitCenters` | MobilityMiddleWare | [x] aplicada 2026-09-10 | [ ] pendiente |
+
+Orden de deploy: **vista → MW 1.331.0 → BackOffice 2.16.0**. Con un MW anterior, `GET /api/regions/groups`
+responde 503 "requiere MW ≥ 1.331.0" y la lista de la seccion Regiones no carga.
+
 ### Revision de estructura PROD para el deploy v2.0.0 (arquitectura via Middleware)
 
 Contexto: en v2.0.0 BackOffice dejo de tocar SQL — consume el MobilityMiddleWare. Como el

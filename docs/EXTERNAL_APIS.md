@@ -1,7 +1,7 @@
 # APIs y Endpoints Externos — Mobility BackOffice
 
-> Ultima actualizacion: 2026-08-27
-> Version: 2.15.0
+> Ultima actualizacion: 2026-09-10
+> Version: 2.16.0
 
 ## Integraciones activas
 
@@ -41,7 +41,8 @@ MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
   | GET | `/mobility/regions/:guid/cebes` | Vinculos de la region | `dbo.ContinentProfitCenters` | idem |
   | POST | `/mobility/regions/:guid/cebes` | Vincular CEBE-region-sociedad (upsert) | `dbo.ContinentProfitCenters` | idem |
   | DELETE | `/mobility/regions/:guid/cebes/:code?companyCode=` | Desvincular (soft delete) | `dbo.ContinentProfitCenters` | idem |
-  | GET | `/mobility/regions/resolve?codes=` | Pares (CEBE, sociedad) efectivos | `dbo.ContinentProfitCenters` | idem |
+  | GET | `/mobility/regions/groups` | **Agrupaciones de regiones** (CAYCAR): `[{ code, name, members, pairs }]`. **Requiere MW ≥ 1.331.0** | `dbo.VIEW_RegionGroupProfitCenters` | idem |
+  | GET | `/mobility/regions/resolve?codes=` | Pares (CEBE, sociedad) efectivos. Acepta codigos de region atomica **y de agrupacion** (`codes=CAYCAR`, MW ≥ 1.331.0): para una agrupacion devuelve sus pares segun la vista, no la union de sus miembros | `dbo.ContinentProfitCenters` + `dbo.VIEW_RegionGroupProfitCenters` | idem |
   | GET | `/mobility/regions/links/codes` | CEBEs con link activo | `dbo.ContinentProfitCenters` | idem |
   | GET | `/mobility/regions/links/multi-region` | CEBEs en varias regiones | `dbo.ContinentProfitCenters` | idem |
   | GET | `/v2/mobility/profit-centers` | Maestro de CEBEs (typeahead, diagnosticos) | `dbo.VIEW_V2_ProfitCentersMobility` | idem |
@@ -58,6 +59,14 @@ MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
   no depende de eso: es una preocupacion del Middleware, no de esta app.
 - **Nota de paths**: los path constants del cliente son relativos a `MIDDLEWARE_URL` (que ya
   trae `/api`). Verificado contra el Middleware en vivo.
+- **Piso de version — agrupaciones de regiones (desde BackOffice 2.16.0)**: la seccion Regiones
+  pide `/mobility/regions/groups`, que existe desde **MW 1.331.0**. Un middleware anterior
+  responde 404 — sin cuerpo (< 1.176.0, sin router de regiones) o con `Region not found`
+  (1.176.0 – 1.330.x, donde `/groups` cae en `GET /:guid`). **Todo 404 de ese endpoint** se
+  traduce a **503 "requiere MW ≥ 1.331.0"**: nunca a "no hay agrupaciones" ni a una union
+  calculada localmente. Contra un MW asi la lista de la seccion falla entera (la web pide
+  regiones y agrupaciones juntas).
+  **Orden de deploy**: vista `dbo.VIEW_RegionGroupProfitCenters` → MW 1.331.0 → BackOffice 2.16.0.
 
 ## Integraciones consumidas por terceros
 

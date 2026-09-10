@@ -28,7 +28,7 @@ export async function getRegions(search = '', page = 1, limit = 50): Promise<Pag
   return { data: res.data.data, pagination: res.data.pagination };
 }
 
-/** Agrupaciones virtuales (CAYCAR = CA + CB). */
+/** Agrupaciones de la base (CAYCAR = CEBEs comunes a Centroamérica y Caribe). */
 export async function getGroups(): Promise<Region[]> {
   const res = await httpClient.get<ApiData<Region[]>>('/api/regions/groups');
   return res.data.data;
@@ -42,7 +42,7 @@ export async function getRegion(guid: string): Promise<RegionDetail> {
   return res.data.data;
 }
 
-/** Pares (CEBE, sociedad) efectivos de una región o agrupación (CAYCAR → unión CA+CB). */
+/** Pares (CEBE, sociedad) efectivos de una región o agrupación (CAYCAR → los comunes a CA y CB). */
 export async function resolveRegion(code: string): Promise<ResolvedCebe[]> {
   const res = await httpClient.get<ApiData<ResolvedCebe[]>>(
     `/api/regions/${encodeURIComponent(code)}/resolve`,

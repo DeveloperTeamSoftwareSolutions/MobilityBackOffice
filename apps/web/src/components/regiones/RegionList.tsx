@@ -5,8 +5,8 @@ import { Region } from './regiones.types';
 
 /**
  * Lista de regiones comerciales: las atómicas (catálogo `Continents`: CA/CB/AN/NA) más
- * las agrupaciones virtuales (CAYCAR). El catálogo es fijo (pocas filas), así que se
- * traen juntas; el buscador filtra por código/nombre.
+ * las agrupaciones que define la base (CAYCAR). El catálogo es fijo (pocas filas), así que
+ * se traen juntas; el buscador filtra por código/nombre.
  */
 export function RegionList({ onSelect }: { onSelect: (r: Region) => void }) {
   const [rows, setRows] = useState<Region[]>([]);
@@ -43,7 +43,7 @@ export function RegionList({ onSelect }: { onSelect: (r: Region) => void }) {
         <h1 className="bo-rg__title">Regiones comerciales</h1>
         <p className="bo-rg__subtitle">
           Asociá CEBEs (Centros de Beneficio) a cada región para consolidar los reportes por
-          CEBE. CAYCAR agrupa Centroamérica y Caribe.
+          CEBE. CAYCAR reúne los CEBEs comunes a Centroamérica y Caribe.
         </p>
       </header>
 

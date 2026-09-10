@@ -2,7 +2,7 @@ import { of, throwError } from 'rxjs';
 import { ServiceUnavailableException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
-import { RegionsClient, mapProfitCenter } from './regions.client';
+import { RegionsClient, mapProfitCenter, MIN_MW_VERSION_REGION_GROUPS } from './regions.client';
 
 function make(cfg: Record<string, string | undefined>) {
   const http = { get: jest.fn() } as unknown as HttpService;
@@ -161,5 +161,90 @@ describe('RegionsClient.getAllProfitCenters', () => {
     (http.get as jest.Mock).mockReturnValue(throwError(() => ({ code: 'ECONNREFUSED' })));
 
     await expect(client.getAllProfitCenters()).rejects.toThrow(ServiceUnavailableException);
+  });
+});
+
+/** Error de axios con status y cuerpo, como lo entrega HttpService. */
+function httpError(status: number, data?: unknown) {
+  return throwError(() => ({ response: { status, data } }));
+}
+
+describe('RegionsClient.listRegionGroups', () => {
+  const GROUPS_URL = 'http://mw:6002/api/mobility/regions/groups';
+  const CAYCAR = {
+    code: 'CAYCAR',
+    name: 'CAYCAR (común a Centroamérica y Caribe)',
+    members: ['CA', 'CB'],
+    pairs: 18,
+  };
+
+  it('pega a /mobility/regions/groups y devuelve la data tal cual (el repo la normaliza)', async () => {
+    const { client, http } = make(BASE);
+    (http.get as jest.Mock).mockReturnValue(of({ data: { success: true, data: [CAYCAR] } }));
+
+    expect(await client.listRegionGroups()).toEqual([CAYCAR]);
+
+    const [url, opts] = (http.get as jest.Mock).mock.calls[0];
+    expect(url).toBe(GROUPS_URL);
+    expect(opts.headers).toEqual({ 'x-source-app': 'MobilityBackOffice' });
+  });
+
+  it('una respuesta sin arreglo en `data` → lista vacía', async () => {
+    const { client, http } = make(BASE);
+    (http.get as jest.Mock).mockReturnValue(of({ data: { success: true } }));
+
+    expect(await client.listRegionGroups()).toEqual([]);
+  });
+
+  it('404 sin cuerpo (middleware sin el router de regiones) → 503 que pide la versión mínima', async () => {
+    const { client, http } = make(BASE);
+    (http.get as jest.Mock).mockReturnValue(httpError(404, '<pre>Cannot GET /api/mobility/regions/groups</pre>'));
+
+    const err = await client.listRegionGroups().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ServiceUnavailableException);
+    expect((err as Error).message).toContain(`MW ≥ ${MIN_MW_VERSION_REGION_GROUPS}`);
+  });
+
+  it('404 "Region not found" (MW 1.176–1.330: /groups cae en GET /:guid) → el mismo 503 de versión', async () => {
+    // Un middleware con el router de regiones pero sin /groups interpreta "groups" como un
+    // Guid y responde 404 CON cuerpo. Tomar ese cuerpo por una respuesta real diría
+    // "región no encontrada" y escondería que falta desplegar el middleware.
+    const { client, http } = make(BASE);
+    (http.get as jest.Mock).mockReturnValue(
+      httpError(404, { success: false, error: 'Region not found' }),
+    );
+
+    const err = await client.listRegionGroups().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ServiceUnavailableException);
+    expect((err as Error).message).toContain(`MW ≥ ${MIN_MW_VERSION_REGION_GROUPS}`);
+  });
+
+  it('caída o 5xx → 503 genérico, nunca una lista vacía', async () => {
+    const { client, http } = make(BASE);
+    (http.get as jest.Mock).mockReturnValue(httpError(500, { success: false, error: 'boom' }));
+
+    const err = await client.listRegionGroups().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ServiceUnavailableException);
+    expect((err as Error).message).not.toContain('MW ≥');
+  });
+});
+
+describe('RegionsClient.resolveByCodes', () => {
+  it('manda los códigos de agrupación tal cual al resolver del middleware', async () => {
+    const { client, http } = make(BASE);
+    (http.get as jest.Mock).mockReturnValue(of({ data: { success: true, data: [] } }));
+
+    await client.resolveByCodes(['CAYCAR']);
+
+    const [url, opts] = (http.get as jest.Mock).mock.calls[0];
+    expect(url).toBe('http://mw:6002/api/mobility/regions/resolve');
+    expect(opts.params).toEqual({ codes: 'CAYCAR' });
+  });
+
+  it('sin códigos no llama al middleware', async () => {
+    const { client, http } = make(BASE);
+
+    expect(await client.resolveByCodes([])).toEqual([]);
+    expect(http.get as jest.Mock).not.toHaveBeenCalled();
   });
 });

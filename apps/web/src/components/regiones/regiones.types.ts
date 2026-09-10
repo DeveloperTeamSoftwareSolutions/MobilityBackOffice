@@ -12,7 +12,7 @@ export interface Paged<T> {
   pagination: Pagination;
 }
 
-/** Región comercial. Atómica (Continents: CA/CB/AN/NA) o agrupación virtual (CAYCAR). */
+/** Región comercial. Atómica (Continents: CA/CB/AN/NA) o agrupación definida en la base (CAYCAR). */
 export interface Region {
   guid: string; // para agrupaciones, el guid es el propio code
   code: string;

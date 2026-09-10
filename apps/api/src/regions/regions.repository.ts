@@ -2,12 +2,14 @@ import { Injectable } from '@nestjs/common';
 import {
   RegionsClient,
   MwRegion,
+  MwRegionGroup,
   MwRegionLink,
   MwResolvedCebe,
   MwMultiRegionRow,
 } from './regions.client';
 import {
   Region,
+  RegionGroup,
   RegionCebe,
   RegionDetail,
   AvailableCebe,
@@ -21,8 +23,9 @@ import {
 // Almacenamiento: la "región comercial" (negocio) son las filas de la tabla existente
 // `Continents` (CA/CB/AN/NA), en SOLO LECTURA (no se modifica; la comparten otros
 // reportes). Los CEBEs vinculados van en `ContinentProfitCenters`. Las agrupaciones
-// (CAYCAR = CA+CB) se resuelven por configuración (region-groups.ts), no en la base.
-// Ver docs/SPEC_BACKOFFICE_REGIONES.md.
+// (CAYCAR = lo común a CA y CB, por código de CEBE) las define la vista
+// `dbo.VIEW_RegionGroupProfitCenters` y BackOffice las LEE del middleware: no hay una
+// segunda definición en este código. Ver docs/SPEC_BACKOFFICE_REGIONES.md.
 //
 // ⚠️ ESTE REPOSITORIO YA NO TOCA SQL SERVER. Las tres fuentes van por el middleware,
 // que es el único componente que conecta a la base:
@@ -49,8 +52,8 @@ export function mapRegion(row: MwRegion): Region {
     serverTimestamp: Number(row.serverTimestamp),
     deletedTimestamp: row.deletedTimestamp != null ? Number(row.deletedTimestamp) : null,
     code: row.code ?? '',
-    // Una región de la base NUNCA es una agrupación: las agrupaciones (CAYCAR) las
-    // sintetiza el service desde configuración y no tienen fila.
+    // Una fila de `Continents` NUNCA es una agrupación: las agrupaciones (CAYCAR) salen de
+    // la vista de agrupaciones y no tienen fila en `Continents`.
     isGroup: false,
     name: row.name,
     sortOrder: row.sortOrder,
@@ -76,6 +79,27 @@ export function mapRegionCebe(row: MwRegionLink): RegionCebe {
     updatedBy: row.updatedBy ?? null,
     version: row.version,
   };
+}
+
+/**
+ * Normaliza una agrupación del middleware. Sin código la fila no identifica nada y se
+ * descarta (`null`). El código y los miembros se recortan y pasan a mayúsculas; el nombre
+ * cae al código; `pairs` no numérico o negativo cuenta como 0.
+ */
+export function mapRegionGroup(row: MwRegionGroup): RegionGroup | null {
+  const code = typeof row.code === 'string' ? row.code.trim().toUpperCase() : '';
+  if (!code) return null;
+  const name = typeof row.name === 'string' && row.name.trim() ? row.name.trim() : code;
+  const rawMembers = Array.isArray(row.members) ? row.members : [];
+  const members = [
+    ...new Set(
+      rawMembers
+        .map((m) => (typeof m === 'string' ? m.trim().toUpperCase() : ''))
+        .filter(Boolean),
+    ),
+  ];
+  const pairs = Number(row.pairs);
+  return { code, name, members, pairs: Number.isFinite(pairs) && pairs > 0 ? pairs : 0 };
 }
 
 export function mapResolvedCebe(row: MwResolvedCebe): ResolvedCebe {
@@ -261,15 +285,22 @@ export class RegionsRepository {
 
   // ---- Resolver + maestros + diagnósticos -------------------------------
   /**
-   * Pares (CEBE, sociedad) efectivos de un conjunto de regiones (por Code). Para una
-   * agrupación como CAYCAR el service pasa sus miembros (['CA','CB']) y el middleware
-   * hace la unión distinct. Cada CEBE queda limitado a las sociedades vinculadas en esas
-   * regiones (así un transversal como "Duwest Banano" no arrastra sociedades de otra).
+   * Pares (CEBE, sociedad) efectivos de un conjunto de códigos (por Code). Un código de
+   * región atómica devuelve sus vínculos; uno de agrupación (CAYCAR) devuelve los pares que
+   * le asigna la vista `dbo.VIEW_RegionGroupProfitCenters`. Cada CEBE queda limitado a las
+   * sociedades vinculadas en esas regiones (así un transversal como "Duwest Banano" no
+   * arrastra sociedades de otra).
    */
   async resolveCebesByCodes(codes: string[]): Promise<ResolvedCebe[]> {
     if (codes.length === 0) return [];
     const rows = await this.mw.resolveByCodes(codes);
     return rows.map(mapResolvedCebe);
+  }
+
+  /** Agrupaciones de regiones según la vista de la base, normalizadas (sin filas sin código). */
+  async getGroups(): Promise<RegionGroup[]> {
+    const rows = await this.mw.listRegionGroups();
+    return rows.map(mapRegionGroup).filter((g): g is RegionGroup => g !== null);
   }
 
   /**

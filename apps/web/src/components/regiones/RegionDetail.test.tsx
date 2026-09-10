@@ -18,9 +18,9 @@ const REGION_CA: Region = {
 const CAYCAR: Region = {
   guid: 'CAYCAR',
   code: 'CAYCAR',
-  name: 'CAYCAR (Centroamérica + Caribe)',
+  name: 'CAYCAR (común a Centroamérica y Caribe)',
   isGroup: true,
-  cebeCount: 3,
+  cebeCount: 18,
 };
 
 beforeEach(() => {
@@ -132,5 +132,8 @@ describe('RegionDetail — agrupación (CAYCAR)', () => {
     expect(screen.queryByRole('button', { name: 'Quitar' })).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/Vincular CEBE/)).not.toBeInTheDocument();
     expect(screen.getByText(/Solo lectura/)).toBeInTheDocument();
+    // CAYCAR es la interseccion por codigo de CEBE: la nota no puede decir "union".
+    expect(screen.getByText(/comunes a sus regiones/)).toBeInTheDocument();
+    expect(screen.queryByText(/unión/)).not.toBeInTheDocument();
   });
 });

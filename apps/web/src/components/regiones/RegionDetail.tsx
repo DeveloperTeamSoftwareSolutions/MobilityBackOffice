@@ -8,8 +8,8 @@ import { Region, RegionCebe, AvailableCebe, AvailableCompany } from './regiones.
 /**
  * Detalle de una región. Si es **atómica** (CA/CB/AN/NA): lista sus vínculos
  * CEBE↔sociedad, permite agregar (en dos pasos: elegir CEBE, luego sociedad) y quitar.
- * Si es **agrupación** (CAYCAR): muestra en solo lectura los pares efectivos (unión de
- * sus miembros) — no se edita.
+ * Si es **agrupación** (CAYCAR): muestra en solo lectura los pares que le asigna la base
+ * (los CEBEs comunes a sus regiones) — no se edita.
  */
 export function RegionDetail({ region, onBack }: { region: Region; onBack: () => void }) {
   const [cebes, setCebes] = useState<RegionCebe[]>([]);
@@ -73,7 +73,7 @@ export function RegionDetail({ region, onBack }: { region: Region; onBack: () =>
 
       {region.isGroup && (
         <p className="bo-rg__note">
-          Agrupación: los CEBEs se resuelven por unión de sus regiones. Solo lectura.
+          Agrupación: incluye solo los CEBEs comunes a sus regiones. Solo lectura.
         </p>
       )}
 
@@ -120,7 +120,7 @@ export function RegionDetail({ region, onBack }: { region: Region; onBack: () =>
         {!loading && cebes.length === 0 && (
           <p className="bo-rg__hint">
             {region.isGroup
-              ? 'Sin CEBEs en las regiones que agrupa.'
+              ? 'Sin CEBEs comunes a sus regiones.'
               : 'Sin CEBEs vinculados.'}
           </p>
         )}

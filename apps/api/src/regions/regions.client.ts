@@ -36,6 +36,29 @@ const REGIONS_PATH = '/mobility/regions';
 /** Endpoint del middleware que envuelve `[SAPServices].[dbo].[Companies]`. */
 const COMPANIES_PATH = '/v2/mobility/companies';
 
+/**
+ * Primera versión del middleware que sirve las agrupaciones de regiones desde la vista
+ * `dbo.VIEW_RegionGroupProfitCenters`: `/mobility/regions/groups` y `resolve` con códigos de
+ * agrupación. Un middleware anterior no tiene `/groups` y responde 404 sin cuerpo.
+ */
+export const MIN_MW_VERSION_REGION_GROUPS = '1.331.0';
+
+/**
+ * Agrupación de regiones tal como la publica el middleware. Todo opcional: es un contrato
+ * externo y el repositorio la normaliza antes de usarla.
+ */
+export interface MwRegionGroup {
+  code?: string | null;
+  name?: string | null;
+  members?: unknown;
+  pairs?: unknown;
+}
+
+/** Status HTTP de un error de axios, sin depender del tipo. */
+function httpStatus(err: unknown): number | undefined {
+  return (err as { response?: { status?: number } })?.response?.status;
+}
+
 /** Región tal como la publica el middleware. `cebeCount` null = no se pidió el conteo. */
 export interface MwRegion {
   id: number;
@@ -265,8 +288,48 @@ export class RegionsClient {
   }
 
   /**
-   * Pares (CEBE, sociedad) de un conjunto de regiones. La expansión de agrupaciones
-   * (CAYCAR → CA + CB) la hace el service: es configuración, no un dato de la base.
+   * Agrupaciones de regiones (CAYCAR...) con sus miembros y su cantidad de pares, tal como
+   * las define la vista `dbo.VIEW_RegionGroupProfitCenters`.
+   *
+   * **Todo 404 es un middleware anterior a 1.331.0** y se informa como 503 "requiere MW ≥
+   * 1.331.0" — nunca como "no hay agrupaciones": callarlo mostraría la sección sin CAYCAR
+   * como si la base no la definiera. El handler de `/groups` no tiene ningún camino a 404,
+   * así que un 404 solo puede venir de un middleware viejo, y llega de DOS formas:
+   *
+   *   · sin el router de regiones (< 1.176.0): el HTML de Express, sin `error`;
+   *   · con el router pero sin `/groups` (1.176.0 – 1.330.x): `/groups` cae en `GET /:guid`,
+   *     que busca una región con Guid "groups" y responde `{ error: 'Region not found' }`.
+   *
+   * Por el segundo caso NO alcanza con mirar si el 404 trae cuerpo: ese cuerpo es de otra
+   * ruta y traducirlo a "región no encontrada" escondería el problema de deploy.
+   */
+  async listRegionGroups(): Promise<MwRegionGroup[]> {
+    try {
+      const res = await firstValueFrom(
+        this.http.get<{ success: boolean; data?: MwRegionGroup[] }>(
+          `${this.base()}${REGIONS_PATH}/groups`,
+          { headers: this.headers(), timeout: 20000 },
+        ),
+      );
+      const data = res.data?.data;
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      if (httpStatus(err) === 404) {
+        throw new ServiceUnavailableException(
+          `El middleware todavía no tiene las agrupaciones de regiones — requiere MW ≥ ${MIN_MW_VERSION_REGION_GROUPS}`,
+        );
+      }
+      throw new ServiceUnavailableException(
+        'El servicio de agrupaciones de regiones no está disponible',
+      );
+    }
+  }
+
+  /**
+   * Pares (CEBE, sociedad) de un conjunto de regiones o agrupaciones. Con un código de
+   * agrupación (CAYCAR) el middleware devuelve los pares que le asigna la vista
+   * `dbo.VIEW_RegionGroupProfitCenters`: la regla vive en la base y BackOffice no combina
+   * miembros.
    */
   async resolveByCodes(codes: string[]): Promise<MwResolvedCebe[]> {
     if (codes.length === 0) return [];

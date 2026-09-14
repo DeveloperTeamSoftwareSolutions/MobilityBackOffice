@@ -5,8 +5,9 @@
 
 /**
  * Región comercial (negocio). Las regiones atómicas son filas de la tabla `Continents`
- * (CA/CB/AN/NA, solo lectura). Las agrupaciones (CAYCAR) son **virtuales** (config,
- * `isGroup=true`, sin fila propia): su `guid` es su `code` y no se pueden editar.
+ * (CA/CB/AN/NA, solo lectura). Las agrupaciones (CAYCAR) no tienen fila en `Continents`:
+ * las define la vista `dbo.VIEW_RegionGroupProfitCenters` y BackOffice las lee del
+ * middleware (`isGroup=true`); su `guid` es su `code` y no se pueden editar.
  */
 export interface Region {
   id: number;
@@ -17,8 +18,19 @@ export interface Region {
   code: string;
   name: string;
   sortOrder: number;
-  isGroup: boolean; // true = agrupación config (CAYCAR); false = región atómica (Continents)
-  cebeCount: number; // CEBEs vinculados (para grupos: unión de sus miembros)
+  isGroup: boolean; // true = agrupación (CAYCAR, definida en la vista); false = región atómica (Continents)
+  cebeCount: number; // pares vinculados (para grupos: los pares que la vista le asigna)
+}
+
+/**
+ * Agrupación de regiones tal como la define la base (`dbo.VIEW_RegionGroupProfitCenters`,
+ * servida por el middleware en `/mobility/regions/groups`). BackOffice no la calcula: la lee.
+ */
+export interface RegionGroup {
+  code: string;
+  name: string;
+  members: string[]; // regiones atómicas de las que sale (informativo: quién entra lo decide la vista)
+  pairs: number; // pares (sociedad, CEBE) de la agrupación según la vista
 }
 
 /**

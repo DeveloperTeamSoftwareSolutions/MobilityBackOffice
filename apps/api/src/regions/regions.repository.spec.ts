@@ -2,6 +2,7 @@ import {
   RegionsRepository,
   mapRegion,
   mapRegionCebe,
+  mapRegionGroup,
   mapResolvedCebe,
   groupMultiRegion,
   reconcileLinks,
@@ -51,10 +52,43 @@ describe('mappers del contrato del middleware', () => {
     expect(mapRegion({ ...mwRegion, cebeCount: null }).cebeCount).toBe(0);
   });
 
-  it('mapRegion: una región de la base NUNCA es agrupación', () => {
-    // Las agrupaciones (CAYCAR) las sintetiza el service desde configuración: no tienen
-    // fila. Si esto devolviera true, una región real se comportaría como grupo.
+  it('mapRegion: una fila de Continents NUNCA es agrupación', () => {
+    // Las agrupaciones (CAYCAR) salen de la vista de agrupaciones y no tienen fila en
+    // Continents. Si esto devolviera true, una región real se comportaría como grupo.
     expect(mapRegion(mwRegion).isGroup).toBe(false);
+  });
+
+  it('mapRegionGroup: normaliza código, miembros y pares de la vista', () => {
+    expect(
+      mapRegionGroup({
+        code: ' caycar ',
+        name: 'CAYCAR (común a Centroamérica y Caribe)',
+        members: ['ca', 'CB', 'CA', '', 7],
+        pairs: 18,
+      }),
+    ).toEqual({
+      code: 'CAYCAR',
+      name: 'CAYCAR (común a Centroamérica y Caribe)',
+      members: ['CA', 'CB'],
+      pairs: 18,
+    });
+  });
+
+  it('mapRegionGroup: sin código la fila no identifica nada → null', () => {
+    expect(mapRegionGroup({ code: '  ', name: 'X', members: [], pairs: 1 })).toBeNull();
+    expect(mapRegionGroup({ name: 'X' })).toBeNull();
+  });
+
+  it('mapRegionGroup: nombre cae al código; pares inválidos o negativos → 0', () => {
+    expect(mapRegionGroup({ code: 'CAYCAR', name: null, members: null, pairs: 'x' })).toEqual({
+      code: 'CAYCAR',
+      name: 'CAYCAR',
+      members: [],
+      pairs: 0,
+    });
+    expect(mapRegionGroup({ code: 'CAYCAR', pairs: -3 })?.pairs).toBe(0);
+    // El middleware puede serializar el conteo como string: se numeriza.
+    expect(mapRegionGroup({ code: 'CAYCAR', pairs: '18' })?.pairs).toBe(18);
   });
 
   it('mapRegionCebe: guidContinents del middleware → guidRegions del DTO', () => {
@@ -188,6 +222,7 @@ describe('RegionsRepository', () => {
       linkCebe: jest.fn(),
       unlinkCebe: jest.fn(),
       resolveByCodes: jest.fn(),
+      listRegionGroups: jest.fn(),
       getLinkedCebeCodes: jest.fn(),
       getMultiRegionLinks: jest.fn(),
       searchCompanies: jest.fn(),
@@ -293,6 +328,28 @@ describe('RegionsRepository', () => {
     const { repo, mw } = make();
     expect(await repo.resolveCebesByCodes([])).toEqual([]);
     expect(mw.resolveByCodes).not.toHaveBeenCalled();
+  });
+
+  it('resolveCebesByCodes: un código de agrupación viaja tal cual al middleware', async () => {
+    const { repo, mw } = make();
+    mw.resolveByCodes.mockResolvedValue([
+      { profitCenterCode: '1080', profitCenterName: 'Qualicon', companyCode: '2100', companyName: null },
+      { profitCenterCode: '1080', profitCenterName: 'Qualicon', companyCode: '3000', companyName: null },
+    ]);
+    const out = await repo.resolveCebesByCodes(['CAYCAR']);
+    expect(mw.resolveByCodes).toHaveBeenCalledWith(['CAYCAR']);
+    expect(out).toHaveLength(2);
+  });
+
+  it('getGroups: normaliza las agrupaciones del middleware y descarta las que no tienen código', async () => {
+    const { repo, mw } = make();
+    mw.listRegionGroups.mockResolvedValue([
+      { code: 'CAYCAR', name: 'CAYCAR (común a Centroamérica y Caribe)', members: ['CA', 'CB'], pairs: 18 },
+      { code: null, name: 'huérfana', members: [], pairs: 3 },
+    ]);
+    expect(await repo.getGroups()).toEqual([
+      { code: 'CAYCAR', name: 'CAYCAR (común a Centroamérica y Caribe)', members: ['CA', 'CB'], pairs: 18 },
+    ]);
   });
 
   it('getAvailableCompanies: delega en el middleware (adiós al cross-DB)', async () => {

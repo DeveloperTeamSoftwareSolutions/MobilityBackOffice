@@ -1,7 +1,7 @@
 # Auditoria — Mobility BackOffice
 
 > Ultima actualizacion: 2026-08-31
-> Version: 2.24.0
+> Version: 2.25.0
 
 Toda accion relevante deja traza en `AuditLogs`, la tabla **central compartida** con ITManager
 y MobilityManager. BackOffice escribe sus filas con `AppId='MobilityBackOffice'`.

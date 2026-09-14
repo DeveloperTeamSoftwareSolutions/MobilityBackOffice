@@ -34,6 +34,7 @@ function build(repoOverrides: Partial<RegionsRepository> = {}) {
     linkCebe: jest.fn().mockResolvedValue(undefined),
     unlinkCebe: jest.fn().mockResolvedValue(true),
     resolveCebesByCodes: jest.fn().mockResolvedValue([]),
+    getGroups: jest.fn().mockResolvedValue([]),
     ...repoOverrides,
   } as unknown as RegionsRepository;
 
@@ -285,35 +286,68 @@ describe('RegionsService.sync', () => {
   });
 });
 
+// Contrato cambiado (2026-09-10): BackOffice ya no calcula las agrupaciones. Antes
+// `getGroups` salía de `region-groups.ts` y contaba la UNIÓN de CA y CB con un resolve por
+// miembro; ahora la regla (intersección por código de CEBE, decisión del negocio) vive en la
+// vista `dbo.VIEW_RegionGroupProfitCenters` y el service solo la presenta.
 describe('RegionsService.getGroups', () => {
-  it('devuelve CAYCAR como region virtual con sus CEBEs efectivos', async () => {
+  it('presenta cada agrupación de la base como región virtual, con los pares de la vista', async () => {
     const { service, repo } = build({
-      resolveCebesByCodes: jest.fn().mockResolvedValue([
-        { profitCenterCode: '1003', profitCenterName: null, companyCode: '2100', companyName: null },
-        { profitCenterCode: '1003', profitCenterName: null, companyCode: '3000', companyName: null },
+      getGroups: jest.fn().mockResolvedValue([
+        { code: 'CAYCAR', name: 'CAYCAR (común a Centroamérica y Caribe)', members: ['CA', 'CB'], pairs: 18 },
       ]),
     });
     const [caycar] = await service.getGroups();
     expect(caycar).toMatchObject({
       code: 'CAYCAR',
       guid: 'CAYCAR',
+      name: 'CAYCAR (común a Centroamérica y Caribe)',
       isGroup: true,
-      cebeCount: 2,
+      cebeCount: 18,
     });
-    expect(repo.resolveCebesByCodes).toHaveBeenCalledWith(['CA', 'CB']);
+    // El conteo es el de la vista: no se resuelve ni se combina nada del lado de BackOffice.
+    expect(repo.resolveCebesByCodes).not.toHaveBeenCalled();
+    expect(repo.getGroups).toHaveBeenCalledTimes(1);
+  });
+
+  it('sin agrupaciones definidas en la base → lista vacía', async () => {
+    const { service } = build();
+    expect(await service.getGroups()).toEqual([]);
+  });
+
+  it('no cachea: cada listado vuelve a pedir la vista (el conteo cambia al vincular)', async () => {
+    const { service, repo } = build();
+    await service.getGroups();
+    await service.getGroups();
+    expect(repo.getGroups).toHaveBeenCalledTimes(2);
+  });
+
+  it('un middleware sin agrupaciones propaga el error, no una lista vacía', async () => {
+    const falla = new Error('requiere MW ≥ 1.331.0');
+    const { service } = build({ getGroups: jest.fn().mockRejectedValue(falla) });
+    await expect(service.getGroups()).rejects.toBe(falla);
   });
 });
 
 describe('RegionsService.resolve', () => {
-  it('expande la agrupacion antes de resolver', async () => {
+  it('una agrupación va al resolver del middleware tal cual, sin expandir miembros', async () => {
     const { service, repo } = build();
     await service.resolve('CAYCAR');
-    expect(repo.resolveCebesByCodes).toHaveBeenCalledWith(['CA', 'CB']);
+    expect(repo.resolveCebesByCodes).toHaveBeenCalledWith(['CAYCAR']);
+    expect(repo.resolveCebesByCodes).toHaveBeenCalledTimes(1);
   });
 
   it('una region atomica se resuelve sola', async () => {
     const { service, repo } = build();
     await service.resolve('AN');
     expect(repo.resolveCebesByCodes).toHaveBeenCalledWith(['AN']);
+  });
+
+  it('recorta espacios; un código vacío no pide nada', async () => {
+    const { service, repo } = build();
+    await service.resolve('  CAYCAR ');
+    expect(repo.resolveCebesByCodes).toHaveBeenLastCalledWith(['CAYCAR']);
+    await service.resolve('   ');
+    expect(repo.resolveCebesByCodes).toHaveBeenLastCalledWith([]);
   });
 });

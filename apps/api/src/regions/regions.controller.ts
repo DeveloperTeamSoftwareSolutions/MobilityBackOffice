@@ -24,7 +24,8 @@ import { actorFrom, AuthedRequest } from '../common/actor';
  * API de Regiones comerciales por CEBE.
  *
  * Las regiones (CA/CB/AN/NA) son el catálogo `Continents` en solo lectura y las
- * agrupaciones (CAYCAR) son virtuales: **no hay CRUD de regiones**. Lo único que se
+ * agrupaciones (CAYCAR) las define la vista `dbo.VIEW_RegionGroupProfitCenters` (se leen
+ * del middleware): **no hay CRUD de regiones**. Lo único que se
  * gestiona son los vínculos CEBE ↔ región ↔ sociedad.
  *
  * El módulo entero exige rol `Administrador` (SuperAdmin pasa siempre por el
@@ -62,7 +63,7 @@ export class RegionsController {
     return { success: true, ...result };
   }
 
-  // GET /api/regions/groups — agrupaciones virtuales (CAYCAR = CA + CB)
+  // GET /api/regions/groups — agrupaciones de la base (CAYCAR = lo común a CA y CB)
   @Get('groups')
   async groups() {
     return { success: true, data: await this.regions.getGroups() };
@@ -100,7 +101,7 @@ export class RegionsController {
     return { success: true, data: await this.regions.multiRegionCebes() };
   }
 
-  // GET /api/regions/:code/resolve — CEBEs efectivos (CAYCAR → unión CA+CB)
+  // GET /api/regions/:code/resolve — CEBEs efectivos (CAYCAR → sus pares según la vista)
   //
   // ORDEN LOAD-BEARING: esta ruta y todas las literales de arriba deben declararse
   // ANTES de `:guid`, o `/groups` y compañía se interpretan como un guid.

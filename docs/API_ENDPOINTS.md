@@ -1,7 +1,7 @@
 # API — Mobility BackOffice
 
-> Ultima actualizacion: 2026-08-27
-> Version: 2.15.0
+> Ultima actualizacion: 2026-09-10
+> Version: 2.16.0
 
 Toda respuesta incluye `success`. Los errores siguen el formato de Nest:
 `{ message, error, statusCode }`.
@@ -33,15 +33,26 @@ Toda respuesta incluye `success`. Los errores siguen el formato de Nest:
 | Metodo | Ruta | Descripcion |
 |---|---|---|
 | GET | `/api/regions` | Listado paginado. Query: `page`, `limit` (max 200), `search`, `sortBy` (`code`\|`name`\|`sortOrder`\|`serverTimestamp`\|`cebeCount`), `sortDir` |
-| GET | `/api/regions/groups` | Agrupaciones virtuales (CAYCAR = CA + CB) con su conteo de CEBEs efectivos |
+| GET | `/api/regions/groups` | Agrupaciones de la base (CAYCAR = CEBEs comunes a CA y CB, ver abajo). `cebeCount` = pares que les asigna la vista. 503 "requiere MW ≥ 1.331.0" si el middleware es anterior |
 | GET | `/api/regions/cebes/available` | Typeahead de CEBEs. Query: `q`, `limit` (max 50) |
 | GET | `/api/regions/companies` | Typeahead de sociedades. Query: `q`, `limit` (max 50) |
 | GET | `/api/regions/diagnostics/unmapped` | CEBEs del maestro sin ninguna region |
 | GET | `/api/regions/diagnostics/multi` | CEBEs vinculados a mas de una region |
-| GET | `/api/regions/:code/resolve` | Pares (CEBE, sociedad) efectivos. `CAYCAR` → union sin duplicados de CA y CB |
+| GET | `/api/regions/:code/resolve` | Pares (CEBE, sociedad) efectivos. Region atomica → sus vinculos; `CAYCAR` → los pares que le asigna la vista (una sola llamada al middleware) |
 | GET | `/api/regions/:guid` | Region + sus vinculos. 404 si no existe |
 | POST | `/api/regions/:guid/cebes` | Vincular. Body `{ cebes: [{ code, companyCode, name? }] }` → `{ success, linked }`. 400 si la lista viene vacia o si algun item no trae `companyCode`; 404 si la region no existe |
 | DELETE | `/api/regions/:guid/cebes/:code/:companyCode` | Desvincular (soft delete). 404 si el vinculo no existia |
+
+### Agrupaciones (CAYCAR) — se leen de la base
+
+Desde 2.16.0 BackOffice **no calcula** agrupaciones. La unica definicion es la vista
+`dbo.VIEW_RegionGroupProfitCenters` (repo MobilityMiddleWare), que el middleware sirve desde
+1.331.0. `GET /api/regions/groups` y `GET /api/regions/CAYCAR/resolve` leen esa misma vista:
+el conteo del listado y las filas del detalle no pueden divergir.
+
+Regla (decision del negocio, 2026-09-10): CAYCAR = **interseccion de CA y CB por codigo de
+CEBE**. Hasta 2.15.0 era la union (QATEST: 11 codigos / 38 pares); ahora son 2 codigos / 18
+pares. Detalle en `docs/SPEC_BACKOFFICE_REGIONES.md` §3.4.
 
 ### Orden de rutas — load-bearing
 

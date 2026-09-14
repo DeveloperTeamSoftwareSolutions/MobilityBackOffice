@@ -7,7 +7,6 @@ import { RegionsRepository, reconcileLinks, linkKey, parseLinkKey } from './regi
 import { AuditService } from '../audit/audit.service';
 import { AuditCategory } from '../audit/audit.categories';
 import { Actor } from '../common/actor';
-import { expandRegionCode, listRegionGroups } from './region-groups';
 import {
   Region,
   RegionDetail,
@@ -25,8 +24,9 @@ import {
 /**
  * Lógica del módulo de Regiones comerciales por CEBE. Las regiones (CA/CB/AN/NA) son el
  * catálogo `Continents` en solo lectura — NO se crean/editan. Las agrupaciones (CAYCAR)
- * son virtuales (config `region-groups.ts`). El admin solo gestiona **vínculos CEBE↔región**;
- * cada acción se **audita en `AuditLogs`** (`Category='regions'`).
+ * las define la vista `dbo.VIEW_RegionGroupProfitCenters` y BackOffice las lee del
+ * middleware: acá no hay reglas de agrupación. El admin solo gestiona **vínculos
+ * CEBE↔región**; cada acción se **audita en `AuditLogs`** (`Category='regions'`).
  */
 @Injectable()
 export class RegionsService {
@@ -44,31 +44,37 @@ export class RegionsService {
     return this.repo.getByGuid(guid);
   }
 
-  /** Agrupaciones (CAYCAR...) como "regiones" virtuales, con su conteo de CEBEs efectivos. */
+  /**
+   * Agrupaciones (CAYCAR...) como "regiones" para el listado de la sección, con la cantidad
+   * de pares que les asigna la vista. Una sola llamada al middleware y sin caché: el conteo
+   * cambia apenas alguien vincula un CEBE, y el detalle (`resolve`) sale de la misma vista —
+   * la lista y el drill no pueden hablar de conjuntos distintos.
+   */
   async getGroups(): Promise<Region[]> {
-    const groups = listRegionGroups();
-    return Promise.all(
-      groups.map(async (g) => {
-        const cebes = await this.repo.resolveCebesByCodes(g.members);
-        return {
-          id: 0,
-          guid: g.code,
-          timeStamp: 0,
-          serverTimestamp: 0,
-          deletedTimestamp: null,
-          code: g.code,
-          name: g.name,
-          sortOrder: 999,
-          isGroup: true,
-          cebeCount: cebes.length,
-        };
-      }),
-    );
+    const groups = await this.repo.getGroups();
+    return groups.map((g) => ({
+      id: 0,
+      guid: g.code,
+      timeStamp: 0,
+      serverTimestamp: 0,
+      deletedTimestamp: null,
+      code: g.code,
+      name: g.name,
+      sortOrder: 999,
+      isGroup: true,
+      cebeCount: g.pairs,
+    }));
   }
 
-  /** Pares (CEBE, sociedad) efectivos de una región o agrupación (CAYCAR → unión CA+CB). */
+  /**
+   * Pares (CEBE, sociedad) efectivos de una región o agrupación. Los dos casos van al mismo
+   * resolver del middleware en una sola llamada: para una agrupación (CAYCAR) devuelve los
+   * pares que le asigna la vista `dbo.VIEW_RegionGroupProfitCenters`. BackOffice no combina
+   * miembros.
+   */
   resolve(code: string): Promise<ResolvedCebe[]> {
-    return this.repo.resolveCebesByCodes(expandRegionCode(code));
+    const c = (code || '').trim();
+    return this.repo.resolveCebesByCodes(c ? [c] : []);
   }
 
   availableCebes(search: string, limit: number): Promise<AvailableCebe[]> {

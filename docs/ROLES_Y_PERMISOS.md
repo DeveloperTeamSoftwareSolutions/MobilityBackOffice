@@ -1,6 +1,6 @@
 # Roles y Permisos — Mobility BackOffice
 
-> Última actualización: 2026-09-15 · Versión: 2.26.0
+> Última actualización: 2026-09-15 · Versión: 2.27.0
 >
 > Qué puede hacer cada rol, cómo se decide, y cómo se registra en ITManager.
 
@@ -21,15 +21,16 @@ Y la regla que más sorprende:
 
 ---
 
-## 2. Los cinco roles
+## 2. Los seis roles
 
 | RoleKey (ITManager) | Rol en la app | Prioridad | Qué ve |
 |---|---|---|---|
 | `MOBILITYBO_SUPERADMIN` | **SuperAdmin** | 1 (gana a todos) | Absolutamente todo, incluida la consola de soporte y cualquier sección futura |
 | `MOBILITYBO_SUPPORT` | **Soporte** | 2 | **Solo** la consola de soporte |
-| `MOBILITYBO_USER` | **Usuario** | 3 | Todo **menos** la consola de soporte y lo exclusivo de SuperAdmin |
-| `MOBILITYBO_ADMIN` | **Administrador** | 4 | Regiones comerciales |
-| `MOBILITYBO_MARKETING` | **Marketing** | 5 | Documentación del RAG, Templates de WhatsApp |
+| `MOBILITYBO_REVISION_SAP` | **RevisionSap** | 3 | **Solo** Órdenes rechazadas por SAP |
+| `MOBILITYBO_USER` | **Usuario** | 4 | Todo **menos** la consola de soporte, Órdenes rechazadas por SAP y lo exclusivo de SuperAdmin |
+| `MOBILITYBO_ADMIN` | **Administrador** | 5 | Regiones comerciales |
+| `MOBILITYBO_MARKETING` | **Marketing** | 6 | Documentación del RAG, Templates de WhatsApp |
 
 ### Qué implica cada uno
 
@@ -45,11 +46,17 @@ anularlo. **No** da acceso a Regiones ni a Marketing.
 Es el único rol que toca documentos de negocio, y por eso está separado del resto.
 Ver `docs/SPEC_CONSOLA_SOPORTE.md`.
 
-**Usuario** — el rol del día a día. **Todo el back-office menos la consola de soporte y
-menos lo que sea exclusivo de SuperAdmin.**
+**RevisionSap** — rol **operativo** de quien revisa las órdenes que SAP rechazó: ve la
+orden sin precios, reasigna centro y destino por ítem y la reenvía. **No** da acceso a
+Regiones, Marketing ni a la consola de soporte. Se asigna a propósito, igual que Soporte:
+por eso `Usuario` no lo recibe. Ver `docs/SPEC_REVISION_ORDENES_SAP.md`.
+
+**Usuario** — el rol del día a día. **Todo el back-office menos la consola de soporte,
+menos Órdenes rechazadas por SAP y menos lo que sea exclusivo de SuperAdmin.**
 Hoy eso significa Regiones comerciales + Documentación del RAG + Templates de WhatsApp, y
-**cualquier sección que se agregue en el futuro** salvo que sea de soporte o que se
-declare como exclusiva de SuperAdmin (`roles: ['SuperAdmin']`).
+**cualquier sección que se agregue en el futuro** salvo que pida un rol deliberado
+(`Soporte`, `RevisionSap`) o que se declare como exclusiva de SuperAdmin
+(`roles: ['SuperAdmin']`).
 No es "SuperAdmin sin la consola": SuperAdmin además entra a la consola y a la matriz
 de autorizadores.
 
@@ -63,16 +70,16 @@ y (cuando exista) los templates de WhatsApp.
 
 ## 3. Qué ve cada rol, sección por sección
 
-| Sección | SuperAdmin | Soporte | Usuario | Administrador | Marketing |
-|---|:--:|:--:|:--:|:--:|:--:|
-| Inicio | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Regiones comerciales | ✓ | — | ✓ | ✓ | — |
-| Documentación del RAG | ✓ | — | ✓ | — | ✓ |
-| Templates de WhatsApp | ✓ | — | ✓ | — | ✓ |
-| **Consola de soporte** | ✓ | ✓ | **—** | — | — |
-| **Matriz de autorizadores** | ✓ | — | **—** | **—** | **—** |
-| **Órdenes rechazadas por SAP** *(vista previa; rol a definir)* | ✓ | — | **—** | **—** | **—** |
-| *Cualquier sección futura no-soporte* | ✓ | — | ✓ | — | — |
+| Sección | SuperAdmin | Soporte | RevisionSap | Usuario | Administrador | Marketing |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|
+| Inicio | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Regiones comerciales | ✓ | — | — | ✓ | ✓ | — |
+| Documentación del RAG | ✓ | — | — | ✓ | — | ✓ |
+| Templates de WhatsApp | ✓ | — | — | ✓ | — | ✓ |
+| **Consola de soporte** | ✓ | ✓ | — | **—** | — | — |
+| **Matriz de autorizadores** | ✓ | — | — | **—** | **—** | **—** |
+| **Órdenes rechazadas por SAP** | ✓ | — | ✓ | **—** | **—** | **—** |
+| *Cualquier sección futura sin rol deliberado* | ✓ | — | — | ✓ | — | — |
 
 "Inicio" es fijo y siempre visible; muestra solo las tarjetas de las secciones que el rol
 puede abrir.
@@ -88,6 +95,7 @@ puede abrir.
 | `/api/templates/*` | Marketing, Usuario, SuperAdmin |
 | `/api/support/*` | **Soporte, SuperAdmin** |
 | `/api/authorizers/*` | **Solo SuperAdmin** |
+| `/api/revision-sap/*` | **RevisionSap, SuperAdmin** |
 | `/api/regions/sync` | Ninguno — se autentica por API key (máquina a máquina) |
 
 > **La UI oculta; el backend prohíbe.** Esconder una sección es comodidad, no seguridad:
@@ -123,10 +131,12 @@ Como gana uno solo, **toda combinación pierde algo**:
 | `USER` + `MARKETING` | Usuario | Sin pérdida: Usuario ya incluye Marketing |
 | **`USER` + `SUPPORT`** | **Soporte** | **Pierde todo el resto del back-office** |
 | `ADMIN` + `SUPPORT` | Soporte | **Pierde Regiones** |
+| **`USER` + `REVISION_SAP`** | **RevisionSap** | **Pierde todo el resto del back-office** |
+| `SUPPORT` + `REVISION_SAP` | Soporte | **Pierde Órdenes rechazadas por SAP** |
 | cualquiera + `SUPERADMIN` | SuperAdmin | Sin pérdida: ve todo |
 
-> **Regla práctica: quien necesite la consola de soporte Y el resto del back-office va con
-> `MOBILITYBO_SUPERADMIN`.** Es la única combinación que funciona.
+> **Regla práctica: quien necesite la consola de soporte u Órdenes rechazadas por SAP Y el
+> resto del back-office va con `MOBILITYBO_SUPERADMIN`.** Es la única combinación que funciona.
 
 Por qué `Usuario` va arriba de Administrador y Marketing: porque los **contiene** a los
 dos. Si ganara uno de ellos, el usuario perdería la otra mitad del back-office.
@@ -151,6 +161,8 @@ Prefijo `MOBILITYBO_`. La app los recibe **sin** el prefijo (`REGIONS_VIEW`, etc
 | `MOBILITYBO_SUPPORT_VIEW` | `SUPPORT_VIEW` | Buscar documentos y ver su línea de tiempo | en uso (por rol) |
 | `MOBILITYBO_SUPPORT_OVERRIDE` | `SUPPORT_OVERRIDE` | Corregir documentos del flujo | en uso (por rol) |
 | `MOBILITYBO_USER_ACCESS` | `USER_ACCESS` | Uso general del back-office | en uso (por rol) |
+| `MOBILITYBO_REVISION_SAP_VIEW` | `REVISION_SAP_VIEW` | Ver órdenes rechazadas por SAP, sin precios | en uso (por rol) |
+| `MOBILITYBO_REVISION_SAP_RESEND` | `REVISION_SAP_RESEND` | Reasignar centro y destino y reenviar a SAP | en uso (por rol) |
 
 ### Mapeo Rol → Permiso
 
@@ -158,6 +170,7 @@ Prefijo `MOBILITYBO_`. La app los recibe **sin** el prefijo (`REGIONS_VIEW`, etc
 |---|---|
 | SuperAdmin | todos |
 | Soporte | SUPPORT_VIEW, SUPPORT_OVERRIDE |
+| RevisionSap | REVISION_SAP_VIEW, REVISION_SAP_RESEND |
 | Usuario | USER_ACCESS, REGIONS_VIEW, REGIONS_LINK, RAG_ACCESS, TEMPLATES_VIEW, TEMPLATES_MANAGE — **ningún permiso de soporte** |
 | Administrador | REGIONS_VIEW, REGIONS_LINK |
 | Marketing | RAG_ACCESS, TEMPLATES_VIEW, TEMPLATES_MANAGE |
@@ -183,9 +196,10 @@ Correr contra la base del entorno, con SSMS o `sqlcmd -I`:
 | `001_RegisterMobilityBackOfficeApp.sql` | La Application + SuperAdmin, Administrador, Marketing y sus permisos |
 | `006_AddSupportRole.sql` | Rol Soporte + SUPPORT_VIEW + SUPPORT_OVERRIDE |
 | `007_AddUserRole.sql` | Rol Usuario + USER_ACCESS + herencia de los permisos de Administrador y Marketing |
+| `008_AddRevisionSapRole.sql` | Rol RevisionSap + REVISION_SAP_VIEW + REVISION_SAP_RESEND |
 
-Los tres son **idempotentes y aditivos**: crean lo que falte, no duplican ni borran. El
-006 y el 007 exigen que el 001 haya corrido antes — sin la Application, el rol no tiene
+Todos son **idempotentes y aditivos**: crean lo que falte, no duplican ni borran. El
+006, el 007 y el 008 exigen que el 001 haya corrido antes — sin la Application, el rol no tiene
 dónde colgarse y el accessMatrix no lo devolvería.
 
 El 007 hereda los permisos de Administrador y Marketing copiándolos, y **excluye
@@ -206,7 +220,7 @@ Ver `docs/AUTENTICACION.md`.
 
 | Qué | Dónde |
 |---|---|
-| Los cinco roles | `apps/api/src/auth/backoffice-role.enum.ts` |
+| Los seis roles | `apps/api/src/auth/backoffice-role.enum.ts` |
 | RoleKey → rol, y la prioridad | `apps/api/src/auth/role-resolver.service.ts` |
 | La autorización del backend | `apps/api/src/auth/roles.guard.ts` + `@Roles(...)` en cada controller |
 | El proxy del RAG | `apps/api/src/rag/rag.proxy.ts` (`ALLOWED_ROLES`) |
@@ -221,7 +235,7 @@ Ver `docs/AUTENTICACION.md`.
 3. Poner `@Roles(...)` en su controller.
 
 **`Usuario` no hay que listarlo**: la regla en `roleAccess.ts` le da acceso a todo lo que
-no pida `Soporte`. Lo que sí hay que recordar es lo contrario — marcar la sección como de
+no pida un rol deliberado (`Soporte`, `RevisionSap` o `SuperAdmin`, lista `NOT_FOR_USUARIO`). Lo que sí hay que recordar es lo contrario — marcar la sección como de
 Soporte si corresponde —, que es justo lo que no se olvida, porque es el motivo por el que
 se creó la sección.
 

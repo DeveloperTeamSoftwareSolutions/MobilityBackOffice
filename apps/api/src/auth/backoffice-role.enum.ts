@@ -9,6 +9,12 @@ export enum BackOfficeRole {
   /** Consola de soporte: auditar y corregir ordenes/cotizaciones (DevelopersTeam). */
   Soporte = 'Soporte',
   /**
+   * Revisión de órdenes rechazadas por SAP: reasignar centro y destino por ítem y
+   * reenviar. Rol operativo de BackOffice, asignado deliberadamente: `Usuario` no lo
+   * incluye.
+   */
+  RevisionSap = 'RevisionSap',
+  /**
    * Todo el back-office MENOS la consola de soporte.
    *
    * No es "SuperAdmin sin la consola": es el rol para quien trabaja con las

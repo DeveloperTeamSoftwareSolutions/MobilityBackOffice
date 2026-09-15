@@ -143,6 +143,38 @@ describe('RoleResolver — rol de Soporte (consola de soporte)', () => {
   });
 });
 
+describe('RoleResolver — rol RevisionSap (ordenes rechazadas por SAP)', () => {
+  const resolver = new RoleResolver();
+
+  it('mapea MOBILITYBO_REVISION_SAP a RevisionSap', () => {
+    expect(resolver.resolve({ roleKeys: ['MOBILITYBO_REVISION_SAP'] })).toBe(
+      BackOfficeRole.RevisionSap,
+    );
+  });
+
+  it('SuperAdmin y Soporte ganan sobre RevisionSap', () => {
+    expect(
+      resolver.resolve({ roleKeys: ['MOBILITYBO_REVISION_SAP', 'MOBILITYBO_SUPERADMIN'] }),
+    ).toBe(BackOfficeRole.SuperAdmin);
+    expect(
+      resolver.resolve({ roleKeys: ['MOBILITYBO_REVISION_SAP', 'MOBILITYBO_SUPPORT'] }),
+    ).toBe(BackOfficeRole.Soporte);
+  });
+
+  it('RevisionSap gana sobre Administrador y Marketing', () => {
+    expect(
+      resolver.resolve({
+        roleKeys: ['MOBILITYBO_ADMIN', 'MOBILITYBO_MARKETING', 'MOBILITYBO_REVISION_SAP'],
+      }),
+    ).toBe(BackOfficeRole.RevisionSap);
+  });
+
+  it('el RoleKey es exactamente el que registra el SQL 008', () => {
+    // Un typo aca devuelve null y el login responde 403 sin explicar por que.
+    expect(resolver.resolve({ roleKeys: ['MOBILITYBO_REVISIONSAP'] })).toBeNull();
+  });
+});
+
 describe('RoleResolver — rol Usuario', () => {
   const resolver = new RoleResolver();
 
@@ -173,6 +205,12 @@ describe('RoleResolver — rol Usuario', () => {
     expect(
       resolver.resolve({ roleKeys: ['MOBILITYBO_USER', 'MOBILITYBO_SUPERADMIN'] }),
     ).toBe(BackOfficeRole.SuperAdmin);
+  });
+
+  it('RevisionSap gana sobre Usuario: se asigna deliberadamente', () => {
+    expect(
+      resolver.resolve({ roleKeys: ['MOBILITYBO_USER', 'MOBILITYBO_REVISION_SAP'] }),
+    ).toBe(BackOfficeRole.RevisionSap);
   });
 
   it('el RoleKey de Usuario NO es MOBILITYBO_USUARIO', () => {

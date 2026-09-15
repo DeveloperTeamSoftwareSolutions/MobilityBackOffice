@@ -87,7 +87,7 @@ export function App(): JSX.Element {
               path="ordenes-rechazadas-sap"
               element={
                 <RoleGuard
-                  allow={['SuperAdmin']}
+                  allow={['RevisionSap']}
                   fallback={<Navigate to="/" replace />}
                 >
                   <RevisionSapPage />

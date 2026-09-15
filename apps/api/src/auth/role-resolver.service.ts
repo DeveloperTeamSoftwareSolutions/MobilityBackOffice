@@ -14,6 +14,7 @@ export interface RoleResolutionInput {
 const ROLE_KEY_MAP: Readonly<Record<string, BackOfficeRole>> = {
   MOBILITYBO_SUPERADMIN: BackOfficeRole.SuperAdmin,
   MOBILITYBO_SUPPORT: BackOfficeRole.Soporte,
+  MOBILITYBO_REVISION_SAP: BackOfficeRole.RevisionSap,
   MOBILITYBO_USER: BackOfficeRole.Usuario,
   MOBILITYBO_ADMIN: BackOfficeRole.Administrador,
   MOBILITYBO_MARKETING: BackOfficeRole.Marketing,
@@ -26,18 +27,24 @@ const ROLE_KEY_MAP: Readonly<Record<string, BackOfficeRole>> = {
  * deliberadamente al DevelopersTeam: si alguien lo tiene, es porque se espera que
  * opere la consola.
  *
- * `Usuario` va tercero, arriba de Administrador y Marketing, porque los CONTIENE a
+ * `RevisionSap` va tercero por el mismo motivo que Soporte: es operativo y se asigna
+ * deliberadamente a quien revisa las ordenes rechazadas por SAP.
+ *
+ * `Usuario` va despues, arriba de Administrador y Marketing, porque los CONTIENE a
  * los dos: darle prioridad a uno de ellos le quitaria acceso a la otra mitad.
  *
  * ⚠️ La app resuelve UN SOLO rol, asi que toda combinacion pierde algo:
  *   - ADMIN + MARKETING -> conviene USER, que abarca los dos.
- *   - USER + SUPPORT    -> gana Soporte y se pierde el resto. **Quien necesite las
- *     dos cosas va con SUPERADMIN**, que es la unica combinacion real.
+ *   - USER + SUPPORT    -> gana Soporte y se pierde el resto.
+ *   - USER + REVISION_SAP -> gana RevisionSap y se pierde el resto.
+ *   **Quien necesite dos de estas cosas va con SUPERADMIN**, que es la unica
+ *   combinacion real.
  * Ver docs/ROLES_Y_PERMISOS.md y el riesgo R2 de docs/SPEC_CONSOLA_SOPORTE.md.
  */
 const PRIORITY: readonly BackOfficeRole[] = [
   BackOfficeRole.SuperAdmin,
   BackOfficeRole.Soporte,
+  BackOfficeRole.RevisionSap,
   BackOfficeRole.Usuario,
   BackOfficeRole.Administrador,
   BackOfficeRole.Marketing,

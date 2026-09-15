@@ -99,8 +99,8 @@ export const NAV_SECTIONS: NavSection[] = [
       'Revisá por qué SAP rechazó una orden, reasigná centro y destino por ítem y reenviala.',
     path: '/ordenes-rechazadas-sap',
     group: 'Órdenes',
-    // Solo SuperAdmin mientras no esté definido el rol de BackOffice que la opera.
-    roles: ['SuperAdmin'],
+    // Rol deliberado: Usuario no la recibe por defecto (ver roleAccess.ts).
+    roles: ['RevisionSap'],
     status: 'ready',
     icon: <IconArrowRepeat />,
   },

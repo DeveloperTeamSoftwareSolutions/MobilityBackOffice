@@ -117,11 +117,11 @@ describe('ReviewOrderDetail', () => {
     expect(screen.queryByText(/precio|descuento|total/i)).toBeNull();
   });
 
-  it('pide primero sin stock y después con stock, y avisa si no hay en el centro de cabecera', async () => {
+  it('no consulta el stock de SAP ni muestra avisos de stock', async () => {
     await renderDetail();
-    expect(api.getReviewCatalogs).toHaveBeenNthCalledWith(1, ORDER, false);
-    expect(api.getReviewCatalogs).toHaveBeenNthCalledWith(2, ORDER, true);
-    expect(await screen.findByText(/Sin stock en el centro 2801/)).toBeTruthy();
+    expect(api.getReviewCatalogs).toHaveBeenCalledTimes(1);
+    expect(api.getReviewCatalogs).toHaveBeenCalledWith(ORDER, false);
+    expect(screen.queryByText(/stock/i)).toBeNull();
   });
 
   it('cambiar el destino queda sin guardar, bloquea el reenvío y se puede descartar', async () => {

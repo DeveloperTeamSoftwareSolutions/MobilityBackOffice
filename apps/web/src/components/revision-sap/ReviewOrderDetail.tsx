@@ -30,7 +30,6 @@ interface Props {
   onBack: () => void;
 }
 
-type StockState = 'idle' | 'loading' | 'done' | 'failed';
 type Tab = 'items' | 'sap-orders';
 
 /** Detalle de una orden en revisión: cabecera, motivo del rechazo, ítems y órdenes SAP. */
@@ -40,7 +39,6 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
   const [drafts, setDrafts] = useState<LineDrafts>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [stockState, setStockState] = useState<StockState>('idle');
   const [saving, setSaving] = useState(false);
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -48,33 +46,18 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
   const [tab, setTab] = useState<Tab>('items');
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Primero la orden y las opciones SIN stock, que responden enseguida. El stock sale de
-  // SAP, una consulta por producto, y puede tardar: se pide aparte y no traba la pantalla.
+  // La orden y sus opciones (centros permitidos y destinos del área). El stock de SAP no
+  // se consulta desde esta pantalla: SAP lo revalida al enviar.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    setStockState('idle');
     Promise.all([getReviewOrder(guid), getReviewCatalogs(guid, false)])
       .then(([detail, options]) => {
         if (cancelled) return;
         setOrder(detail);
         setCatalogs(options);
         setDrafts(initialDrafts(detail.items));
-        setStockState('loading');
-        getReviewCatalogs(guid, true)
-          .then((withStock) => {
-            if (cancelled) return;
-            setCatalogs((prev) => ({
-              ...(prev ?? withStock),
-              stock: withStock.stock,
-              errors: withStock.errors,
-            }));
-            setStockState('done');
-          })
-          .catch(() => {
-            if (!cancelled) setStockState('failed');
-          });
       })
       .catch((err) => {
         if (!cancelled) setError(apiErrorMessage(err, 'No se pudo cargar la orden.'));
@@ -190,7 +173,6 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
   const editable = order.backoffice.inReview && !saving;
   const lastError = order.sap.lastError ?? order.sapAttempts.find((a) => a.error)?.error ?? null;
   const previousAttempts = order.sapAttempts.filter((a) => a.error).slice(1);
-  const stockErrors = catalogs.errors.filter((e) => e.source === 'stock');
   const otherErrors = catalogs.errors.filter((e) => e.source !== 'stock');
 
   return (
@@ -322,13 +304,7 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
               <span className="bo-rs__cell--muted" aria-live="polite">
                 {groups.length === 1
                   ? 'Si se reenvía así, sale en 1 orden SAP'
-                  : `Si se reenvía así, sale en ${groups.length} órdenes SAP, una por centro`}{' '}
-                · {stockState === 'loading' && 'consultando stock en SAP…'}
-                {stockState === 'done' &&
-                  (stockErrors.length === 0
-                    ? 'stock actualizado'
-                    : `sin stock de ${stockErrors.length} producto${stockErrors.length === 1 ? '' : 's'}: SAP no respondió`)}
-                {stockState === 'failed' && 'no se pudo consultar el stock'}
+                  : `Si se reenvía así, sale en ${groups.length} órdenes SAP, una por centro`}
               </span>
             </header>
             {otherErrors.length > 0 && (

@@ -1,119 +1,105 @@
 import { describe, it, expect } from 'vitest';
 import {
   blockingItemCount,
-  changedItems,
-  filterQueue,
-  initialAssignments,
+  destinationChanges,
+  effectiveCenter,
+  initialDrafts,
   itemWarnings,
+  stockFor,
 } from './revision-sap.logic';
-import { ReviewCatalogs, ReviewItem, ReviewQueueEntry } from './revision-sap.types';
+import { ReviewCatalogs, ReviewItem } from './revision-sap.types';
 
 /**
- * Lo que se fija acá es qué frena el reenvío y qué solo avisa.
+ * Lo que se fija acá es qué frena y qué solo avisa.
  *
- * El equipo decidió que se pueda elegir un centro sin stock (SAP lo revalida con el
- * stock real), pero no un centro fuera de los permitidos del cliente ni un destino
- * de otra área de venta: esos SAP los rechaza seguro, y reenviarlos solo suma otro
- * intento fallido.
+ * Frena el destino vacío o de otra área de venta: SAP lo rechaza seguro y el servidor
+ * tampoco lo acepta. El centro y el stock solo avisan: el centro no se edita todavía y
+ * el stock lo revalida SAP (el equipo decidió permitir centros sin stock).
  */
 
 const catalogs: ReviewCatalogs = {
   centers: [
-    { centerCode: '2101', centerName: 'CD Villa Nueva' },
-    { centerCode: '2102', centerName: 'CD Escuintla' },
+    { centerCode: '2801', centerName: 'DW Alm. Externo' },
+    { centerCode: '2802', centerName: 'DW Cartago' },
   ],
   destinations: [
-    { destinationCode: '30001187', destinationName: 'Bodega central', deliveryAddress: null },
+    { destinationCode: '30000124', destinationName: 'Inversiones', deliveryAddress: null },
   ],
-  stock: { '100245': { '2101': 320, '2102': 10 } },
+  stock: { '1001917': { '2801': 320, '2802': 0 } },
+  errors: [],
 };
 
 function item(over: Partial<ReviewItem> = {}): ReviewItem {
   return {
     guid: 'item-1',
     lineNumber: 1,
-    productCode: '100245',
-    productName: 'Glifosato',
+    productCode: '1001917',
+    productDescription: 'ACTIV 80',
     quantity: 40,
     unitOfMeasure: 'UN',
-    centerCode: '2101',
-    destinationCode: '30001187',
+    centerCode: null,
+    deliveryDestinationCode: '30000124',
+    deliveryDestinationName: 'Inversiones',
     ...over,
   };
 }
 
-function kinds(i: ReviewItem, centerCode: string | null, destinationCode: string | null) {
-  return itemWarnings(i, { centerCode, destinationCode }, catalogs).map((w) => [
-    w.kind,
-    w.blocking,
-  ]);
+function kinds(i: ReviewItem, destination: string | null, header: string | null, cat = catalogs) {
+  return itemWarnings(i, destination, header, cat).map((w) => [w.kind, w.blocking]);
 }
 
 describe('itemWarnings', () => {
-  it('un centro permitido con stock y un destino del área no generan avisos', () => {
-    expect(kinds(item(), '2101', '30001187')).toEqual([]);
+  it('destino del área y centro permitido con stock: sin avisos', () => {
+    expect(kinds(item(), '30000124', '2801')).toEqual([]);
   });
 
-  it('un centro sin registro de stock avisa pero no bloquea', () => {
-    expect(kinds(item({ productCode: 'OTRO' }), '2101', '30001187')).toEqual([
-      ['sin-stock', false],
-    ]);
+  it('destino vacío o de otra área bloquea', () => {
+    expect(kinds(item(), null, '2801')).toEqual([['sin-destino', true]]);
+    expect(kinds(item(), '30000112', '2801')).toEqual([['destino-fuera-del-area', true]]);
   });
 
-  it('stock menor que la cantidad pedida avisa pero no bloquea', () => {
-    expect(kinds(item(), '2102', '30001187')).toEqual([['stock-insuficiente', false]]);
+  it('el centro de cabecera fuera de los permitidos avisa pero no bloquea', () => {
+    expect(kinds(item(), '30000124', '2800')).toEqual([['centro-no-permitido', false]]);
   });
 
-  it('un centro fuera de los permitidos del cliente bloquea', () => {
-    expect(kinds(item(), '2803', '30001187')).toEqual([['centro-no-permitido', true]]);
+  it('sin stock o con stock insuficiente avisa pero no bloquea', () => {
+    expect(kinds(item(), '30000124', '2802')).toEqual([['sin-stock', false]]);
+    expect(kinds(item({ quantity: 500 }), '30000124', '2801')).toEqual([['stock-insuficiente', false]]);
   });
 
-  it('un destino de otra área de venta bloquea', () => {
-    expect(kinds(item(), '2101', '30000877')).toEqual([['destino-fuera-del-area', true]]);
-  });
-
-  it('sin centro ni destino bloquea por los dos', () => {
-    expect(kinds(item(), null, null)).toEqual([
-      ['sin-centro', true],
-      ['sin-destino', true],
-    ]);
+  it('si el stock no se sabe, no inventa un aviso de stock', () => {
+    expect(kinds(item(), '30000124', '2802', { ...catalogs, stock: null })).toEqual([]);
+    expect(kinds(item({ productCode: 'SIN-RESPUESTA' }), '30000124', '2802')).toEqual([]);
   });
 });
 
-describe('changedItems y blockingItemCount', () => {
-  const items = [
-    item(),
-    item({ guid: 'item-2', lineNumber: 2, centerCode: '2803' }),
-  ];
-
-  it('sin tocar nada no hay cambios, aunque la orden traiga un dato inválido', () => {
-    const assignments = initialAssignments(items);
-    expect(changedItems(items, assignments)).toEqual([]);
-    expect(blockingItemCount(items, assignments, catalogs)).toBe(1);
+describe('centro y stock', () => {
+  it('la línea sin centro propio hereda el de la cabecera', () => {
+    expect(effectiveCenter(item(), '2801')).toEqual({ code: '2801', inherited: true });
+    expect(effectiveCenter(item({ centerCode: '2802' }), '2801')).toEqual({ code: '2802', inherited: false });
   });
 
-  it('corregir el centro inválido registra el cambio y libera el reenvío', () => {
-    const assignments = {
-      ...initialAssignments(items),
-      'item-2': { centerCode: '2101', destinationCode: '30001187' },
-    };
-    const changes = changedItems(items, assignments);
+  it('stockFor distingue "no se sabe" de "cero"', () => {
+    expect(stockFor(null, '1001917', '2801')).toBeNull();
+    expect(stockFor(catalogs.stock, 'OTRO', '2801')).toBeNull();
+    expect(stockFor(catalogs.stock, '1001917', '2803')).toBe(0);
+  });
+});
+
+describe('destinationChanges y blockingItemCount', () => {
+  const items = [item(), item({ guid: 'item-2', lineNumber: 2, deliveryDestinationCode: '30000112' })];
+
+  it('sin tocar nada no hay cambios, aunque la orden traiga un destino de otra área', () => {
+    const drafts = initialDrafts(items);
+    expect(destinationChanges(items, drafts)).toEqual([]);
+    expect(blockingItemCount(items, drafts, '2801', catalogs)).toBe(1);
+  });
+
+  it('corregir el destino registra el cambio y destraba', () => {
+    const drafts = { ...initialDrafts(items), 'item-2': '30000124' };
+    const changes = destinationChanges(items, drafts);
     expect(changes).toHaveLength(1);
-    expect(changes[0].before.centerCode).toBe('2803');
-    expect(changes[0].after.centerCode).toBe('2101');
-    expect(blockingItemCount(items, assignments, catalogs)).toBe(0);
-  });
-});
-
-describe('filterQueue', () => {
-  const entries = [
-    { orderNumber: 'ORD-1', customerCode: '100', customerName: 'Finca La Esperanza', sellerEmail: 'ana@x.com' },
-    { orderNumber: 'ORD-2', customerCode: '200', customerName: 'Agro Norte', sellerEmail: 'luis@x.com' },
-  ] as ReviewQueueEntry[];
-
-  it('busca por número, cliente y vendedor sin distinguir mayúsculas', () => {
-    expect(filterQueue(entries, 'esperanza').map((e) => e.orderNumber)).toEqual(['ORD-1']);
-    expect(filterQueue(entries, 'LUIS@').map((e) => e.orderNumber)).toEqual(['ORD-2']);
-    expect(filterQueue(entries, '  ')).toHaveLength(2);
+    expect(changes[0]).toMatchObject({ before: '30000112', after: '30000124' });
+    expect(blockingItemCount(items, drafts, '2801', catalogs)).toBe(0);
   });
 });

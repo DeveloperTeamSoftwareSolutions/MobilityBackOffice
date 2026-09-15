@@ -1,12 +1,13 @@
 /**
- * Aviso de vista previa. Mientras la sección muestre datos de ejemplo, nadie tiene
- * que confundir estas órdenes con órdenes reales.
+ * Lo que la sección todavía no hace. Mientras el reenvío no esté conectado, nadie
+ * tiene que creer que corregir la orden alcanza para que llegue a SAP.
  */
 export function PreviewNotice() {
   return (
     <p className="bo-rs__preview" role="note">
-      <strong>Vista previa con datos de ejemplo.</strong> Las órdenes no son reales y
-      el reenvío a SAP todavía no está conectado.
+      <strong>El reenvío a SAP todavía no está conectado.</strong> Por ahora podés revisar
+      la orden y corregir el destino de entrega de cada ítem. El centro por ítem queda
+      pendiente: hoy SAP recibe solo el de la cabecera.
     </p>
   );
 }

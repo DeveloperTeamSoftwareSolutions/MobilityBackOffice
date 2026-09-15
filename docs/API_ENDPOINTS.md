@@ -1,7 +1,7 @@
 # API — Mobility BackOffice
 
-> Ultima actualizacion: 2026-09-10
-> Version: 2.16.0
+> Ultima actualizacion: 2026-09-15
+> Version: 2.27.0
 
 Toda respuesta incluye `success`. Los errores siguen el formato de Nest:
 `{ message, error, statusCode }`.
@@ -134,6 +134,26 @@ La bitacora es un passthrough a `GET /mobility/document-timeline` del Middleware
 ediciones, envio, decisiones por item, contraofertas, decision de cabecera, corridas del motor
 de credito, pagos y su validacion, liberacion o denegacion de credito, cierre del turno del
 gerente, envio a SAP y anulacion con motivo. `includeViews=1` suma quien MIRO el documento.
+
+## Ordenes rechazadas por SAP
+
+**Todo el modulo exige rol `RevisionSap`** (`SuperAdmin` pasa siempre). `Usuario` no entra.
+Passthrough a `/api/mobility/backoffice-review` del Middleware (≥ 1.348.0). Ninguna respuesta
+trae precios. Ver `docs/SPEC_REVISION_ORDENES_SAP.md`.
+
+| Metodo | Ruta | Descripcion |
+|---|---|---|
+| GET | `/api/revision-sap/orders` | Bandeja: ordenes con `ProcessedBackoffice = 0`. Query: `search`, `page`, `limit` (max 200), `sortBy` (`sapLastAttemptAt` \| `orderNumber` \| `customerName` \| `sellerEmail` \| `orderDate`), `sortDir` |
+| GET | `/api/revision-sap/orders/:guid` | Detalle sin precios: cabecera, items con centro y destino, `sapAttempts`, `backoffice.inReview`. 400 si el guid es invalido; 404 si no existe |
+| GET | `/api/revision-sap/orders/:guid/options` | Centros permitidos del cliente, destinos del area de la orden y, con `includeStock=1`, el stock de SAP por producto y centro. Las fuentes que fallan vienen en `errors` |
+| PUT | `/api/revision-sap/orders/:guid/items/:itemGuid/destination` | Body `{ destinationCode, reasonNotes? }`. Quien hace el cambio sale del token. 400 destino invalido o fuera del area; 404 orden o linea inexistente; 409 la orden ya no esta en revision |
+
+**Auditoria**: el cambio de destino registra `REVISION_SAP_DESTINATION_CHANGE` (categoria
+`SapReview`) solo si el destino realmente cambio. Las lecturas no se auditan: quedan en los
+`ApiLogs` del Middleware.
+
+**Lo que no esta**: el reenvio a SAP y el cambio de centro por item, pendientes de la definicion
+de la division por centro.
 
 ## Matriz de autorizadores
 

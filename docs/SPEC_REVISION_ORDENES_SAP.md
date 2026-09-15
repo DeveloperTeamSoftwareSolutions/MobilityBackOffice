@@ -1,18 +1,19 @@
 # Órdenes rechazadas por SAP — Spec
 
-> Última actualización: 2026-09-15 · Versión: 2.26.0
-> Estado: **vista previa con datos de ejemplo** (solo front). Sin integración con la API.
+> Última actualización: 2026-09-15 · Versión: 2.27.0
+> Estado: **bandeja, detalle y destino por ítem conectados** (requiere Middleware ≥ 1.348.0).
+> **El reenvío a SAP y el centro por ítem todavía no.**
 
 ## Qué resuelve
 
-Cuando MobilityIA envía una orden a SAP y SAP la rechaza, la orden pasa a **revisión de
-BackOffice**: MobilityIA la deja en solo lectura y el control pasa a BackOffice. BackOffice:
+Cuando MobilityIA envía una orden a SAP y SAP la rechaza (o la crea sin entrega), el
+Middleware deja `ProcessedBackoffice = 0`: la orden pasa a **revisión de BackOffice**,
+MobilityIA la deja en solo lectura y el vendedor ya no puede reenviarla. BackOffice:
 
 1. ve la cabecera y los ítems de la orden **sin precios, descuentos ni totales**;
 2. ve el motivo del rechazo de SAP, con los intentos anteriores;
-3. cambia **por ítem** el centro de distribución y el destino de entrega;
-4. reenvía la orden a SAP. Si SAP la acepta, queda procesada; si la rechaza, se ve el
-   motivo nuevo.
+3. corrige **por ítem** el destino de entrega *(conectado)* y el centro *(pendiente)*;
+4. reenvía la orden a SAP *(pendiente)*.
 
 ## Decisiones del equipo (2026-09-15)
 
@@ -26,72 +27,98 @@ BackOffice**: MobilityIA la deja en solo lectura y el control pasa a BackOffice.
 | 4c | Se elige solo el **centro**, no el almacén. |
 | 4d | Destinos filtrados por **sociedad + canal + sector** de la orden, desde `CustomerDeliveryDestinations`. |
 | 4e | El Middleware valida centro y destino, no solo la pantalla. |
+| 5 | Rol propio: `MOBILITYBO_REVISION_SAP` (`RevisionSap`). `Usuario` no lo recibe. |
 | 6 | Por ahora BackOffice solo **reasigna**: no rechaza ni anula. |
 
-Sin decidir: el **rol** que opera la sección (hoy solo SuperAdmin), si BackOffice podrá
-rechazar o anular, y el aviso por correo a BackOffice cuando llega una orden.
-
-## Pantallas (vista previa)
+## Pantallas
 
 **Bandeja** (`/ordenes-rechazadas-sap`): orden y fecha del rechazo, cliente, área de venta,
-vendedor, motivo del rechazo e intentos. Búsqueda por orden, cliente o vendedor.
+vendedor, motivo e intentos. Búsqueda, orden y paginación en el servidor.
 
 **Detalle:**
-- Cabecera: cliente, vendedor, área de venta, fecha, centro y destino de cabecera.
-- Motivo del rechazo: el último intento a la vista, los anteriores plegados.
-- Ítems: producto, cantidad y dos selectores por línea. El de centro muestra el stock de
-  ese producto en cada centro; el de destino, los del área de venta de la orden.
-- Barra de acciones fija: cantidad de ítems modificados, **Descartar cambios** y
-  **Reenviar a SAP**, que abre una confirmación con cada cambio (antes → después).
+- Cabecera sin precios: cliente, vendedor, área, fecha, centro y destino de cabecera.
+- Motivo del rechazo: el último a la vista, los anteriores plegados.
+- Ítems:
+  - **Destino:** selector con los destinos del área de venta de la orden. Se guarda con
+    **Guardar cambios**, línea por línea; si una falla, su error queda en la línea y el
+    cambio sigue pendiente.
+  - **Centro:** se muestra el efectivo (el de la línea o, si no tiene, el de cabecera) y
+    el stock en cada centro permitido. **No se edita**: hoy SAP recibe solo el centro de
+    cabecera.
+- Stock: la pantalla pide primero centros y destinos (inmediato) y después el stock de
+  SAP, que puede tardar o fallar sin trabar el resto.
+- **Reenviar a SAP:** abre la confirmación con el botón de confirmar deshabilitado. No se
+  habilita con cambios sin guardar.
+- Una orden que ya salió de revisión se muestra en solo lectura.
 
 **Avisos por línea** (`revision-sap.logic.ts`):
 
-| Aviso | ¿Bloquea el reenvío? |
+| Aviso | ¿Bloquea guardar y reenviar? |
 |---|---|
-| Sin centro o sin destino | Sí |
-| Centro fuera de los permitidos del cliente | Sí |
-| Destino fuera del área de venta de la orden | Sí |
-| Centro sin stock del producto | No (decisión 4b) |
-| Stock menor que la cantidad pedida | No (decisión 4b) |
+| Sin destino | Sí |
+| Destino fuera del área de venta de la orden | Sí (el Middleware también lo rechaza) |
+| Centro fuera de los permitidos del cliente | No: avisa, puede ser el motivo del rechazo |
+| Centro sin stock / stock menor a lo pedido | No (decisión 4b) |
 
-Si la orden trae un centro o destino que ya no está en las listas, se muestra igual como
-opción marcada ("no permitido para el cliente" / "fuera del área de venta").
+## Arquitectura
+
+```
+web  revision-sap.api.ts ──> api  /api/revision-sap/*  (rol RevisionSap)
+                                   RevisionSapController → Service (auditoría) → Client
+                                   └──> Middleware /api/mobility/backoffice-review/*  (x-api-key)
+```
+
+| Endpoint BackOffice | Middleware | Qué hace |
+|---|---|---|
+| `GET /api/revision-sap/orders` | `GET /orders` | Bandeja |
+| `GET /api/revision-sap/orders/:guid` | `GET /orders/:guid` | Detalle sin precios |
+| `GET /api/revision-sap/orders/:guid/options?includeStock=1` | `GET /orders/:guid/options` | Centros, destinos y stock |
+| `PUT /api/revision-sap/orders/:guid/items/:itemGuid/destination` | `PUT …/destination` | Cambia el destino de una línea |
+
+- Quién hace el cambio sale **del token**, nunca del body.
+- **Auditoría:**
+  - BackOffice registra `REVISION_SAP_DESTINATION_CHANGE`, categoría `SapReview`.
+  - El Middleware deja `BackofficeItemDestinationChange`, con antes y después, más un comentario en el hilo de la orden.
+- Contrato del Middleware: `MobilityMiddleWare/docs/API_BACKOFFICE_REVIEW.md` (PR #646).
 
 ## Archivos
+
+`apps/api/src/revision-sap/`: `revision-sap.controller.ts`, `.service.ts`, `.client.ts`,
+`.types.ts`, `.module.ts`, y sus `*.spec.ts`.
 
 `apps/web/src/components/revision-sap/`:
 
 | Archivo | Qué hace |
 |---|---|
 | `RevisionSapPanel.tsx` | Contenedor: bandeja o detalle |
-| `ReviewQueueList.tsx` | Tabla de la bandeja |
-| `ReviewOrderDetail.tsx` | Cabecera, motivo del rechazo, ítems y acciones |
-| `ReviewItemsTable.tsx` | Ítems con los selectores de centro y destino |
-| `ResendConfirmModal.tsx` | Confirmación con el resumen de cambios |
-| `PreviewNotice.tsx` | Aviso de datos de ejemplo |
-| `revision-sap.api.ts` | Acceso a datos. Hoy lee los de ejemplo; mismas firmas que la integración |
-| `revision-sap.ejemplo.ts` | Datos de ejemplo (clientes y direcciones inventados) |
-| `revision-sap.logic.ts` | Reglas puras: cambios, avisos, filtro |
+| `ReviewQueueList.tsx` | Tabla de la bandeja, con orden y paginación |
+| `ReviewOrderDetail.tsx` | Cabecera, motivo, ítems, guardado y acciones |
+| `ReviewItemsTable.tsx` | Ítems: centro con stock y selector de destino |
+| `ResendConfirmModal.tsx` | Confirmación del reenvío (deshabilitada) |
+| `PreviewNotice.tsx` | Aviso de lo que todavía no está conectado |
+| `revision-sap.api.ts` | Llamadas a la API |
+| `revision-sap.logic.ts` | Reglas puras: cambios, avisos, stock |
 | `revision-sap.types.ts` | Tipos |
 
-Tests: `revision-sap.logic.test.ts`, `ReviewOrderDetail.test.tsx`.
+## Deploy
 
-## Para conectarla — qué falta en el Middleware
+1. **Middleware ≥ 1.348.0** (PR #646) con `MIDDLEWARE_API_KEY` configurada.
+2. **SQL 008** (`008_AddRevisionSapRole.sql`) en la base del entorno, y asignar
+   `MOBILITYBO_REVISION_SAP` en ITManager a quien opere la sección.
+3. BackOffice 2.27.0.
 
-| Necesidad | Estado |
-|---|---|
-| Destinos por área de venta | **Hecho**: `GET /api/v2/mobility/customer-delivery-destinations` (MW PR #642, 1.347.0) |
-| Reenvío de BackOffice | **Existe**: `POST /api/v2/mobility/businessorders2sap` con `x-api-key` y `{ guidBusinessOrders, asBackoffice: true, actorEmail }` |
-| Bandeja: órdenes con `ProcessedBackoffice = 0`, con el último `SapLastError` | Falta |
-| Detalle sin precios, con centro y destino por línea e intentos de SAP | Falta |
-| Centros permitidos de un cliente (regla de `warehouseCustomers.getAllowedWarehousesForCustomer`, agrupada por centro) con stock por producto | Falta |
-| Guardar centro y destino por línea, validando contra las listas (4e) y registrando `BackofficeDecidedBy/At` | Falta |
+Con un Middleware anterior, la bandeja responde 503 ("no está disponible").
 
-## Bloqueos a resolver con el equipo
+## Pendiente — definiciones del equipo
 
-- **Nadie divide la orden por centro todavía.** A SAP viaja un solo pedido con el centro y
-  el destino de **cabecera**, y MobilityIA no manda centro por línea. Hasta que exista la
-  división, cambiar el centro o destino de un ítem no llega a SAP.
-- Riesgo de **pedidos duplicados** en SAP en un reenvío (sin bloqueo por orden y con
-  timeouts distintos entre MobilityIA y el Middleware).
-- La liberación de crédito **vence a las 24 h**: una revisión más larga hace fallar el reenvío.
+- **División por centro** *(bloquea el centro por ítem y el reenvío)*: hoy a SAP viaja un
+  solo pedido con centro y destino de cabecera, y MobilityIA no guarda centro por línea.
+  ¿Quién la programa? ¿Dónde se guardan varios números de SAP? ¿Qué pasa si SAP acepta
+  un pedido y rechaza otro?
+- **Ítems sin stock en el reenvío:** hoy el Middleware los saca del pedido sin avisar.
+- **Pedidos duplicados:** sin bloqueo por orden ni consulta previa a SAP.
+- **Vencimiento de 24 h de la liberación de crédito** en el reenvío de BackOffice.
+- **Estado `PendingBackofficeReview`:** nadie lo asigna; la marca real es `ProcessedBackoffice = 0`.
+- **Rechazar o anular** desde BackOffice, y **aviso por correo** a BackOffice.
+- **Guardado de MobilityIA:** su upsert reescribe los destinos de las líneas. Hoy no pisa
+  el cambio de BackOffice porque la orden en revisión está en solo lectura.

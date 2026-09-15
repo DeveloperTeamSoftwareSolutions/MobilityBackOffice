@@ -1,0 +1,137 @@
+/**
+ * Contratos de la revisión de órdenes rechazadas por SAP. Espejo de
+ * `/api/mobility/backoffice-review` del middleware (docs/API_BACKOFFICE_REVIEW.md).
+ * Ninguno trae precios: BackOffice no los ve.
+ */
+
+export interface SalesArea {
+  companyCode: string | null;
+  channelCode: string | null;
+  sectorCode: string | null;
+}
+
+export interface Pagination {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export const REVIEW_SORT_FIELDS = [
+  'sapLastAttemptAt',
+  'orderNumber',
+  'customerName',
+  'sellerEmail',
+  'orderDate',
+] as const;
+
+export type ReviewSortField = (typeof REVIEW_SORT_FIELDS)[number];
+
+export function isReviewSortField(value: string): value is ReviewSortField {
+  return (REVIEW_SORT_FIELDS as readonly string[]).includes(value);
+}
+
+export interface ReviewQueueQuery {
+  page: number;
+  limit: number;
+  search: string;
+  sortBy: ReviewSortField;
+  sortDir: 'ASC' | 'DESC';
+}
+
+export interface ReviewQueueEntry {
+  guid: string;
+  orderNumber: string;
+  statusCode: string | null;
+  customerCode: string | null;
+  customerName: string | null;
+  sellerEmail: string | null;
+  sellerName: string | null;
+  salesArea: SalesArea;
+  sapLastError: string | null;
+  sapLastAttemptAt: string | null;
+  sapOrderNumber: string | null;
+  orderDate: string | null;
+  attempts: number;
+  itemCount: number;
+}
+
+export interface ReviewQueuePage {
+  data: ReviewQueueEntry[];
+  pagination: Pagination;
+}
+
+export interface ReviewItem {
+  guid: string;
+  lineNumber: number;
+  productCode: string;
+  productDescription: string | null;
+  quantity: number | null;
+  unitOfMeasure: string | null;
+  centerCode: string | null;
+  deliveryDestinationCode: string | null;
+  deliveryDestinationName: string | null;
+  destinationExplicit: boolean;
+}
+
+export interface SapAttempt {
+  guid: string;
+  attemptAt: string | null;
+  statusCode: string | null;
+  error: string | null;
+  sapOrderNumber: string | null;
+  sapDispatchNumber: string | null;
+}
+
+export interface ReviewOrder {
+  guid: string;
+  orderNumber: string;
+  statusCode: string | null;
+  customerCode: string | null;
+  customerName: string | null;
+  sellerEmail: string | null;
+  sellerName: string | null;
+  salesArea: SalesArea;
+  profitCenterCode: string | null;
+  profitCenterName: string | null;
+  centerCode: string | null;
+  centerName: string | null;
+  dispatchCenterCode: string | null;
+  destination: string | null;
+  orderDate: string | null;
+  cancelledAt: string | null;
+  sap: {
+    orderNumber: string | null;
+    dispatchNumber: string | null;
+    lastError: string | null;
+    lastAttemptAt: string | null;
+  };
+  backoffice: {
+    inReview: boolean;
+    processedBackoffice: number | null;
+    decidedBy: string | null;
+    decidedAt: string | null;
+  };
+  items: ReviewItem[];
+  sapAttempts: SapAttempt[];
+}
+
+export interface ReviewOptions {
+  orderGuid: string;
+  salesArea: SalesArea;
+  centers: { centerCode: string; centerName: string | null }[];
+  destinations: {
+    destinationCode: string;
+    destinationName: string | null;
+    deliveryAddress: string | null;
+  }[];
+  /** productCode -> centerCode -> cantidad. `null` si se pidió sin stock. */
+  stock: Record<string, Record<string, number>> | null;
+  errors: { source: string; productCode?: string; message: string }[];
+}
+
+export interface DestinationChangeResult {
+  ok: true;
+  unchanged: boolean;
+  item: ReviewItem;
+}

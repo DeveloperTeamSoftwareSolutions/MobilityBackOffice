@@ -8,6 +8,7 @@ import { RegionsModule } from './regions/regions.module';
 import { AuthorizersModule } from './authorizers/authorizers.module';
 import { SupportModule } from './support/support.module';
 import { TemplatesModule } from './templates/templates.module';
+import { RevisionSapModule } from './revision-sap/revision-sap.module';
 import { HealthModule } from './health/health.module';
 
 @Module({
@@ -23,6 +24,7 @@ import { HealthModule } from './health/health.module';
     AuthorizersModule,
     SupportModule,
     TemplatesModule,
+    RevisionSapModule,
     HealthModule,
   ],
 })

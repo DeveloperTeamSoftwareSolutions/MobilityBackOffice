@@ -1,0 +1,83 @@
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service';
+import { AuditCategory } from '../audit/audit.categories';
+import { Actor } from '../common/actor';
+import { RevisionSapClient } from './revision-sap.client';
+import {
+  DestinationChangeResult,
+  ReviewOptions,
+  ReviewOrder,
+  ReviewQueuePage,
+  ReviewQueueQuery,
+} from './revision-sap.types';
+
+/**
+ * Revisión de órdenes rechazadas por SAP.
+ *
+ * Las LECTURAS no se auditan en `AuditLogs`: quedan en los `ApiLogs` del middleware por
+ * el header `x-source-app`. Las ESCRITURAS sí: cambian a dónde va la mercadería de un
+ * cliente. El middleware además deja su propia auditoría con el antes y el después, y
+ * un comentario en el hilo de la orden.
+ */
+@Injectable()
+export class RevisionSapService {
+  constructor(
+    private readonly client: RevisionSapClient,
+    private readonly audit: AuditService,
+  ) {}
+
+  listQueue(query: ReviewQueueQuery): Promise<ReviewQueuePage> {
+    return this.client.listQueue(query);
+  }
+
+  getOrder(guid: string): Promise<ReviewOrder> {
+    return this.client.getOrder(guid);
+  }
+
+  getOptions(guid: string, includeStock: boolean): Promise<ReviewOptions> {
+    return this.client.getOptions(guid, includeStock);
+  }
+
+  async changeItemDestination(
+    guid: string,
+    itemGuid: string,
+    destinationCode: string,
+    reasonNotes: string | null,
+    actor: Actor,
+  ): Promise<DestinationChangeResult> {
+    // El middleware exige quién hizo el cambio y queda en la orden: sin email no hay
+    // a quién atribuirlo.
+    if (!actor.email) {
+      throw new BadRequestException(
+        'La sesión no tiene email: no se puede atribuir el cambio',
+      );
+    }
+
+    const result = await this.client.changeItemDestination(guid, itemGuid, {
+      destinationCode,
+      actorEmail: actor.email,
+      reasonNotes,
+    });
+
+    if (!result.unchanged) {
+      await this.audit.safeRecord({
+        action: 'REVISION_SAP_DESTINATION_CHANGE',
+        entity: 'BusinessOrderItems',
+        entityId: result.item.guid,
+        category: AuditCategory.SapReview,
+        guidUsers: actor.guid ?? null,
+        guidApiLoginClients: actor.guidApiLoginClients ?? null,
+        actorEmail: actor.email,
+        detail: [
+          `orden=${guid}`,
+          `linea=${result.item.lineNumber}`,
+          `producto=${result.item.productCode}`,
+          `destino=${result.item.deliveryDestinationCode ?? '-'}`,
+          `motivo=${reasonNotes ?? '-'}`,
+        ].join(' | '),
+      });
+    }
+
+    return result;
+  }
+}

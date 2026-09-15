@@ -1,7 +1,7 @@
 # APIs y Endpoints Externos — Mobility BackOffice
 
-> Ultima actualizacion: 2026-09-14
-> Version: 2.25.0
+> Ultima actualizacion: 2026-09-15
+> Version: 2.27.0
 
 ## Integraciones activas
 
@@ -54,6 +54,10 @@ MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
   | GET | `/v2/mobility/authorizer-limits-profit-centers` | **La matriz de autorizadores** de una sociedad (banda + CEBEs). `companyCode` obligatorio | `dbo.VIEW_V2_AuthorizerLimitsProfitCentersMobility` sobre `[SAPServices].[dbo].[AuthorizerLimits]` + `[AuthorizerProfitCenters]` | `src/authorizers/authorizers.client.ts` |
   | GET | `/mobility/commercial-team-hierarchy/country-manager` | Country Managers de la sociedad — autorizan "otra forma de pago", que NO pasa por la matriz. Filtra por `cth.Name LIKE 'COUNTRY MANAGER%'` y por `Users.SapCompanyCode` | `dbo.CommercialTeamHierarchies` + `dbo.CommercialTeamMembers` + `dbo.Users` | idem |
   | GET | `/v2/mobility/profit-centers` | Nombre del CEBE para la matriz (la vista solo trae el codigo) | `dbo.VIEW_V2_ProfitCentersMobility` | idem |
+  | GET | `/mobility/backoffice-review/orders` | **Bandeja de ordenes rechazadas por SAP** (`ProcessedBackoffice = 0`). **Requiere MW ≥ 1.348.0** | `dbo.BusinessOrders` + conteos de `dbo.SAPOrders` / `dbo.BusinessOrderItems` | `src/revision-sap/revision-sap.client.ts` |
+  | GET | `/mobility/backoffice-review/orders/:guid` | Detalle SIN precios: cabecera, items con centro y destino, intentos de SAP | `dbo.BusinessOrders`, `dbo.BusinessOrderItems`, `dbo.SAPOrders` | idem |
+  | GET | `/mobility/backoffice-review/orders/:guid/options?includeStock=` | Centros permitidos del cliente, destinos del area de la orden y stock de SAP por centro | `[SAPServices].[dbo].[Warehouses]` + `WarehouseCustomers`, `VIEW_V2_CustomerDeliveryDestinationsMobility`, SAP `catalogs/stock` | idem |
+  | PUT | `/mobility/backoffice-review/orders/:guid/items/:itemGuid/destination` | Cambia el destino de una linea; el MW valida area y revision, audita y comenta en el hilo | `dbo.BusinessOrderItems`, `dbo.BusinessOrders` | idem |
 - **Cross-database y collations**: el join a `[SAPServices].[dbo].[Companies]` y el manejo de
   collations ocurren **dentro del Middleware** (via `VIEW_V2_CompaniesMobility`). BackOffice ya
   no depende de eso: es una preocupacion del Middleware, no de esta app.
@@ -67,6 +71,11 @@ MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
   calculada localmente. Contra un MW asi la lista de la seccion falla entera (la web pide
   regiones y agrupaciones juntas).
   **Orden de deploy**: vista `dbo.VIEW_RegionGroupProfitCenters` → MW 1.331.0 → BackOffice 2.16.0.
+- **Piso de version — ordenes rechazadas por SAP (desde BackOffice 2.27.0)**: la seccion pide
+  `/mobility/backoffice-review/*`, que existe desde **MW 1.348.0** (PR #646). Con un Middleware
+  anterior la bandeja responde **503 "no está disponible"**. El stock sale de SAP: el timeout
+  del cliente es 150 s con `includeStock=1` y 20 s en el resto.
+  **Orden de deploy**: MW 1.348.0 → SQL 008 + rol en ITManager → BackOffice 2.27.0.
 
 ### WhatsApp WABA Admin — plantillas de WhatsApp
 

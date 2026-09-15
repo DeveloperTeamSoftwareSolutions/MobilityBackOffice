@@ -1,55 +1,87 @@
-import { EXAMPLE_CATALOGS, EXAMPLE_ORDERS } from './revision-sap.ejemplo';
+import axios from 'axios';
+import { httpClient } from '../../api/httpClient';
 import {
+  Pagination,
   ReviewCatalogs,
+  ReviewItem,
   ReviewOrderDetail,
   ReviewQueueEntry,
+  SortDir,
+  SortField,
 } from './revision-sap.types';
 
-/**
- * Acceso a datos de la sección.
- *
- * Hoy responde con los datos de ejemplo. Las firmas son las que va a tener la
- * integración con la API: cuando el Middleware exponga la bandeja, el detalle y los
- * catálogos, se cambia el cuerpo de estas funciones y los componentes no se tocan.
- */
-
-export class ReviewOrderNotFoundError extends Error {
-  constructor(guid: string) {
-    super(`No existe una orden en revisión con guid ${guid}`);
-    this.name = 'ReviewOrderNotFoundError';
-  }
+interface ApiData<T> {
+  success: boolean;
+  data: T;
 }
 
-function toQueueEntry(order: ReviewOrderDetail): ReviewQueueEntry {
-  return {
-    guid: order.guid,
-    orderNumber: order.orderNumber,
-    customerCode: order.customerCode,
-    customerName: order.customerName,
-    sellerEmail: order.sellerEmail,
-    salesArea: { ...order.salesArea },
-    sapError: order.sapError,
-    rejectedAt: order.rejectedAt,
-    attempts: order.attempts,
-    itemCount: order.itemCount,
-  };
+interface ApiPaged<T> {
+  success: boolean;
+  data: T[];
+  pagination: Pagination;
 }
 
-/** Órdenes en revisión, la rechazada más recientemente primero. */
-export async function listReviewQueue(): Promise<ReviewQueueEntry[]> {
-  return EXAMPLE_ORDERS.map(toQueueEntry).sort((a, b) =>
-    b.rejectedAt.localeCompare(a.rejectedAt),
-  );
+export interface QueueParams {
+  page: number;
+  limit: number;
+  search: string;
+  sortBy: SortField;
+  sortDir: SortDir;
+}
+
+/** Bandeja de órdenes rechazadas por SAP. Búsqueda, orden y paginación en el servidor. */
+export async function listReviewQueue(
+  params: QueueParams,
+): Promise<{ data: ReviewQueueEntry[]; pagination: Pagination }> {
+  const res = await httpClient.get<ApiPaged<ReviewQueueEntry>>('/api/revision-sap/orders', {
+    params: { ...params, search: params.search || undefined },
+  });
+  return { data: res.data.data, pagination: res.data.pagination };
 }
 
 export async function getReviewOrder(guid: string): Promise<ReviewOrderDetail> {
-  const order = EXAMPLE_ORDERS.find((o) => o.guid === guid);
-  if (!order) throw new ReviewOrderNotFoundError(guid);
-  return structuredClone(order);
+  const res = await httpClient.get<ApiData<ReviewOrderDetail>>(
+    `/api/revision-sap/orders/${encodeURIComponent(guid)}`,
+  );
+  return res.data.data;
 }
 
-export async function getReviewCatalogs(guid: string): Promise<ReviewCatalogs> {
-  const catalogs = EXAMPLE_CATALOGS[guid];
-  if (!catalogs) throw new ReviewOrderNotFoundError(guid);
-  return structuredClone(catalogs);
+/**
+ * Centros permitidos, destinos del área y, con `includeStock`, el stock de SAP. El
+ * stock puede tardar: la pantalla pide primero sin stock y después con stock.
+ */
+export async function getReviewCatalogs(
+  guid: string,
+  includeStock: boolean,
+): Promise<ReviewCatalogs> {
+  const res = await httpClient.get<ApiData<ReviewCatalogs>>(
+    `/api/revision-sap/orders/${encodeURIComponent(guid)}/options`,
+    { params: { includeStock: includeStock ? 1 : 0 } },
+  );
+  return res.data.data;
+}
+
+/** Guarda el destino de una línea. El servidor valida que sea del área de la orden. */
+export async function changeItemDestination(
+  guid: string,
+  itemGuid: string,
+  destinationCode: string,
+): Promise<ReviewItem> {
+  const res = await httpClient.put<ApiData<{ item: ReviewItem }>>(
+    `/api/revision-sap/orders/${encodeURIComponent(guid)}/items/${encodeURIComponent(itemGuid)}/destination`,
+    { destinationCode },
+  );
+  return res.data.data.item;
+}
+
+/** Mensaje legible de un fallo de la API, para mostrarlo tal cual. */
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    const status = err.response?.status;
+    if (status === 403) return 'Tu rol no tiene acceso a las órdenes rechazadas por SAP.';
+    const message = (err.response?.data as { message?: unknown } | undefined)?.message;
+    if (typeof message === 'string' && message.trim()) return message;
+    if (status === 503) return 'El middleware no está disponible. Reintentá en unos minutos.';
+  }
+  return fallback;
 }

@@ -34,7 +34,7 @@ Documento **vivo**: marcar la casilla y anotar la fecha al aplicar cada script e
 | 005 | `005_ViewV2CompaniesMobility.sql` | Crea `dbo.VIEW_V2_CompaniesMobility` (wrapper cross-DB sobre `[SAPServices].[dbo].[Companies]`). La consume el Middleware para el typeahead de sociedades del alta de CEBE | [x] ya existia en QATEST | [ ] **FALTA en PROD — aplicar** |
 | 006 | `006_AddSupportRole.sql` | Rol `MOBILITYBO_SUPPORT` + permisos `SUPPORT_VIEW` / `SUPPORT_OVERRIDE` + mapeo (tambien a SUPERADMIN). Habilita la consola de soporte (v2.1.0) | [ ] **pendiente** | [ ] **pendiente** |
 | 007 | `007_AddUserRole.sql` | Rol `MOBILITYBO_USER` + permiso `USER_ACCESS` + herencia de los permisos de Administrador y Marketing (excluye los de soporte). Habilita el rol Usuario: todo el back-office menos la consola de soporte (v2.11.0) | [ ] **pendiente** | [ ] **pendiente** |
-| 008 | `008_AddRevisionSapRole.sql` | Rol `MOBILITYBO_REVISION_SAP` + permisos `REVISION_SAP_VIEW` / `REVISION_SAP_RESEND` + mapeo (tambien a SUPERADMIN). Habilita la seccion "Ordenes rechazadas por SAP" (v2.27.0) | [ ] **pendiente** | [ ] **pendiente** |
+| 008 | `008_AddRevisionSapRole.sql` | Rol `MOBILITYBO_REVISION_SAP` + permisos `REVISION_SAP_VIEW` / `REVISION_SAP_RESEND` + mapeo (tambien a SUPERADMIN). Habilita la seccion "Ordenes rechazadas por SAP" (v2.27.0) | [x] aplicado 2026-09-15 | [ ] **pendiente** |
 
 Orden de ejecucion: **001 → 002 → 003 → 004 → 005 → 006 → 007 → 008**. El 003 requiere que el 002 ya exista.
 El 006, el 007 y el 008 requieren el 001 (sin la Application, el rol no tiene donde colgarse).

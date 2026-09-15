@@ -1,6 +1,6 @@
 # Roles y Permisos — Mobility BackOffice
 
-> Última actualización: 2026-08-31 · Versión: 2.16.0
+> Última actualización: 2026-09-15 · Versión: 2.26.0
 >
 > Qué puede hacer cada rol, cómo se decide, y cómo se registra en ITManager.
 
@@ -71,6 +71,7 @@ y (cuando exista) los templates de WhatsApp.
 | Templates de WhatsApp | ✓ | — | ✓ | — | ✓ |
 | **Consola de soporte** | ✓ | ✓ | **—** | — | — |
 | **Matriz de autorizadores** | ✓ | — | **—** | **—** | **—** |
+| **Órdenes rechazadas por SAP** *(vista previa; rol a definir)* | ✓ | — | **—** | **—** | **—** |
 | *Cualquier sección futura no-soporte* | ✓ | — | ✓ | — | — |
 
 "Inicio" es fijo y siempre visible; muestra solo las tarjetas de las secciones que el rol

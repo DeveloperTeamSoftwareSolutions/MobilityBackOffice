@@ -7,7 +7,10 @@ const ITEM = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
 describe('RevisionSapController', () => {
   let service: jest.Mocked<
-    Pick<RevisionSapService, 'listQueue' | 'getOrder' | 'getOptions' | 'changeItemDestination'>
+    Pick<
+      RevisionSapService,
+      'listQueue' | 'getOrder' | 'getOptions' | 'changeItemDestination' | 'changeItemCenter' | 'listSapOrders'
+    >
   >;
   let controller: RevisionSapController;
 
@@ -17,6 +20,8 @@ describe('RevisionSapController', () => {
       getOrder: jest.fn().mockResolvedValue({ guid: ORDER }),
       getOptions: jest.fn().mockResolvedValue({ centers: [] }),
       changeItemDestination: jest.fn().mockResolvedValue({ ok: true, unchanged: false, item: {} }),
+      changeItemCenter: jest.fn().mockResolvedValue({ ok: true, unchanged: false, item: {} }),
+      listSapOrders: jest.fn().mockResolvedValue([]),
     };
     controller = new RevisionSapController(service as unknown as RevisionSapService);
   });
@@ -58,6 +63,30 @@ describe('RevisionSapController', () => {
       'SAP rechazo el destino',
       { email: 'bo@duwest.com', guid: 'g-1', guidApiLoginClients: 'c-1' },
     );
+  });
+
+  it('cambio de centro: valida el codigo y toma el actor del token', async () => {
+    const req = { user: { email: 'bo@duwest.com', guid: 'g-1' } };
+    await expect(
+      controller.changeCenter(ORDER, ITEM, { centerCode: "28'02" }, req),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      controller.changeCenter(ORDER, ITEM, { centerCode: '123456789' }, req),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(service.changeItemCenter).not.toHaveBeenCalled();
+
+    await controller.changeCenter(ORDER, ITEM, { centerCode: ' 2802 ' }, req);
+    expect(service.changeItemCenter).toHaveBeenCalledWith(ORDER, ITEM, '2802', null, {
+      email: 'bo@duwest.com',
+      guid: 'g-1',
+      guidApiLoginClients: null,
+    });
+  });
+
+  it('ordenes SAP: valida el guid antes de pedirlas', async () => {
+    await expect(controller.sapOrders('x')).rejects.toBeInstanceOf(BadRequestException);
+    await controller.sapOrders(ORDER);
+    expect(service.listSapOrders).toHaveBeenCalledWith(ORDER);
   });
 
   it('valida el destino y el motivo antes de llamar al servicio', async () => {

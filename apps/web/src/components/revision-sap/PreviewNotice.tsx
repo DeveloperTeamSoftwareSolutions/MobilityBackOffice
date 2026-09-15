@@ -5,9 +5,9 @@
 export function PreviewNotice() {
   return (
     <p className="bo-rs__preview" role="note">
-      <strong>El reenvío a SAP todavía no está conectado.</strong> Por ahora podés revisar
-      la orden y corregir el destino de entrega de cada ítem. El centro por ítem queda
-      pendiente: hoy SAP recibe solo el de la cabecera.
+      <strong>El reenvío a SAP todavía no está conectado.</strong> Podés revisar la orden y
+      corregir el centro y el destino de cada ítem. Cuando el reenvío parta la orden por
+      centro, cada centro va a salir como una orden SAP.
     </p>
   );
 }

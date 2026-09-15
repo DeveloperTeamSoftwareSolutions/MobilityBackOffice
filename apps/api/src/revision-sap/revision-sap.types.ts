@@ -135,3 +135,27 @@ export interface DestinationChangeResult {
   unchanged: boolean;
   item: ReviewItem;
 }
+
+/** El cambio de centro devuelve la misma forma que el de destino. */
+export type CenterChangeResult = DestinationChangeResult;
+
+export type SapOrderStatus = 'accepted' | 'accepted_no_dispatch' | 'rejected' | 'no_response';
+
+/** Una orden SAP de la orden (fila de `SAPOrders`), con sus ítems sin precios. */
+export interface SapOrder {
+  guid: string;
+  status: SapOrderStatus;
+  statusCode: string | null;
+  attemptAt: string | null;
+  sapOrderNumber: string | null;
+  sapDispatchNumber: string | null;
+  sapOrderCreatedAt: string | null;
+  error: string | null;
+  items: {
+    lineNumber: number;
+    productCode: string;
+    description: string | null;
+    quantity: number | null;
+    unitOfMeasure: string | null;
+  }[];
+}

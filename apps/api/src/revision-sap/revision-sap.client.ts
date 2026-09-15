@@ -10,7 +10,9 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { middlewareBase, middlewareHeaders } from '../common/middleware-request';
 import {
+  CenterChangeResult,
   DestinationChangeResult,
+  SapOrder,
   ReviewOptions,
   ReviewOrder,
   ReviewQueuePage,
@@ -121,20 +123,55 @@ export class RevisionSapClient {
     }
   }
 
+  /** Órdenes SAP de la orden (una fila por orden SAP), con sus ítems sin precios. */
+  async listSapOrders(guid: string): Promise<SapOrder[]> {
+    try {
+      const res = await firstValueFrom(
+        this.http.get<MwData<SapOrder[]>>(`${this.base()}${ORDER_PATH(guid)}/sap-orders`, {
+          headers: this.headers(),
+          timeout: DEFAULT_TIMEOUT,
+        }),
+      );
+      return res.data.data;
+    } catch (err) {
+      if (httpStatus(err) === 404) throw new NotFoundException('Orden no encontrada');
+      throw new ServiceUnavailableException('Las órdenes SAP no están disponibles');
+    }
+  }
+
   /**
    * Cambia el destino de una línea. El middleware valida que el destino sea del área
    * de la orden y que la orden siga en revisión; sus rechazos se devuelven con su
    * mensaje, porque le dicen al usuario qué corregir.
    */
-  async changeItemDestination(
+  changeItemDestination(
     guid: string,
     itemGuid: string,
     body: { destinationCode: string; actorEmail: string; reasonNotes: string | null },
   ): Promise<DestinationChangeResult> {
+    return this.putLine(guid, itemGuid, 'destination', body, 'No se pudo guardar el destino');
+  }
+
+  /** Cambia el centro de una línea. El middleware exige un centro permitido para el cliente. */
+  changeItemCenter(
+    guid: string,
+    itemGuid: string,
+    body: { centerCode: string; actorEmail: string; reasonNotes: string | null },
+  ): Promise<CenterChangeResult> {
+    return this.putLine(guid, itemGuid, 'center', body, 'No se pudo guardar el centro');
+  }
+
+  private async putLine<T>(
+    guid: string,
+    itemGuid: string,
+    field: 'destination' | 'center',
+    body: object,
+    unavailable: string,
+  ): Promise<T> {
     try {
       const res = await firstValueFrom(
-        this.http.put<MwData<DestinationChangeResult>>(
-          `${this.base()}${ORDER_PATH(guid)}/items/${encodeURIComponent(itemGuid)}/destination`,
+        this.http.put<MwData<T>>(
+          `${this.base()}${ORDER_PATH(guid)}/items/${encodeURIComponent(itemGuid)}/${field}`,
           body,
           { headers: this.headers(), timeout: DEFAULT_TIMEOUT },
         ),
@@ -147,8 +184,8 @@ export class RevisionSapClient {
       if (status === 409) {
         throw new ConflictException(message ?? 'La orden ya no está en revisión');
       }
-      if (status === 400) throw new BadRequestException(message ?? 'Destino inválido');
-      throw new ServiceUnavailableException('No se pudo guardar el destino');
+      if (status === 400) throw new BadRequestException(message ?? 'Valor inválido');
+      throw new ServiceUnavailableException(unavailable);
     }
   }
 }

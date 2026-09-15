@@ -21,13 +21,13 @@ const item = {
 };
 
 describe('RevisionSapService — cambio de destino', () => {
-  let client: jest.Mocked<Pick<RevisionSapClient, 'changeItemDestination'>>;
+  let client: jest.Mocked<Pick<RevisionSapClient, 'changeItemDestination' | 'changeItemCenter'>>;
   let audit: jest.Mocked<Pick<AuditService, 'safeRecord'>>;
   let service: RevisionSapService;
   const actor = { email: 'bo@duwest.com', guid: 'g-1', guidApiLoginClients: 'c-1' };
 
   beforeEach(() => {
-    client = { changeItemDestination: jest.fn() };
+    client = { changeItemDestination: jest.fn(), changeItemCenter: jest.fn() };
     audit = { safeRecord: jest.fn().mockResolvedValue(undefined) };
     service = new RevisionSapService(
       client as unknown as RevisionSapClient,
@@ -67,6 +67,29 @@ describe('RevisionSapService — cambio de destino', () => {
       service.changeItemDestination(ORDER, ITEM, '30000124', null, { guid: 'g-1' }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(client.changeItemDestination).not.toHaveBeenCalled();
+  });
+
+  it('cambio de centro: manda el email del token y audita solo si cambio', async () => {
+    client.changeItemCenter.mockResolvedValue({ ok: true, unchanged: false, item: { ...item, centerCode: '2802' } });
+    await service.changeItemCenter(ORDER, ITEM, '2802', null, actor);
+    expect(client.changeItemCenter).toHaveBeenCalledWith(ORDER, ITEM, {
+      centerCode: '2802',
+      actorEmail: 'bo@duwest.com',
+      reasonNotes: null,
+    });
+    expect(audit.safeRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'REVISION_SAP_CENTER_CHANGE', category: AuditCategory.SapReview }),
+    );
+    expect(audit.safeRecord.mock.calls[0][0].detail).toContain('centro=2802');
+
+    audit.safeRecord.mockClear();
+    client.changeItemCenter.mockResolvedValue({ ok: true, unchanged: true, item });
+    await service.changeItemCenter(ORDER, ITEM, '2802', null, actor);
+    expect(audit.safeRecord).not.toHaveBeenCalled();
+
+    await expect(
+      service.changeItemCenter(ORDER, ITEM, '2802', null, { guid: 'g-1' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('si el middleware rechaza, no queda auditoria de un cambio que no ocurrio', async () => {

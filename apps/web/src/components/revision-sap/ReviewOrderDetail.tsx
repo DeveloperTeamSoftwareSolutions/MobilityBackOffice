@@ -2,24 +2,28 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatDateTime } from '../soporte/DocumentHeader';
 import {
   apiErrorMessage,
+  changeItemCenter,
   changeItemDestination,
   getReviewCatalogs,
   getReviewOrder,
 } from './revision-sap.api';
 import {
   blockingItemCount,
-  destinationChanges,
   formatSalesArea,
   initialDrafts,
+  lineChanges,
+  sapOrdersByCenter,
 } from './revision-sap.logic';
 import {
-  DestinationDrafts,
+  LineDraft,
+  LineDrafts,
   ReviewCatalogs,
   ReviewOrderDetail as Detail,
 } from './revision-sap.types';
 import { ReviewItemsTable } from './ReviewItemsTable';
 import { ResendConfirmModal } from './ResendConfirmModal';
 import { PreviewNotice } from './PreviewNotice';
+import { SapOrdersPanel } from './SapOrdersPanel';
 
 interface Props {
   guid: string;
@@ -27,12 +31,13 @@ interface Props {
 }
 
 type StockState = 'idle' | 'loading' | 'done' | 'failed';
+type Tab = 'items' | 'sap-orders';
 
-/** Detalle de una orden en revisión: cabecera, motivo del rechazo e ítems. */
+/** Detalle de una orden en revisión: cabecera, motivo del rechazo, ítems y órdenes SAP. */
 export function ReviewOrderDetail({ guid, onBack }: Props) {
   const [order, setOrder] = useState<Detail | null>(null);
   const [catalogs, setCatalogs] = useState<ReviewCatalogs | null>(null);
-  const [drafts, setDrafts] = useState<DestinationDrafts>({});
+  const [drafts, setDrafts] = useState<LineDrafts>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stockState, setStockState] = useState<StockState>('idle');
@@ -40,6 +45,8 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [tab, setTab] = useState<Tab>('items');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Primero la orden y las opciones SIN stock, que responden enseguida. El stock sale de
   // SAP, una consulta por producto, y puede tardar: se pide aparte y no traba la pantalla.
@@ -80,24 +87,25 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
     };
   }, [guid]);
 
-  const changes = useMemo(
-    () => (order ? destinationChanges(order.items, drafts) : []),
-    [order, drafts],
-  );
+  const changes = useMemo(() => (order ? lineChanges(order.items, drafts) : []), [order, drafts]);
   const blocking = useMemo(
     () =>
       order && catalogs ? blockingItemCount(order.items, drafts, order.centerCode, catalogs) : 0,
     [order, catalogs, drafts],
   );
+  const groups = useMemo(
+    () => (order ? sapOrdersByCenter(order.items, drafts, order.centerCode) : []),
+    [order, drafts],
+  );
 
-  const onDestination = useCallback((itemGuid: string, code: string | null) => {
-    setDrafts((prev) => ({ ...prev, [itemGuid]: code }));
+  const onChange = useCallback((itemGuid: string, next: LineDraft) => {
+    setDrafts((prev) => ({ ...prev, [itemGuid]: next }));
     setSaveMessage(null);
     setSaveErrors((prev) => {
       if (!(itemGuid in prev)) return prev;
-      const next = { ...prev };
-      delete next[itemGuid];
-      return next;
+      const rest = { ...prev };
+      delete rest[itemGuid];
+      return rest;
     });
   }, []);
 
@@ -109,8 +117,8 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
   }
 
   /**
-   * Guarda línea por línea. Una que falla no frena a las demás: su error queda al lado
-   * de la línea y su cambio sigue pendiente para corregirlo y volver a guardar.
+   * Guarda cambio por cambio. Uno que falla no frena a los demás: su error queda al lado
+   * de la línea y ese cambio sigue pendiente para corregirlo y volver a guardar.
    */
   async function onSave() {
     if (!order || changes.length === 0) return;
@@ -121,10 +129,16 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
     for (const change of changes) {
       if (!change.after) continue;
       try {
-        await changeItemDestination(order.guid, change.item.guid, change.after);
+        if (change.field === 'center') {
+          await changeItemCenter(order.guid, change.item.guid, change.after);
+        } else {
+          await changeItemDestination(order.guid, change.item.guid, change.after);
+        }
         saved += 1;
       } catch (err) {
-        errors[change.item.guid] = apiErrorMessage(err, 'No se pudo guardar el destino.');
+        const fallback =
+          change.field === 'center' ? 'No se pudo guardar el centro.' : 'No se pudo guardar el destino.';
+        errors[change.item.guid] = apiErrorMessage(err, fallback);
       }
     }
     try {
@@ -132,9 +146,12 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
       setOrder(fresh);
       setDrafts((prev) => {
         const next = initialDrafts(fresh.items);
-        for (const itemGuid of Object.keys(errors)) next[itemGuid] = prev[itemGuid] ?? null;
+        for (const itemGuid of Object.keys(errors)) {
+          if (prev[itemGuid]) next[itemGuid] = prev[itemGuid];
+        }
         return next;
       });
+      setRefreshKey((n) => n + 1);
     } catch (err) {
       setError(apiErrorMessage(err, 'Se guardaron los cambios, pero no se pudo recargar la orden.'));
     }
@@ -142,8 +159,8 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
     const failed = Object.keys(errors).length;
     if (saved > 0) {
       setSaveMessage(
-        (saved === 1 ? 'Se guardó 1 destino.' : `Se guardaron ${saved} destinos.`) +
-          (failed > 0 ? ` ${failed} no se pudieron guardar.` : ''),
+        (saved === 1 ? 'Se guardó 1 cambio.' : `Se guardaron ${saved} cambios.`) +
+          (failed > 0 ? ` ${failed === 1 ? '1 línea no' : `${failed} líneas no`} se pudo guardar.` : ''),
       );
     }
     setSaving(false);
@@ -240,9 +257,7 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
             Motivo del rechazo de SAP
           </h3>
           <span className="bo-rs__cell--muted">
-            {order.sapAttempts.length === 1
-              ? '1 intento'
-              : `${order.sapAttempts.length} intentos`}
+            {order.sapAttempts.length === 1 ? '1 intento' : `${order.sapAttempts.length} intentos`}
             {order.sap.lastAttemptAt ? ` · último ${formatDateTime(order.sap.lastAttemptAt)}` : ''}
           </span>
         </header>
@@ -262,86 +277,118 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
         )}
       </section>
 
-      <section className="bo-rs__card" aria-labelledby="bo-rs-items-title">
-        <header className="bo-rs__card-head">
-          <h3 id="bo-rs-items-title" className="bo-rs__card-title">
-            Ítems de la orden
-          </h3>
-          <span className="bo-rs__cell--muted" aria-live="polite">
-            Destinos del área {formatSalesArea(order.salesArea)} ·{' '}
-            {stockState === 'loading' && 'consultando stock en SAP…'}
-            {stockState === 'done' &&
-              (stockErrors.length === 0
-                ? 'stock actualizado'
-                : `sin stock de ${stockErrors.length} producto${stockErrors.length === 1 ? '' : 's'}: SAP no respondió`)}
-            {stockState === 'failed' && 'no se pudo consultar el stock'}
-          </span>
-        </header>
-        {otherErrors.length > 0 && (
-          <p className="bo-rs__error">
-            No se pudo cargar todo lo necesario para corregir la orden:{' '}
-            {otherErrors.map((e) => e.message).join(' · ')}
-          </p>
-        )}
-        <ReviewItemsTable
-          items={order.items}
-          headerCenterCode={order.centerCode}
-          drafts={drafts}
-          catalogs={catalogs}
-          editable={editable}
-          saveErrors={saveErrors}
-          onDestination={onDestination}
-        />
-      </section>
-
-      <div className="bo-rs__actions">
-        <p className="bo-rs__actions-status" aria-live="polite">
-          {saveMessage ??
-            (changes.length === 0
-              ? 'Sin cambios'
-              : changes.length === 1
-                ? '1 destino sin guardar'
-                : `${changes.length} destinos sin guardar`)}
-          {blocking > 0 && (
-            <span className="bo-rs__actions-blocking">
-              {' '}
-              · {blocking === 1 ? '1 ítem necesita corrección' : `${blocking} ítems necesitan corrección`}
-            </span>
-          )}
-        </p>
-        <div className="bo-rs__actions-buttons">
-          <button
-            type="button"
-            className="bo-rs__button bo-rs__button--ghost"
-            disabled={changes.length === 0 || saving}
-            onClick={onDiscard}
-          >
-            Descartar cambios
-          </button>
-          <button
-            type="button"
-            className="bo-rs__button bo-rs__button--ghost"
-            disabled={changes.length === 0 || blocking > 0 || !editable}
-            onClick={() => void onSave()}
-          >
-            {saving ? 'Guardando…' : 'Guardar cambios'}
-          </button>
-          <button
-            type="button"
-            className="bo-rs__button"
-            disabled={changes.length > 0 || blocking > 0 || !order.backoffice.inReview}
-            title={changes.length > 0 ? 'Guardá los cambios antes de reenviar' : undefined}
-            onClick={() => setConfirmOpen(true)}
-          >
-            Reenviar a SAP
-          </button>
-        </div>
+      <div className="bo-rs__tabs" role="tablist" aria-label="Contenido de la orden">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'items'}
+          className={`bo-rs__tab${tab === 'items' ? ' bo-rs__tab--active' : ''}`}
+          onClick={() => setTab('items')}
+        >
+          Ítems
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'sap-orders'}
+          className={`bo-rs__tab${tab === 'sap-orders' ? ' bo-rs__tab--active' : ''}`}
+          onClick={() => setTab('sap-orders')}
+        >
+          Órdenes SAP
+        </button>
       </div>
+
+      {tab === 'sap-orders' ? (
+        <section className="bo-rs__card" aria-label="Órdenes SAP">
+          <SapOrdersPanel orderGuid={order.guid} refreshKey={refreshKey} />
+        </section>
+      ) : (
+        <>
+          <section className="bo-rs__card" aria-labelledby="bo-rs-items-title">
+            <header className="bo-rs__card-head">
+              <h3 id="bo-rs-items-title" className="bo-rs__card-title">
+                Ítems de la orden
+              </h3>
+              <span className="bo-rs__cell--muted" aria-live="polite">
+                {groups.length === 1
+                  ? 'Sale en 1 orden SAP'
+                  : `Sale en ${groups.length} órdenes SAP, una por centro`}{' '}
+                · {stockState === 'loading' && 'consultando stock en SAP…'}
+                {stockState === 'done' &&
+                  (stockErrors.length === 0
+                    ? 'stock actualizado'
+                    : `sin stock de ${stockErrors.length} producto${stockErrors.length === 1 ? '' : 's'}: SAP no respondió`)}
+                {stockState === 'failed' && 'no se pudo consultar el stock'}
+              </span>
+            </header>
+            {otherErrors.length > 0 && (
+              <p className="bo-rs__error">
+                No se pudo cargar todo lo necesario para corregir la orden:{' '}
+                {otherErrors.map((e) => e.message).join(' · ')}
+              </p>
+            )}
+            <ReviewItemsTable
+              items={order.items}
+              headerCenterCode={order.centerCode}
+              drafts={drafts}
+              catalogs={catalogs}
+              editable={editable}
+              saveErrors={saveErrors}
+              onChange={onChange}
+            />
+          </section>
+
+          <div className="bo-rs__actions">
+            <p className="bo-rs__actions-status" aria-live="polite">
+              {saveMessage ??
+                (changes.length === 0
+                  ? 'Sin cambios'
+                  : changes.length === 1
+                    ? '1 cambio sin guardar'
+                    : `${changes.length} cambios sin guardar`)}
+              {blocking > 0 && (
+                <span className="bo-rs__actions-blocking">
+                  {' '}
+                  · {blocking === 1 ? '1 ítem necesita corrección' : `${blocking} ítems necesitan corrección`}
+                </span>
+              )}
+            </p>
+            <div className="bo-rs__actions-buttons">
+              <button
+                type="button"
+                className="bo-rs__button bo-rs__button--ghost"
+                disabled={changes.length === 0 || saving}
+                onClick={onDiscard}
+              >
+                Descartar cambios
+              </button>
+              <button
+                type="button"
+                className="bo-rs__button bo-rs__button--ghost"
+                disabled={changes.length === 0 || blocking > 0 || !editable}
+                onClick={() => void onSave()}
+              >
+                {saving ? 'Guardando…' : 'Guardar cambios'}
+              </button>
+              <button
+                type="button"
+                className="bo-rs__button"
+                disabled={changes.length > 0 || blocking > 0 || !order.backoffice.inReview}
+                title={changes.length > 0 ? 'Guardá los cambios antes de reenviar' : undefined}
+                onClick={() => setConfirmOpen(true)}
+              >
+                Reenviar a SAP
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {confirmOpen && (
         <ResendConfirmModal
           orderNumber={order.orderNumber}
           itemCount={order.items.length}
+          sapOrderCount={groups.length}
           onClose={() => setConfirmOpen(false)}
         />
       )}

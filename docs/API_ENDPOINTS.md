@@ -147,13 +147,15 @@ trae precios. Ver `docs/SPEC_REVISION_ORDENES_SAP.md`.
 | GET | `/api/revision-sap/orders/:guid` | Detalle sin precios: cabecera, items con centro y destino, `sapAttempts`, `backoffice.inReview`. 400 si el guid es invalido; 404 si no existe |
 | GET | `/api/revision-sap/orders/:guid/options` | Centros permitidos del cliente, destinos del area de la orden y, con `includeStock=1`, el stock de SAP por producto y centro. Las fuentes que fallan vienen en `errors` |
 | PUT | `/api/revision-sap/orders/:guid/items/:itemGuid/destination` | Body `{ destinationCode, reasonNotes? }`. Quien hace el cambio sale del token. 400 destino invalido o fuera del area; 404 orden o linea inexistente; 409 la orden ya no esta en revision |
+| PUT | `/api/revision-sap/orders/:guid/items/:itemGuid/center` | Body `{ centerCode, reasonNotes? }`. 400 centro invalido o no permitido para el cliente; 404 orden o linea inexistente; 409 la orden ya no esta en revision. Un centro sin stock se acepta |
+| GET | `/api/revision-sap/orders/:guid/sap-orders` | Ordenes SAP de la orden con su estado (`accepted` \| `accepted_no_dispatch` \| `rejected` \| `no_response`) y sus items, sin precios |
 
-**Auditoria**: el cambio de destino registra `REVISION_SAP_DESTINATION_CHANGE` (categoria
-`SapReview`) solo si el destino realmente cambio. Las lecturas no se auditan: quedan en los
-`ApiLogs` del Middleware.
+**Auditoria**: los cambios registran `REVISION_SAP_DESTINATION_CHANGE` y
+`REVISION_SAP_CENTER_CHANGE` (categoria `SapReview`) solo si el valor realmente cambio. Las
+lecturas no se auditan: quedan en los `ApiLogs` del Middleware.
 
-**Lo que no esta**: el reenvio a SAP y el cambio de centro por item, pendientes de la definicion
-de la division por centro.
+**Lo que no esta**: el reenvio a SAP. Espera a que el Middleware parta la orden en una orden SAP
+por centro, avise los items sin stock antes de enviar y no pueda duplicar pedidos.
 
 ## Matriz de autorizadores
 

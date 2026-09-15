@@ -4,7 +4,9 @@ import { AuditCategory } from '../audit/audit.categories';
 import { Actor } from '../common/actor';
 import { RevisionSapClient } from './revision-sap.client';
 import {
+  CenterChangeResult,
   DestinationChangeResult,
+  SapOrder,
   ReviewOptions,
   ReviewOrder,
   ReviewQueuePage,
@@ -38,6 +40,64 @@ export class RevisionSapService {
     return this.client.getOptions(guid, includeStock);
   }
 
+  /** Órdenes SAP de la orden. Es una LECTURA: no se audita. */
+  listSapOrders(guid: string): Promise<SapOrder[]> {
+    return this.client.listSapOrders(guid);
+  }
+
+  /**
+   * Cambia el centro de una línea. El centro por línea es el que va a usar el
+   * middleware para partir la orden en una orden SAP por centro.
+   */
+  async changeItemCenter(
+    guid: string,
+    itemGuid: string,
+    centerCode: string,
+    reasonNotes: string | null,
+    actor: Actor,
+  ): Promise<CenterChangeResult> {
+    const actorEmail = this.requireEmail(actor);
+    const result = await this.client.changeItemCenter(guid, itemGuid, {
+      centerCode,
+      actorEmail,
+      reasonNotes,
+    });
+
+    if (!result.unchanged) {
+      await this.audit.safeRecord({
+        action: 'REVISION_SAP_CENTER_CHANGE',
+        entity: 'BusinessOrderItems',
+        entityId: result.item.guid,
+        category: AuditCategory.SapReview,
+        guidUsers: actor.guid ?? null,
+        guidApiLoginClients: actor.guidApiLoginClients ?? null,
+        actorEmail,
+        detail: [
+          `orden=${guid}`,
+          `linea=${result.item.lineNumber}`,
+          `producto=${result.item.productCode}`,
+          `centro=${result.item.centerCode ?? '-'}`,
+          `motivo=${reasonNotes ?? '-'}`,
+        ].join(' | '),
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * El middleware exige quién hizo el cambio y queda en la orden: sin email no hay a
+   * quién atribuirlo.
+   */
+  private requireEmail(actor: Actor): string {
+    if (!actor.email) {
+      throw new BadRequestException(
+        'La sesión no tiene email: no se puede atribuir el cambio',
+      );
+    }
+    return actor.email;
+  }
+
   async changeItemDestination(
     guid: string,
     itemGuid: string,
@@ -45,17 +105,11 @@ export class RevisionSapService {
     reasonNotes: string | null,
     actor: Actor,
   ): Promise<DestinationChangeResult> {
-    // El middleware exige quién hizo el cambio y queda en la orden: sin email no hay
-    // a quién atribuirlo.
-    if (!actor.email) {
-      throw new BadRequestException(
-        'La sesión no tiene email: no se puede atribuir el cambio',
-      );
-    }
+    this.requireEmail(actor);
 
     const result = await this.client.changeItemDestination(guid, itemGuid, {
       destinationCode,
-      actorEmail: actor.email,
+      actorEmail: actor.email as string,
       reasonNotes,
     });
 

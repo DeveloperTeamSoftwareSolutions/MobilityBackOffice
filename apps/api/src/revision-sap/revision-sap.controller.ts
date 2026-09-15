@@ -21,6 +21,7 @@ const MAX_LIMIT = 200;
 const DEFAULT_LIMIT = 20;
 const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DESTINATION_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const CENTER_RE = /^[A-Za-z0-9]{1,8}$/;
 const MAX_REASON = 500;
 
 /**
@@ -73,6 +74,13 @@ export class RevisionSapController {
     return { success: true, data };
   }
 
+  // GET /api/revision-sap/orders/:guid/sap-orders — órdenes SAP de la orden
+  @Get('orders/:guid/sap-orders')
+  async sapOrders(@Param('guid') guid: string) {
+    const data = await this.service.listSapOrders(this.parseGuid(guid, 'guid'));
+    return { success: true, data };
+  }
+
   // PUT /api/revision-sap/orders/:guid/items/:itemGuid/destination
   //
   // Quién hace el cambio sale del token, nunca del body.
@@ -85,29 +93,56 @@ export class RevisionSapController {
   ) {
     const orderGuid = this.parseGuid(guid, 'guid');
     const lineGuid = this.parseGuid(itemGuid, 'itemGuid');
-
-    const destinationCode =
-      typeof body?.destinationCode === 'string' ? body.destinationCode.trim() : '';
-    if (!DESTINATION_RE.test(destinationCode)) {
-      throw new BadRequestException('destinationCode es obligatorio (alfanumérico, hasta 64)');
-    }
-
-    let reasonNotes: string | null = null;
-    if (body?.reasonNotes != null) {
-      if (typeof body.reasonNotes !== 'string') {
-        throw new BadRequestException('reasonNotes debe ser texto');
-      }
-      reasonNotes = body.reasonNotes.trim().slice(0, MAX_REASON) || null;
-    }
-
+    const destinationCode = this.parseCode(
+      body?.destinationCode,
+      DESTINATION_RE,
+      'destinationCode es obligatorio (alfanumérico, hasta 64)',
+    );
     const data = await this.service.changeItemDestination(
       orderGuid,
       lineGuid,
       destinationCode,
-      reasonNotes,
+      this.parseReason(body?.reasonNotes),
       actorFrom(req),
     );
     return { success: true, data };
+  }
+
+  // PUT /api/revision-sap/orders/:guid/items/:itemGuid/center
+  @Put('orders/:guid/items/:itemGuid/center')
+  async changeCenter(
+    @Param('guid') guid: string,
+    @Param('itemGuid') itemGuid: string,
+    @Body() body: { centerCode?: unknown; reasonNotes?: unknown } | undefined,
+    @Req() req: AuthedRequest,
+  ) {
+    const orderGuid = this.parseGuid(guid, 'guid');
+    const lineGuid = this.parseGuid(itemGuid, 'itemGuid');
+    const centerCode = this.parseCode(
+      body?.centerCode,
+      CENTER_RE,
+      'centerCode es obligatorio (alfanumérico, hasta 8)',
+    );
+    const data = await this.service.changeItemCenter(
+      orderGuid,
+      lineGuid,
+      centerCode,
+      this.parseReason(body?.reasonNotes),
+      actorFrom(req),
+    );
+    return { success: true, data };
+  }
+
+  private parseCode(value: unknown, pattern: RegExp, message: string): string {
+    const code = typeof value === 'string' ? value.trim() : '';
+    if (!pattern.test(code)) throw new BadRequestException(message);
+    return code;
+  }
+
+  private parseReason(value: unknown): string | null {
+    if (value == null) return null;
+    if (typeof value !== 'string') throw new BadRequestException('reasonNotes debe ser texto');
+    return value.trim().slice(0, MAX_REASON) || null;
   }
 
   private parseGuid(value: string, name: string): string {

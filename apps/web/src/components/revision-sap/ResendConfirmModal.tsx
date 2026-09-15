@@ -3,6 +3,8 @@ import { useEffect, useRef } from 'react';
 interface Props {
   orderNumber: string;
   itemCount: number;
+  /** Una por cada centro distinto de las líneas. */
+  sapOrderCount: number;
   onClose: () => void;
 }
 
@@ -11,7 +13,7 @@ interface Props {
  * confirmar queda deshabilitado y el modal lo dice, para que nadie crea que la orden
  * salió.
  */
-export function ResendConfirmModal({ orderNumber, itemCount, onClose }: Props) {
+export function ResendConfirmModal({ orderNumber, itemCount, sapOrderCount, onClose }: Props) {
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -38,12 +40,14 @@ export function ResendConfirmModal({ orderNumber, itemCount, onClose }: Props) {
           Reenviar {orderNumber} a SAP
         </h2>
         <p className="bo-rs__modal-text">
-          Se reenvía con los destinos guardados de sus{' '}
-          {itemCount === 1 ? 'ítem' : `${itemCount} ítems`}.
+          Se reenvía con los centros y destinos guardados de sus{' '}
+          {itemCount === 1 ? 'ítem' : `${itemCount} ítems`}
+          {sapOrderCount > 1 ? `, en ${sapOrderCount} órdenes SAP (una por centro)` : ''}.
         </p>
         <p className="bo-rs__preview">
-          El reenvío a SAP todavía no está conectado: falta definir con el equipo cómo se
-          divide la orden por centro y cómo se evitan pedidos duplicados.
+          El reenvío a SAP todavía no está conectado: falta que el envío parta la orden por
+          centro, que avise los ítems sin stock antes de enviar y que no pueda duplicar
+          pedidos.
         </p>
         <div className="bo-rs__modal-actions">
           <button

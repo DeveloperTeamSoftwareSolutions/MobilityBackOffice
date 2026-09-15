@@ -58,6 +58,8 @@ MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
   | GET | `/mobility/backoffice-review/orders/:guid` | Detalle SIN precios: cabecera, items con centro y destino, intentos de SAP | `dbo.BusinessOrders`, `dbo.BusinessOrderItems`, `dbo.SAPOrders` | idem |
   | GET | `/mobility/backoffice-review/orders/:guid/options?includeStock=` | Centros permitidos del cliente, destinos del area de la orden y stock de SAP por centro | `[SAPServices].[dbo].[Warehouses]` + `WarehouseCustomers`, `VIEW_V2_CustomerDeliveryDestinationsMobility`, SAP `catalogs/stock` | idem |
   | PUT | `/mobility/backoffice-review/orders/:guid/items/:itemGuid/destination` | Cambia el destino de una linea; el MW valida area y revision, audita y comenta en el hilo | `dbo.BusinessOrderItems`, `dbo.BusinessOrders` | idem |
+  | PUT | `/mobility/backoffice-review/orders/:guid/items/:itemGuid/center` | Cambia el centro de una linea; el MW exige un centro permitido para el cliente, audita y comenta en el hilo | `dbo.BusinessOrderItems`, `dbo.BusinessOrders`, `[SAPServices].[dbo].[Warehouses]` | idem |
+  | GET | `/mobility/backoffice-review/orders/:guid/sap-orders` | Ordenes SAP de la orden con su estado y sus items, sin precios | `dbo.SAPOrders`, `dbo.SAPOrdersItems` | idem |
 - **Cross-database y collations**: el join a `[SAPServices].[dbo].[Companies]` y el manejo de
   collations ocurren **dentro del Middleware** (via `VIEW_V2_CompaniesMobility`). BackOffice ya
   no depende de eso: es una preocupacion del Middleware, no de esta app.

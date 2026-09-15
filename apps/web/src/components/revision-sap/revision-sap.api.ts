@@ -6,6 +6,7 @@ import {
   ReviewItem,
   ReviewOrderDetail,
   ReviewQueueEntry,
+  SapOrder,
   SortDir,
   SortField,
 } from './revision-sap.types';
@@ -72,6 +73,27 @@ export async function changeItemDestination(
     { destinationCode },
   );
   return res.data.data.item;
+}
+
+/** Guarda el centro de una línea. El servidor exige un centro permitido para el cliente. */
+export async function changeItemCenter(
+  guid: string,
+  itemGuid: string,
+  centerCode: string,
+): Promise<ReviewItem> {
+  const res = await httpClient.put<ApiData<{ item: ReviewItem }>>(
+    `/api/revision-sap/orders/${encodeURIComponent(guid)}/items/${encodeURIComponent(itemGuid)}/center`,
+    { centerCode },
+  );
+  return res.data.data.item;
+}
+
+/** Órdenes SAP de la orden, con el estado de cada una y sus ítems. */
+export async function listSapOrders(guid: string): Promise<SapOrder[]> {
+  const res = await httpClient.get<ApiData<SapOrder[]>>(
+    `/api/revision-sap/orders/${encodeURIComponent(guid)}/sap-orders`,
+  );
+  return res.data.data;
 }
 
 /** Mensaje legible de un fallo de la API, para mostrarlo tal cual. */

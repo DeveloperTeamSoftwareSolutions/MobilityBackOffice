@@ -1,36 +1,34 @@
 import { Fragment } from 'react';
 import {
+  draftFor,
   effectiveCenter,
   formatQuantity,
   itemWarnings,
   stockFor,
 } from './revision-sap.logic';
-import { DestinationDrafts, ReviewCatalogs, ReviewItem } from './revision-sap.types';
+import { LineDraft, LineDrafts, ReviewCatalogs, ReviewItem } from './revision-sap.types';
 
 interface Props {
   items: ReviewItem[];
   headerCenterCode: string | null;
-  drafts: DestinationDrafts;
+  drafts: LineDrafts;
   catalogs: ReviewCatalogs;
   editable: boolean;
   saveErrors: Record<string, string>;
-  onDestination: (itemGuid: string, code: string | null) => void;
+  onChange: (itemGuid: string, next: LineDraft) => void;
 }
 
-function stockText(available: number | null, unit: string | null, stockKnown: boolean): string {
-  if (!stockKnown) return 'stock sin consultar';
-  if (available == null) return 'stock no disponible';
-  return available > 0 ? `stock ${formatQuantity(available)} ${unit ?? ''}`.trim() : 'sin stock';
+function stockLabel(available: number | null, unit: string | null): string {
+  if (available == null) return '';
+  return available > 0 ? ` — stock ${formatQuantity(available)} ${unit ?? ''}`.trimEnd() : ' — sin stock';
 }
 
 /**
- * Ítems con su centro y su destino. Sin precios, descuentos ni totales.
+ * Ítems con su centro y su destino editables. Sin precios, descuentos ni totales.
  *
- * El destino se edita. El centro se muestra con el stock de cada centro permitido,
- * pero no se edita: hoy SAP recibe solo el centro de cabecera.
- *
- * Si la orden trae un destino que no está en la lista del área, se muestra igual como
- * opción marcada: esconderlo haría creer que la línea no tenía nada.
+ * Una línea sin centro propio sale con el de la cabecera; elegir uno lo fija para esa
+ * línea. Un centro o destino guardado que ya no está en las listas se muestra igual
+ * como opción marcada: esconderlo haría creer que la línea no tenía nada.
  */
 export function ReviewItemsTable({
   items,
@@ -39,10 +37,8 @@ export function ReviewItemsTable({
   catalogs,
   editable,
   saveErrors,
-  onDestination,
+  onChange,
 }: Props) {
-  const centerNames = new Map(catalogs.centers.map((c) => [c.centerCode, c.centerName]));
-
   return (
     <div className="bo-rs__table-wrap">
       <table className="bo-rs__table bo-rs__table--items">
@@ -57,13 +53,17 @@ export function ReviewItemsTable({
         </thead>
         <tbody>
           {items.map((item) => {
-            const destination = item.guid in drafts ? drafts[item.guid] : item.deliveryDestinationCode;
-            const warnings = itemWarnings(item, destination, headerCenterCode, catalogs);
+            const draft = draftFor(item, drafts);
+            const warnings = itemWarnings(item, draft, headerCenterCode, catalogs);
             const saveError = saveErrors[item.guid];
-            const changed = destination !== item.deliveryDestinationCode;
-            const known = catalogs.destinations.find((d) => d.destinationCode === destination);
-            const center = effectiveCenter(item, headerCenterCode);
-            const stockKnown = catalogs.stock !== null;
+            const changed =
+              draft.centerCode !== item.centerCode ||
+              draft.destinationCode !== item.deliveryDestinationCode;
+            const center = effectiveCenter(draft.centerCode, headerCenterCode);
+            const centerKnown = catalogs.centers.some((c) => c.centerCode === draft.centerCode);
+            const destination = catalogs.destinations.find(
+              (d) => d.destinationCode === draft.destinationCode,
+            );
             const rowClass = [
               'bo-rs__item-row',
               changed ? 'bo-rs__item-row--changed' : '',
@@ -85,46 +85,53 @@ export function ReviewItemsTable({
                     {formatQuantity(item.quantity)} {item.unitOfMeasure ?? ''}
                   </td>
                   <td>
-                    <span className="bo-rs__mono">{center.code ?? '—'}</span>
-                    {center.code && centerNames.get(center.code) && (
-                      <span className="bo-rs__cell--muted"> · {centerNames.get(center.code)}</span>
-                    )}
-                    <span className="bo-rs__cell-sub">
-                      {center.inherited ? 'de la cabecera · ' : ''}
-                      {stockText(
-                        stockFor(catalogs.stock, item.productCode, center.code),
-                        item.unitOfMeasure,
-                        stockKnown,
+                    <select
+                      className="bo-rs__select"
+                      aria-label={`Centro de distribución de la línea ${item.lineNumber}`}
+                      value={draft.centerCode ?? ''}
+                      disabled={!editable}
+                      onChange={(e) => onChange(item.guid, { ...draft, centerCode: e.target.value || null })}
+                    >
+                      {/* Sin centro propio solo si todavía no tiene uno guardado: el
+                          servidor no borra un centro, lo reemplaza. */}
+                      {!item.centerCode && (
+                        <option value="">
+                          De la cabecera ({headerCenterCode ?? 'sin centro'})
+                          {stockLabel(
+                            stockFor(catalogs.stock, item.productCode, headerCenterCode),
+                            item.unitOfMeasure,
+                          )}
+                        </option>
                       )}
-                    </span>
-                    {stockKnown && catalogs.stock?.[item.productCode] && catalogs.centers.length > 0 && (
-                      <details className="bo-rs__stock">
-                        <summary>Stock por centro</summary>
-                        <ul className="bo-rs__stock-list">
-                          {catalogs.centers.map((c) => (
-                            <li key={c.centerCode}>
-                              <span className="bo-rs__mono">{c.centerCode}</span>{' '}
-                              {c.centerName ?? ''}
-                              <span className="bo-rs__stock-qty">
-                                {formatQuantity(catalogs.stock?.[item.productCode]?.[c.centerCode] ?? 0)}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
+                      {draft.centerCode && !centerKnown && (
+                        <option value={draft.centerCode}>{draft.centerCode} · no permitido para el cliente</option>
+                      )}
+                      {catalogs.centers.map((c) => (
+                        <option key={c.centerCode} value={c.centerCode}>
+                          {c.centerCode} · {c.centerName ?? ''}
+                          {stockLabel(stockFor(catalogs.stock, item.productCode, c.centerCode), item.unitOfMeasure)}
+                        </option>
+                      ))}
+                    </select>
+                    {center.inherited && (
+                      <span className="bo-rs__cell-sub">Sale con el centro de la cabecera</span>
                     )}
                   </td>
                   <td>
                     <select
                       className="bo-rs__select"
                       aria-label={`Destino de entrega de la línea ${item.lineNumber}`}
-                      value={destination ?? ''}
+                      value={draft.destinationCode ?? ''}
                       disabled={!editable}
-                      onChange={(e) => onDestination(item.guid, e.target.value || null)}
+                      onChange={(e) =>
+                        onChange(item.guid, { ...draft, destinationCode: e.target.value || null })
+                      }
                     >
                       <option value="">Elegí un destino</option>
-                      {destination && !known && (
-                        <option value={destination}>{destination} · fuera del área de venta</option>
+                      {draft.destinationCode && !destination && (
+                        <option value={draft.destinationCode}>
+                          {draft.destinationCode} · fuera del área de venta
+                        </option>
                       )}
                       {catalogs.destinations.map((d) => (
                         <option key={d.destinationCode} value={d.destinationCode}>
@@ -132,8 +139,8 @@ export function ReviewItemsTable({
                         </option>
                       ))}
                     </select>
-                    {known?.deliveryAddress && (
-                      <span className="bo-rs__cell-sub">{known.deliveryAddress}</span>
+                    {destination?.deliveryAddress && (
+                      <span className="bo-rs__cell-sub">{destination.deliveryAddress}</span>
                     )}
                   </td>
                 </tr>

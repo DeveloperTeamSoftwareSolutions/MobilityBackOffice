@@ -1,7 +1,8 @@
 import {
-  DestinationChange,
-  DestinationDrafts,
   ItemWarning,
+  LineChange,
+  LineDraft,
+  LineDrafts,
   ReviewCatalogs,
   ReviewItem,
   SalesArea,
@@ -19,32 +20,58 @@ export function formatQuantity(quantity: number | null): string {
   return quantity.toLocaleString('es-AR', { maximumFractionDigits: 3 });
 }
 
-/** Destinos de partida: los que la orden tenía guardados. */
-export function initialDrafts(items: ReviewItem[]): DestinationDrafts {
-  return Object.fromEntries(items.map((item) => [item.guid, item.deliveryDestinationCode]));
+/** Lo de partida: el centro y el destino que la línea tiene guardados. */
+export function initialDrafts(items: ReviewItem[]): LineDrafts {
+  return Object.fromEntries(
+    items.map((item) => [
+      item.guid,
+      { centerCode: item.centerCode, destinationCode: item.deliveryDestinationCode },
+    ]),
+  );
 }
 
-/** Líneas cuyo destino elegido difiere del guardado, en el orden de la orden. */
-export function destinationChanges(
-  items: ReviewItem[],
-  drafts: DestinationDrafts,
-): DestinationChange[] {
+/** Lo elegido para una línea; si no se tocó, lo guardado. */
+export function draftFor(item: ReviewItem, drafts: LineDrafts): LineDraft {
+  return (
+    drafts[item.guid] ?? {
+      centerCode: item.centerCode,
+      destinationCode: item.deliveryDestinationCode,
+    }
+  );
+}
+
+/**
+ * Cambios pendientes, en el orden de la orden: primero el centro y después el destino
+ * de cada línea.
+ */
+export function lineChanges(items: ReviewItem[], drafts: LineDrafts): LineChange[] {
   return items.flatMap((item) => {
-    const before = item.deliveryDestinationCode;
-    const after = item.guid in drafts ? drafts[item.guid] : before;
-    return before === after ? [] : [{ item, before, after }];
+    const draft = draftFor(item, drafts);
+    const changes: LineChange[] = [];
+    if (draft.centerCode !== item.centerCode) {
+      changes.push({ item, field: 'center', before: item.centerCode, after: draft.centerCode });
+    }
+    if (draft.destinationCode !== item.deliveryDestinationCode) {
+      changes.push({
+        item,
+        field: 'destination',
+        before: item.deliveryDestinationCode,
+        after: draft.destinationCode,
+      });
+    }
+    return changes;
   });
 }
 
 /**
- * Centro con el que sale la línea. Hoy MobilityIA no guarda centro por línea, así que
- * casi siempre es el de la cabecera, que es además el único que llega a SAP.
+ * Centro con el que sale la línea: el elegido, o si no tiene, el de la cabecera. El
+ * middleware va a partir la orden en una orden SAP por cada centro.
  */
 export function effectiveCenter(
-  item: ReviewItem,
+  centerCode: string | null,
   headerCenterCode: string | null,
 ): { code: string | null; inherited: boolean } {
-  if (item.centerCode) return { code: item.centerCode, inherited: false };
+  if (centerCode) return { code: centerCode, inherited: false };
   return { code: headerCenterCode, inherited: true };
 }
 
@@ -66,17 +93,19 @@ export function stockFor(
 /**
  * Qué hay que avisar de una línea.
  *
- * Bloquean el destino vacío o de otra área de venta: SAP los rechaza seguro y el
- * servidor tampoco los acepta. El centro y el stock solo avisan: el centro no se edita
- * todavía, y el stock lo revalida SAP (el equipo decidió permitir centros sin stock).
+ * Bloquean lo que SAP rechaza seguro y el servidor tampoco acepta: destino vacío o de
+ * otra área, y un centro elegido que no está permitido para el cliente (decisión 4a).
+ * Avisan sin bloquear: un centro de cabecera no permitido (la línea hereda algo que no
+ * eligió BackOffice) y el stock, que SAP revalida (decisión 4b).
  */
 export function itemWarnings(
   item: ReviewItem,
-  destinationCode: string | null,
+  draft: LineDraft,
   headerCenterCode: string | null,
   catalogs: ReviewCatalogs,
 ): ItemWarning[] {
   const warnings: ItemWarning[] = [];
+  const { destinationCode } = draft;
 
   if (!destinationCode) {
     warnings.push({ kind: 'sin-destino', blocking: true, message: 'Elegí un destino de entrega.' });
@@ -88,27 +117,36 @@ export function itemWarnings(
     });
   }
 
-  const center = effectiveCenter(item, headerCenterCode).code;
-  if (center && catalogs.centers.length > 0 && !catalogs.centers.some((c) => c.centerCode === center)) {
-    warnings.push({
-      kind: 'centro-no-permitido',
-      blocking: false,
-      message: `El centro ${center} no está entre los permitidos para el cliente. Puede ser el motivo del rechazo.`,
-    });
+  const center = effectiveCenter(draft.centerCode, headerCenterCode);
+  const allowed = catalogs.centers.some((c) => c.centerCode === center.code);
+  if (center.code && catalogs.centers.length > 0 && !allowed) {
+    warnings.push(
+      center.inherited
+        ? {
+            kind: 'centro-de-cabecera-no-permitido',
+            blocking: false,
+            message: `Hereda el centro ${center.code} de la cabecera, que no está permitido para el cliente. Puede ser el motivo del rechazo: elegí un centro.`,
+          }
+        : {
+            kind: 'centro-no-permitido',
+            blocking: true,
+            message: `El centro ${center.code} no está permitido para el cliente. Elegí otro.`,
+          },
+    );
   } else {
-    const available = stockFor(catalogs.stock, item.productCode, center);
+    const available = stockFor(catalogs.stock, item.productCode, center.code);
     const unit = item.unitOfMeasure ?? '';
     if (available !== null && available <= 0) {
       warnings.push({
         kind: 'sin-stock',
         blocking: false,
-        message: `Sin stock en el centro ${center}. SAP puede volver a rechazarla.`,
+        message: `Sin stock en el centro ${center.code}. SAP puede volver a rechazarla.`,
       });
     } else if (available !== null && item.quantity != null && available < item.quantity) {
       warnings.push({
         kind: 'stock-insuficiente',
         blocking: false,
-        message: `El centro ${center} tiene ${formatQuantity(available)} ${unit} y la línea pide ${formatQuantity(item.quantity)}. SAP puede volver a rechazarla.`,
+        message: `El centro ${center.code} tiene ${formatQuantity(available)} ${unit} y la línea pide ${formatQuantity(item.quantity)}. SAP puede volver a rechazarla.`,
       });
     }
   }
@@ -119,16 +157,26 @@ export function itemWarnings(
 /** Cantidad de líneas con al menos un aviso que impide guardar o reenviar. */
 export function blockingItemCount(
   items: ReviewItem[],
-  drafts: DestinationDrafts,
+  drafts: LineDrafts,
   headerCenterCode: string | null,
   catalogs: ReviewCatalogs,
 ): number {
   return items.filter((item) =>
-    itemWarnings(
-      item,
-      item.guid in drafts ? drafts[item.guid] : item.deliveryDestinationCode,
-      headerCenterCode,
-      catalogs,
-    ).some((w) => w.blocking),
+    itemWarnings(item, draftFor(item, drafts), headerCenterCode, catalogs).some((w) => w.blocking),
   ).length;
+}
+
+/** Cuántas órdenes SAP saldrían: una por cada centro distinto de las líneas. */
+export function sapOrdersByCenter(
+  items: ReviewItem[],
+  drafts: LineDrafts,
+  headerCenterCode: string | null,
+): { centerCode: string | null; lines: number[] }[] {
+  const groups = new Map<string, number[]>();
+  for (const item of items) {
+    const code = effectiveCenter(draftFor(item, drafts).centerCode, headerCenterCode).code ?? '';
+    if (!groups.has(code)) groups.set(code, []);
+    groups.get(code)?.push(item.lineNumber);
+  }
+  return [...groups.entries()].map(([code, lines]) => ({ centerCode: code || null, lines }));
 }

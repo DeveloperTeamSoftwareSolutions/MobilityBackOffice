@@ -50,7 +50,7 @@ export interface ReviewItem {
   productDescription: string | null;
   quantity: number | null;
   unitOfMeasure: string | null;
-  /** Hoy llega vacío: MobilityIA no guarda centro por línea. */
+  /** Centro propio de la línea. Sin él, la línea sale con el de la cabecera. */
   centerCode: string | null;
   deliveryDestinationCode: string | null;
   deliveryDestinationName: string | null;
@@ -124,11 +124,20 @@ export interface ReviewCatalogs {
   errors: OptionsError[];
 }
 
-/** Destino elegido para cada línea, por guid de la línea. */
-export type DestinationDrafts = Record<string, string | null>;
+/** Centro y destino elegidos para una línea. */
+export interface LineDraft {
+  centerCode: string | null;
+  destinationCode: string | null;
+}
 
-export interface DestinationChange {
+/** Lo elegido para cada línea, por guid de la línea. */
+export type LineDrafts = Record<string, LineDraft>;
+
+export type LineField = 'center' | 'destination';
+
+export interface LineChange {
   item: ReviewItem;
+  field: LineField;
   before: string | null;
   after: string | null;
 }
@@ -137,6 +146,7 @@ export type ItemWarningKind =
   | 'sin-destino'
   | 'destino-fuera-del-area'
   | 'centro-no-permitido'
+  | 'centro-de-cabecera-no-permitido'
   | 'sin-stock'
   | 'stock-insuficiente';
 
@@ -145,4 +155,24 @@ export interface ItemWarning {
   /** `true` impide guardar y reenviar; lo demás solo avisa. */
   blocking: boolean;
   message: string;
+}
+
+export type SapOrderStatus = 'accepted' | 'accepted_no_dispatch' | 'rejected' | 'no_response';
+
+/** Una orden SAP de la orden, con sus ítems sin precios. */
+export interface SapOrder {
+  guid: string;
+  status: SapOrderStatus;
+  statusCode: string | null;
+  attemptAt: string | null;
+  sapOrderNumber: string | null;
+  sapDispatchNumber: string | null;
+  error: string | null;
+  items: {
+    lineNumber: number;
+    productCode: string;
+    description: string | null;
+    quantity: number | null;
+    unitOfMeasure: string | null;
+  }[];
 }

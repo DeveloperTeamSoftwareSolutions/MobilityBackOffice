@@ -3,6 +3,7 @@ import { ItmanagerClient, ItmanagerLoginResult } from './itmanager.client';
 import { RoleResolver } from './role-resolver.service';
 import { TokenService } from './token.service';
 import { AuditService } from '../audit/audit.service';
+import { AuditCategory } from '../audit/audit.categories';
 import { BackOfficeRole } from './backoffice-role.enum';
 
 export interface LoginInput {
@@ -22,6 +23,8 @@ type AuditAction = 'LOGIN' | 'LOGIN_FAILED' | 'LOGOUT';
 interface AuthAuditEntry {
   email: string;
   guidUsers?: string;
+  /** Solo se conoce despues de que ITManager valido las credenciales. */
+  guidApiLoginClients?: string | null;
   role?: BackOfficeRole;
   action: AuditAction;
   detail?: string;
@@ -77,6 +80,7 @@ export class AuthService {
       await this.auditAuth({
         email,
         guidUsers,
+        guidApiLoginClients: itm.guidApiLoginClients,
         action: 'LOGIN_FAILED',
         detail: 'sin rol asignado en MobilityBackOffice',
       });
@@ -89,6 +93,9 @@ export class AuthService {
     const token = await this.tokens.sign({
       sub: guidUsers,
       guid: guidUsers,
+      // Viaja en el token para que cualquier accion posterior pueda auditarse contra el
+      // cliente correcto sin volver a preguntarle a ITManager.
+      guidApiLoginClients: itm.guidApiLoginClients,
       email: itm.user.email,
       username: itm.user.name,
       isAdmin: itm.user.isAdmin,
@@ -96,7 +103,13 @@ export class AuthService {
     });
 
     // 4. Auditoría del acceso exitoso.
-    await this.auditAuth({ email, guidUsers, role, action: 'LOGIN' });
+    await this.auditAuth({
+      email,
+      guidUsers,
+      guidApiLoginClients: itm.guidApiLoginClients,
+      role,
+      action: 'LOGIN',
+    });
 
     return {
       token,
@@ -107,18 +120,22 @@ export class AuthService {
   }
 
   private async auditAuth(entry: AuthAuditEntry): Promise<void> {
-    // AuditLogs (central, compartida) no tiene columnas Email/Success: la identidad
-    // va en Detail y el resultado se distingue por Action (LOGIN vs LOGIN_FAILED).
-    const detailParts = [entry.email];
+    // El resultado se distingue por `Action` (LOGIN vs LOGIN_FAILED): `AuditLogs` no
+    // tiene columna de éxito. La identidad sí tiene la suya (`ActorEmail`), así que el
+    // email va ahí y `Detail` queda para lo que no entra en ninguna columna.
+    const detailParts: string[] = [];
     if (entry.role) detailParts.push(`rol=${entry.role}`);
     if (entry.detail) detailParts.push(entry.detail);
 
     await this.audit.record({
       guidUsers: entry.guidUsers ?? null,
+      // Sin esto la fila existe pero no se ve: la auditoría de ITManager filtra por cliente.
+      guidApiLoginClients: entry.guidApiLoginClients ?? null,
+      actorEmail: entry.email,
       action: entry.action,
       entity: 'Auth',
-      category: 'auth',
-      detail: detailParts.join(' | '),
+      category: AuditCategory.Auth,
+      detail: detailParts.join(' | ') || null,
     });
   }
 }

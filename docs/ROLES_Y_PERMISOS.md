@@ -1,6 +1,6 @@
 # Roles y Permisos — Mobility BackOffice
 
-> Última actualización: 2026-08-27 · Versión: 2.13.0
+> Última actualización: 2026-08-31 · Versión: 2.16.0
 >
 > Qué puede hacer cada rol, cómo se decide, y cómo se registra en ITManager.
 
@@ -68,7 +68,7 @@ y (cuando exista) los templates de WhatsApp.
 | Inicio | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Regiones comerciales | ✓ | — | ✓ | ✓ | — |
 | Documentación del RAG | ✓ | — | ✓ | — | ✓ |
-| Templates de WhatsApp *(próximamente)* | ✓ | — | ✓ | — | ✓ |
+| Templates de WhatsApp | ✓ | — | ✓ | — | ✓ |
 | **Consola de soporte** | ✓ | ✓ | **—** | — | — |
 | **Matriz de autorizadores** | ✓ | — | **—** | **—** | **—** |
 | *Cualquier sección futura no-soporte* | ✓ | — | ✓ | — | — |
@@ -84,6 +84,7 @@ puede abrir.
 | `/api/health` | Público |
 | `/api/regions/*` | Administrador, Usuario, SuperAdmin |
 | `/rag/*` (proxy) | Marketing, Usuario, SuperAdmin |
+| `/api/templates/*` | Marketing, Usuario, SuperAdmin |
 | `/api/support/*` | **Soporte, SuperAdmin** |
 | `/api/authorizers/*` | **Solo SuperAdmin** |
 | `/api/regions/sync` | Ninguno — se autentica por API key (máquina a máquina) |

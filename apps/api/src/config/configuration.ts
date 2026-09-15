@@ -40,4 +40,13 @@ export default () => ({
   rag: {
     url: process.env.RAG_URL,
   },
+
+  // Panel WABA (WhatsApp Business Cloud). BackOffice consume su API REST para las
+  // plantillas: se traen los DATOS y se arma UI propia, igual que hace MobilityManager
+  // con las conversaciones. La cuenta WABA es IMPLICITA en la key. Sin url o key, la
+  // seccion queda deshabilitada. Ver docs/SPEC_PLANTILLAS_WHATSAPP.md.
+  waba: {
+    apiUrl: process.env.WABA_API_URL,
+    apiKey: process.env.WABA_API_KEY,
+  },
 });

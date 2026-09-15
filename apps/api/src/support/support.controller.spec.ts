@@ -228,7 +228,9 @@ describe('SupportController — decisiones sobre lineas y plazos de pago', () =>
     >
   >;
   let controller: SupportController;
-  const req = { user: { email: 'soporte@duwest.com', guid: 'guid-soporte' } };
+  const req = {
+    user: { email: 'soporte@duwest.com', guid: 'guid-soporte', guidApiLoginClients: 'guid-cliente' },
+  };
 
   beforeEach(() => {
     service = {
@@ -347,6 +349,7 @@ describe('SupportController — decisiones sobre lineas y plazos de pago', () =>
     expect(service.decideItem.mock.calls[0][1]).toEqual({
       email: 'soporte@duwest.com',
       guid: 'guid-soporte',
+      guidApiLoginClients: 'guid-cliente',
     });
   });
 
@@ -356,6 +359,7 @@ describe('SupportController — decisiones sobre lineas y plazos de pago', () =>
     expect(service.recompute).toHaveBeenCalledWith('order', 'g', {
       email: 'soporte@duwest.com',
       guid: 'guid-soporte',
+      guidApiLoginClients: 'guid-cliente',
     });
   });
 });
@@ -372,7 +376,9 @@ describe('SupportController — vuelta atras', () => {
    */
   let service: jest.Mocked<Pick<SupportService, 'runAction'>>;
   let controller: SupportController;
-  const req = { user: { email: 'soporte@qa.local', guid: 'guid-soporte' } };
+  const req = {
+    user: { email: 'soporte@qa.local', guid: 'guid-soporte', guidApiLoginClients: 'guid-cliente' },
+  };
 
   beforeEach(() => {
     service = {
@@ -400,7 +406,7 @@ describe('SupportController — vuelta atras', () => {
       'g',
       'revert_to',
       'ticket 42',
-      { email: 'soporte@qa.local', guid: 'guid-soporte' },
+      { email: 'soporte@qa.local', guid: 'guid-soporte', guidApiLoginClients: 'guid-cliente' },
       'Draft',
     );
   });

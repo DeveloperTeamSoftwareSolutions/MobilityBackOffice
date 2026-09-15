@@ -3,11 +3,11 @@ import { AuthProvider } from './auth/AuthProvider';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { RoleGuard } from './auth/RoleGuard';
 import { AppLayout } from './components/layout/AppLayout';
-import { ComingSoon } from './components/common/ComingSoon';
 import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
 import { RegionesPage } from './pages/RegionesPage';
 import { RagPage } from './pages/RagPage';
+import { PlantillasPage } from './pages/PlantillasPage';
 import { SoportePage } from './pages/SoportePage';
 import { AutorizadoresPage } from './pages/AutorizadoresPage';
 
@@ -53,10 +53,7 @@ export function App(): JSX.Element {
                   allow={['Marketing']}
                   fallback={<Navigate to="/" replace />}
                 >
-                  <ComingSoon
-                    titulo="Templates de WhatsApp"
-                    descripcion="Creación y gestión de plantillas para el equipo de marketing."
-                  />
+                  <PlantillasPage />
                 </RoleGuard>
               }
             />

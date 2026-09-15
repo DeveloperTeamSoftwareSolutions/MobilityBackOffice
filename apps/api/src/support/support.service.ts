@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { SupportClient } from './support.client';
 import { AuditService } from '../audit/audit.service';
+import { AuditCategory } from '../audit/audit.categories';
+import { Actor } from '../common/actor';
 import {
   ActionResult,
   DecisionResult,
@@ -23,10 +25,6 @@ import {
 } from './support.types';
 
 /** Identidad del logueado, para la traza. */
-export interface Actor {
-  email?: string;
-  guid?: string;
-}
 
 /**
  * Logica de la consola de soporte.
@@ -128,11 +126,13 @@ export class SupportService {
       action: 'SUPPORT_ACTION',
       entity: type === 'quote' ? 'BusinessQuotes' : 'BusinessOrders',
       entityId: result.documentNumber,
-      category: 'support',
+      category: AuditCategory.Support,
       guidUsers: actor.guid ?? null,
-      detail: [
-        actor.email ?? 'desconocido',
-        `documento=${result.documentNumber}`,
+
+      guidApiLoginClients: actor.guidApiLoginClients ?? null,
+
+      actorEmail: actor.email ?? null,
+      detail: [        `documento=${result.documentNumber}`,
         `accion=${result.action}`,
         `estado=${result.statusBefore ?? 'sin estado'}->${result.statusAfter ?? 'sin estado'}`,
         `esperado=${result.expected ?? '-'}`,
@@ -169,11 +169,13 @@ export class SupportService {
       action: params.accion,
       entity: params.entity,
       entityId: params.result.documentNumber,
-      category: 'support',
+      category: AuditCategory.Support,
       guidUsers: params.actor.guid ?? null,
-      detail: [
-        params.actor.email ?? 'desconocido',
-        `documento=${params.result.documentNumber}`,
+
+      guidApiLoginClients: params.actor.guidApiLoginClients ?? null,
+
+      actorEmail: params.actor.email ?? null,
+      detail: [        `documento=${params.result.documentNumber}`,
         ...params.detalle,
         `estado=${params.result.statusBefore ?? 'sin estado'}->${params.result.statusAfter ?? 'sin estado'}`,
         `motivo=${params.reasonNotes}`,
@@ -283,11 +285,13 @@ export class SupportService {
         action: 'SUPPORT_RECOMPUTE',
         entity: type === 'quote' ? 'BusinessQuotes' : 'BusinessOrders',
         entityId: result.documentNumber,
-        category: 'support',
+        category: AuditCategory.Support,
         guidUsers: actor.guid ?? null,
-        detail: [
-          actor.email ?? 'desconocido',
-          `documento=${result.documentNumber}`,
+
+        guidApiLoginClients: actor.guidApiLoginClients ?? null,
+
+        actorEmail: actor.email ?? null,
+        detail: [          `documento=${result.documentNumber}`,
           `estado=${result.statusBefore ?? 'sin estado'}->${result.statusAfter ?? 'sin estado'}`,
         ].join(' | '),
       });

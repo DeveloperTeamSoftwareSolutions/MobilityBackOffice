@@ -21,7 +21,14 @@ function order(over: Partial<Detail> = {}): Detail {
     customerName: 'CONVENIO DE VENTAS DEMASA',
     sellerEmail: 'vendedor@duwest.com',
     sellerName: 'Vendedor',
-    salesArea: { companyCode: '2800', channelCode: '10', sectorCode: '10' },
+    salesArea: {
+      companyCode: '2800',
+      channelCode: '10',
+      sectorCode: '10',
+      companyName: 'Duwest Cafesa, S.A.',
+      channelName: 'Clientes finales',
+      sectorName: 'Protec de Cultivo',
+    },
     centerCode: '2801',
     centerName: 'DW Alm. Externo',
     destination: null,
@@ -103,6 +110,9 @@ const centerSelect = () => select('Centro de distribución de la línea 1');
 describe('ReviewOrderDetail', () => {
   it('muestra el motivo del rechazo y no muestra precios', async () => {
     await renderDetail();
+    expect(screen.getByText('2800 · Duwest Cafesa, S.A.')).toBeTruthy();
+    expect(screen.getByText('10 · Clientes finales')).toBeTruthy();
+    expect(screen.getByText('10 · Protec de Cultivo')).toBeTruthy();
     expect(screen.getByText(/no definido para el área/)).toBeTruthy();
     expect(screen.queryByText(/precio|descuento|total/i)).toBeNull();
   });

@@ -15,6 +15,22 @@ export function formatSalesArea(area: SalesArea): string {
     .join(' / ');
 }
 
+/** Las tres partes del área de venta con su nombre: "2800 · Duwest Cafesa, S.A.". */
+export function salesAreaParts(area: SalesArea): { label: string; value: string }[] {
+  const part = (code: string | null, name: string | null) =>
+    code ? (name ? `${code} · ${name}` : code) : '—';
+  return [
+    { label: 'Sociedad', value: part(area.companyCode, area.companyName) },
+    { label: 'Canal', value: part(area.channelCode, area.channelName) },
+    { label: 'Sector', value: part(area.sectorCode, area.sectorName) },
+  ];
+}
+
+/** Nombres del área en una línea, para mostrar debajo de los códigos. */
+export function salesAreaNames(area: SalesArea): string {
+  return [area.companyName, area.channelName, area.sectorName].filter(Boolean).join(' · ');
+}
+
 export function formatQuantity(quantity: number | null): string {
   if (quantity == null) return '—';
   return quantity.toLocaleString('es-AR', { maximumFractionDigits: 3 });

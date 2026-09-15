@@ -1,5 +1,5 @@
 import { formatDateTime } from '../soporte/DocumentHeader';
-import { formatSalesArea } from './revision-sap.logic';
+import { formatSalesArea, salesAreaNames } from './revision-sap.logic';
 import { Pagination, ReviewQueueEntry, SortDir, SortField } from './revision-sap.types';
 
 const COLUMNS: { key: string; label: string; sort: SortField | null; numeric?: boolean }[] = [
@@ -102,7 +102,12 @@ export function ReviewQueueList({
                     <span className="bo-rs__cell-sub">{entry.customerCode}</span>
                   )}
                 </td>
-                <td className="bo-rs__mono">{formatSalesArea(entry.salesArea)}</td>
+                <td>
+                  <span className="bo-rs__mono">{formatSalesArea(entry.salesArea)}</span>
+                  {salesAreaNames(entry.salesArea) && (
+                    <span className="bo-rs__cell-sub">{salesAreaNames(entry.salesArea)}</span>
+                  )}
+                </td>
                 <td className="bo-rs__cell--muted">{entry.sellerEmail ?? '—'}</td>
                 <td>
                   <span className="bo-rs__reason" title={entry.sapLastError ?? undefined}>

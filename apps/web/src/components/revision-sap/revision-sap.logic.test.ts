@@ -5,6 +5,7 @@ import {
   initialDrafts,
   itemWarnings,
   lineChanges,
+  salesAreaParts,
   sapOrdersByCenter,
   stockFor,
 } from './revision-sap.logic';
@@ -75,6 +76,21 @@ describe('itemWarnings', () => {
   it('si el stock no se sabe, no inventa un aviso de stock', () => {
     expect(kinds(item(), draft('2802', '30000124'), '2800', { ...catalogs, stock: null })).toEqual([]);
     expect(kinds(item({ productCode: 'SIN-RESPUESTA' }), draft('2802', '30000124'), '2800')).toEqual([]);
+  });
+});
+
+describe('área de venta', () => {
+  it('muestra código y nombre, y solo el código si no hay maestro', () => {
+    expect(
+      salesAreaParts({
+        companyCode: '2800',
+        channelCode: '10',
+        sectorCode: '99',
+        companyName: 'Duwest Cafesa, S.A.',
+        channelName: 'Clientes finales',
+        sectorName: null,
+      }).map((p) => p.value),
+    ).toEqual(['2800 · Duwest Cafesa, S.A.', '10 · Clientes finales', '99']);
   });
 });
 

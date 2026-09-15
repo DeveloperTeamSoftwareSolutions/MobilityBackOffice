@@ -276,6 +276,21 @@
 .bo-rs__sap-order-date {
   margin-left: auto;
 }
+.bo-rs__area {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+}
+.bo-rs__area-label {
+  display: inline-block;
+  min-width: 64px;
+  font-size: 12px;
+  color: var(--bo-text-muted);
+}
 .bo-rs__sap-orders-intro {
   margin: 0 0 12px;
   font-size: 13px;

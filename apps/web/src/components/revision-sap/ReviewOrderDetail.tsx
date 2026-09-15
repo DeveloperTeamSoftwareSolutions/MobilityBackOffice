@@ -9,9 +9,9 @@ import {
 } from './revision-sap.api';
 import {
   blockingItemCount,
-  formatSalesArea,
   initialDrafts,
   lineChanges,
+  salesAreaParts,
   sapOrdersByCenter,
 } from './revision-sap.logic';
 import {
@@ -231,9 +231,17 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
           </div>
           <div className="bo-rs__fact">
             <dt title="Organización de ventas de SAP: sociedad / canal de distribución / sector">
-              Área de venta (sociedad / canal / sector)
+              Área de venta
             </dt>
-            <dd className="bo-rs__mono">{formatSalesArea(order.salesArea)}</dd>
+            <dd>
+              <ul className="bo-rs__area">
+                {salesAreaParts(order.salesArea).map((p) => (
+                  <li key={p.label}>
+                    <span className="bo-rs__area-label">{p.label}</span> {p.value}
+                  </li>
+                ))}
+              </ul>
+            </dd>
           </div>
           <div className="bo-rs__fact">
             <dt>Fecha de la orden</dt>

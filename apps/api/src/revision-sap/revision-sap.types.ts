@@ -8,6 +8,10 @@ export interface SalesArea {
   companyCode: string | null;
   channelCode: string | null;
   sectorCode: string | null;
+  /** Nombres de los maestros de SAP; `null` si el código no tiene maestro. */
+  companyName: string | null;
+  channelName: string | null;
+  sectorName: string | null;
 }
 
 export interface Pagination {

@@ -148,7 +148,10 @@
 .bo-rs__table tbody tr:last-child td {
   border-bottom: none;
 }
-.bo-rs__th--number,
+/* `.bo-rs__table th` fija text-align:left con mas especificidad que una clase sola:
+   sin el prefijo de tabla, el encabezado numerico quedaba a la izquierda y sus valores
+   a la derecha. */
+.bo-rs__table .bo-rs__th--number,
 .bo-rs__cell--number {
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -272,6 +275,10 @@
 }
 .bo-rs__sap-order-date {
   margin-left: auto;
+}
+.bo-rs__sap-orders-intro {
+  margin: 0 0 12px;
+  font-size: 13px;
 }
 .bo-rs__sap-order-hint {
   margin: 0;

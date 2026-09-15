@@ -130,7 +130,7 @@ describe('ReviewOrderDetail', () => {
     fireEvent.change(centerSelect(), { target: { value: '2802' } });
     fireEvent.change(destinationSelect(), { target: { value: '10019279' } });
     expect(screen.getByText('2 cambios sin guardar')).toBeTruthy();
-    expect(screen.getByText(/Sale en 1 orden SAP/)).toBeTruthy();
+    expect(screen.getByText(/Si se reenvía así, sale en 1 orden SAP/)).toBeTruthy();
 
     api.getReviewOrder.mockResolvedValue(
       order({
@@ -176,12 +176,15 @@ describe('ReviewOrderDetail', () => {
 
   it('la pestaña de órdenes SAP muestra cada una con su estado', async () => {
     api.listSapOrders.mockResolvedValue([
-      { guid: 's1', status: 'accepted', statusCode: 'Authorized', attemptAt: '2026-09-15T10:00:00Z', sapOrderNumber: '0004500123', sapDispatchNumber: '0080001234', error: null, items: [{ lineNumber: 1, productCode: '1001917', description: 'ACTIV', quantity: 1, unitOfMeasure: 'UN' }] },
-      { guid: 's2', status: 'rejected', statusCode: 'Draft', attemptAt: '2026-09-15T10:01:00Z', sapOrderNumber: null, sapDispatchNumber: null, error: 'Material no ampliado para el centro 2802', items: [] },
+      { guid: 's1', status: 'accepted', statusCode: 'Authorized', centerCode: '2801', centerName: 'DW Alm. Externo', attemptAt: '2026-09-15T10:00:00Z', sapOrderNumber: '0004500123', sapDispatchNumber: '0080001234', error: null, items: [{ lineNumber: 1, productCode: '1001917', description: 'ACTIV', quantity: 1, unitOfMeasure: 'UN' }] },
+      { guid: 's2', status: 'rejected', statusCode: 'Draft', centerCode: '2802', centerName: 'DW Cartago', attemptAt: '2026-09-15T10:01:00Z', sapOrderNumber: null, sapDispatchNumber: null, error: 'Material no ampliado para el centro 2802', items: [] },
     ]);
     await renderDetail();
     fireEvent.click(screen.getByRole('tab', { name: 'Órdenes SAP' }));
     expect(await screen.findByText('Pedido 0004500123')).toBeTruthy();
+    expect(screen.getByText('Centro 2801 · DW Alm. Externo')).toBeTruthy();
+    expect(screen.getByText('Centro 2802 · DW Cartago')).toBeTruthy();
+    expect(screen.getByText(/ya se enviaron/)).toBeTruthy();
     expect(screen.getByText('Aceptada')).toBeTruthy();
     expect(screen.getByText('Rechazada')).toBeTruthy();
     expect(screen.getByText('Material no ampliado para el centro 2802')).toBeTruthy();

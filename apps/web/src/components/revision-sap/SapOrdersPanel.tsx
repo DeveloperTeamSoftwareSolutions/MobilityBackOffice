@@ -57,7 +57,13 @@ export function SapOrdersPanel({ orderGuid, refreshKey }: Props) {
   }
 
   return (
-    <ul className="bo-rs__sap-orders">
+    <>
+      <p className="bo-rs__cell--muted bo-rs__sap-orders-intro">
+        Órdenes SAP que <strong>ya se enviaron</strong> desde esta orden, con lo que contestó
+        SAP. No es una simulación: lo que saldría con los cambios de la pestaña Ítems se ve
+        ahí, antes de guardar.
+      </p>
+      <ul className="bo-rs__sap-orders">
       {orders.map((order) => {
         const status = STATUS[order.status];
         return (
@@ -65,6 +71,11 @@ export function SapOrdersPanel({ orderGuid, refreshKey }: Props) {
             <div className="bo-rs__sap-order-head">
               <span className={`bo-rs__pill bo-rs__pill--${status.tone}`}>{status.label}</span>
               <span className="bo-rs__cell--strong">
+                {order.centerCode
+                  ? `Centro ${order.centerCode}${order.centerName ? ` · ${order.centerName}` : ''}`
+                  : 'Centro sin informar'}
+              </span>
+              <span className="bo-rs__cell--muted">
                 {order.sapOrderNumber ? `Pedido ${order.sapOrderNumber}` : 'Sin número de pedido'}
               </span>
               {order.sapDispatchNumber && (
@@ -104,6 +115,7 @@ export function SapOrdersPanel({ orderGuid, refreshKey }: Props) {
           </li>
         );
       })}
-    </ul>
+      </ul>
+    </>
   );
 }

@@ -230,7 +230,9 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
             <dd>{order.sellerName ?? order.sellerEmail ?? '—'}</dd>
           </div>
           <div className="bo-rs__fact">
-            <dt>Área de venta</dt>
+            <dt title="Organización de ventas de SAP: sociedad / canal de distribución / sector">
+              Área de venta (sociedad / canal / sector)
+            </dt>
             <dd className="bo-rs__mono">{formatSalesArea(order.salesArea)}</dd>
           </div>
           <div className="bo-rs__fact">
@@ -311,8 +313,8 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
               </h3>
               <span className="bo-rs__cell--muted" aria-live="polite">
                 {groups.length === 1
-                  ? 'Sale en 1 orden SAP'
-                  : `Sale en ${groups.length} órdenes SAP, una por centro`}{' '}
+                  ? 'Si se reenvía así, sale en 1 orden SAP'
+                  : `Si se reenvía así, sale en ${groups.length} órdenes SAP, una por centro`}{' '}
                 · {stockState === 'loading' && 'consultando stock en SAP…'}
                 {stockState === 'done' &&
                   (stockErrors.length === 0

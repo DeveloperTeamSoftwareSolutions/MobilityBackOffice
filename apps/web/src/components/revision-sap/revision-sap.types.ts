@@ -164,6 +164,9 @@ export interface SapOrder {
   guid: string;
   status: SapOrderStatus;
   statusCode: string | null;
+  /** Centro del que sale esta orden SAP: con la orden partida, distingue una de otra. */
+  centerCode: string | null;
+  centerName: string | null;
   attemptAt: string | null;
   sapOrderNumber: string | null;
   sapDispatchNumber: string | null;

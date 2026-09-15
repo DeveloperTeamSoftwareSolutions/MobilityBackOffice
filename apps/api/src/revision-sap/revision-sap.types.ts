@@ -146,6 +146,8 @@ export interface SapOrder {
   guid: string;
   status: SapOrderStatus;
   statusCode: string | null;
+  centerCode: string | null;
+  centerName: string | null;
   attemptAt: string | null;
   sapOrderNumber: string | null;
   sapDispatchNumber: string | null;

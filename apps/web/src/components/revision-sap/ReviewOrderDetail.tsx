@@ -22,6 +22,7 @@ import {
   SapOrder,
 } from './revision-sap.types';
 import { SapOrdersPanel } from './SapOrdersPanel';
+import { ReviewItemsTable } from './ReviewItemsTable';
 import { SapErrorMessage } from './SapErrorMessage';
 import { PreviewNotice } from './PreviewNotice';
 
@@ -30,13 +31,17 @@ interface Props {
   onBack: () => void;
 }
 
+type Tab = 'items' | 'sap';
+
 /**
- * Detalle de una orden en revisión.
+ * Detalle de una orden en revisión, en dos pestañas.
  *
- * Todo lo que se corrige vive dentro de las órdenes SAP: una por centro, que es la
- * unidad que SAP acepta o rechaza. La cabecera solo da el contexto.
+ * **Productos** es la orden tal como se va a volver a enviar: ahí se corrige el centro y
+ * el destino de cada línea. **Órdenes SAP** es el historial de cómo salió cada intento,
+ * una orden por centro, y por eso es solo consulta.
  */
 export function ReviewOrderDetail({ guid, onBack }: Props) {
+  const [tab, setTab] = useState<Tab>('items');
   const [order, setOrder] = useState<Detail | null>(null);
   const [catalogs, setCatalogs] = useState<ReviewCatalogs | null>(null);
   const [sapOrders, setSapOrders] = useState<SapOrder[]>([]);
@@ -263,35 +268,69 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
         <SapErrorMessage error={lastError} />
       </section>
 
-      <section className="bo-rs__card" aria-labelledby="bo-rs-sap-orders-title">
-        <header className="bo-rs__card-head">
-          <h3 id="bo-rs-sap-orders-title" className="bo-rs__card-title">
-            Órdenes SAP y sus productos
-          </h3>
-          <span className="bo-rs__cell--muted">
-            {sapOrders.length === 1 ? '1 orden SAP' : `${sapOrders.length} órdenes SAP`}
-            {rechazadas > 0 &&
-              ` · ${rechazadas === 1 ? '1 rechazada' : `${rechazadas} rechazadas`}: corregí ahí el centro y el destino`}
-          </span>
-        </header>
-        {otherErrors.length > 0 && (
-          <p className="bo-rs__error">
-            No se pudo cargar todo lo necesario para corregir la orden:{' '}
-            {otherErrors.map((e) => e.message).join(' · ')}
-          </p>
-        )}
-        <SapOrdersPanel
-          orderGuid={order.guid}
-          sapOrders={sapOrders}
-          items={order.items}
-          headerCenterCode={order.centerCode}
-          drafts={drafts}
-          catalogs={catalogs}
-          editable={editable}
-          saveErrors={saveErrors}
-          onChange={onChange}
-        />
-      </section>
+      <div className="bo-rs__tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'items'}
+          className={`bo-rs__tab ${tab === 'items' ? 'bo-rs__tab--active' : ''}`}
+          onClick={() => setTab('items')}
+        >
+          Productos ({order.items.length})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'sap'}
+          className={`bo-rs__tab ${tab === 'sap' ? 'bo-rs__tab--active' : ''}`}
+          onClick={() => setTab('sap')}
+        >
+          Órdenes SAP ({sapOrders.length})
+        </button>
+      </div>
+
+      {tab === 'items' ? (
+        <section className="bo-rs__card" aria-labelledby="bo-rs-items-title">
+          <header className="bo-rs__card-head">
+            <h3 id="bo-rs-items-title" className="bo-rs__card-title">
+              Productos de la orden
+            </h3>
+            <span className="bo-rs__cell--muted">
+              Corregí acá el centro y el destino: así se va a volver a enviar.
+            </span>
+          </header>
+          {otherErrors.length > 0 && (
+            <p className="bo-rs__error">
+              No se pudo cargar todo lo necesario para corregir la orden:{' '}
+              {otherErrors.map((e) => e.message).join(' · ')}
+            </p>
+          )}
+          <ReviewItemsTable
+            orderGuid={order.guid}
+            items={order.items}
+            headerCenterCode={order.centerCode}
+            drafts={drafts}
+            catalogs={catalogs}
+            editable={editable}
+            saveErrors={saveErrors}
+            onChange={onChange}
+          />
+        </section>
+      ) : (
+        <section className="bo-rs__card" aria-labelledby="bo-rs-sap-orders-title">
+          <header className="bo-rs__card-head">
+            <h3 id="bo-rs-sap-orders-title" className="bo-rs__card-title">
+              Órdenes SAP y sus productos
+            </h3>
+            <span className="bo-rs__cell--muted">
+              {sapOrders.length === 1 ? '1 orden SAP' : `${sapOrders.length} órdenes SAP`}
+              {rechazadas > 0 &&
+                ` · ${rechazadas === 1 ? '1 rechazada' : `${rechazadas} rechazadas`}`}
+            </span>
+          </header>
+          <SapOrdersPanel sapOrders={sapOrders} />
+        </section>
+      )}
 
       <div className="bo-rs__actions">
         <p className="bo-rs__actions-status" aria-live="polite">

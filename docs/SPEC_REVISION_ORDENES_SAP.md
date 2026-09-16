@@ -1,6 +1,6 @@
 # Órdenes rechazadas por SAP — Spec
 
-> Última actualización: 2026-09-15 · Versión: 2.27.0
+> Última actualización: 2026-09-16 · Versión: 2.28.0
 > Estado: **bandeja, detalle, centro y destino por ítem y órdenes SAP conectados**
 > (requiere Middleware ≥ 1.348.0, PR #646). **El reenvío a SAP todavía no.**
 
@@ -60,17 +60,18 @@ vendedor, motivo e intentos. Búsqueda, orden y paginación en el servidor.
     cambio sigue pendiente.
   - **Centro:** selector con los centros permitidos del cliente. Una línea sin centro
     propio sale con el de cabecera.
-- **Una sola vista de productos: "Órdenes SAP y sus productos".** Cada fila de `SAPOrders`
-  con su **centro**, su estado (aceptada, aceptada sin entrega, rechazada, sin respuesta),
-  número de pedido y entrega, motivo y sus productos.
-  - **Solo en las rechazadas** se corrigen centro y destino de cada producto: son las que
-    hay que volver a mandar.
+- **Dos pestañas**, con papeles distintos:
+  - **Productos** — los ítems de la orden, que es como se va a volver a enviar. Se corrige
+    el **centro** y el **destino** de cada línea, esté aceptada o rechazada la orden SAP en
+    la que cayó. **"Ver stock"** por producto abre un modal con el stock por centro y
+    almacén (disponible, en inspección, en tránsito), marcando los almacenes habilitados
+    para el cliente; sale de la misma fuente que ve el vendedor en MobilityIA.
+  - **Órdenes SAP** — **solo consulta**: cada fila de `SAPOrders` con su **centro**, su
+    estado (aceptada, aceptada sin entrega, rechazada, sin respuesta), número de pedido y
+    entrega, motivo y sus productos. Es el historial de cómo salió cada intento.
   - **Reenviar es por orden SAP**, no por la orden entera: cada orden SAP es lo que SAP
-    acepta o rechaza. El botón vive en cada rechazada *(deshabilitado hasta que el
-    Middleware parta la orden por centro)*.
-  - **"Ver stock"** por producto abre un modal con el stock por centro y almacén
-    (disponible, en inspección, en tránsito), marcando los almacenes habilitados para el
-    cliente. Sale de la misma fuente que ve el vendedor en MobilityIA.
+    acepta o rechaza. El botón vive en cada rechazada, en esa pestaña *(deshabilitado
+    hasta que el Middleware parta la orden por centro)*.
 - Stock: la pantalla pide primero centros y destinos (inmediato) y después el stock de
   SAP, que puede tardar o fallar sin trabar el resto.
 - **Reenviar a SAP:** abre la confirmación con el botón de confirmar deshabilitado. No se
@@ -121,8 +122,9 @@ web  revision-sap.api.ts ──> api  /api/revision-sap/*  (rol RevisionSap)
 |---|---|
 | `RevisionSapPanel.tsx` | Contenedor: bandeja o detalle |
 | `ReviewQueueList.tsx` | Tabla de la bandeja, con el motivo separado en tipo y mensaje |
-| `ReviewOrderDetail.tsx` | Cabecera, motivo, guardado y acciones |
-| `SapOrdersPanel.tsx` | Órdenes SAP con sus productos; en las rechazadas, centro y destino editables |
+| `ReviewOrderDetail.tsx` | Cabecera, motivo, las dos pestañas, guardado y acciones |
+| `ReviewItemsTable.tsx` | Pestaña **Productos**: centro, destino y "Ver stock" por línea |
+| `SapOrdersPanel.tsx` | Pestaña **Órdenes SAP**: estado y productos de cada una, solo consulta |
 | `SapErrorMessage.tsx` | El motivo de SAP: tipo como etiqueta y mensaje |
 | `ProductStockModal.tsx` | Stock por centro y almacén de un producto |
 | `PreviewNotice.tsx` | Aviso de lo que todavía no está conectado |

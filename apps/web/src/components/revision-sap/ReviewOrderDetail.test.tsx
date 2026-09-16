@@ -4,9 +4,12 @@ import { ReviewOrderDetail } from './ReviewOrderDetail';
 import { ProductStock, ReviewCatalogs, ReviewOrderDetail as Detail, SapOrder } from './revision-sap.types';
 
 /**
- * Lo que se fija acá: la corrección vive DENTRO de la orden SAP rechazada, que es la
- * unidad que SAP acepta o rechaza. En la aceptada no se edita nada, cada cambio queda
- * marcado hasta guardarse, y el reenvío es por orden SAP, no por la orden entera.
+ * Lo que se fija acá: el detalle son DOS pestañas con papeles distintos.
+ *
+ * "Productos" es la orden tal como se va a reenviar: ahí se corrige el centro y el
+ * destino de CADA línea, sin importar en qué orden SAP cayó. "Órdenes SAP" es el
+ * historial de cada intento y es solo consulta —ningún selector—, salvo el botón de
+ * reenvío, que es por orden SAP y no por la orden entera.
  */
 
 const ORDER = '11111111-2222-3333-4444-555555555555';
@@ -196,6 +199,14 @@ function button(name: string | RegExp): HTMLButtonElement {
 const centerSelect = () => screen.getByLabelText('Centro de distribución de la línea 3') as HTMLSelectElement;
 const destinationSelect = () => screen.getByLabelText('Destino de entrega de la línea 3') as HTMLSelectElement;
 
+/**
+ * La pestaña de órdenes SAP: el detalle abre en Productos. Se busca por rol `tab`, no
+ * `button`: declarar `role="tab"` reemplaza el rol implícito del `<button>`.
+ */
+function verOrdenesSap() {
+  fireEvent.click(screen.getByRole('tab', { name: /Órdenes SAP/ }));
+}
+
 describe('ReviewOrderDetail', () => {
   it('muestra el motivo separado en tipo y mensaje, y no muestra precios', async () => {
     await renderDetail();
@@ -216,8 +227,12 @@ describe('ReviewOrderDetail', () => {
     expect(await screen.findByText(/no puede salir parcial/)).toBeTruthy();
   });
 
-  it('cada orden SAP muestra su centro y su estado', async () => {
+  it('cada orden SAP muestra su centro y su estado, en su pestaña', async () => {
     await renderDetail();
+    // Los estados viven en la otra pestaña: no están hasta abrirla.
+    expect(screen.queryByText('Aceptada')).toBeNull();
+
+    verOrdenesSap();
     expect(screen.getByText('Centro 2801 · DW Alm. Externo')).toBeTruthy();
     expect(screen.getByText('Centro 2802 · DW Cartago')).toBeTruthy();
     expect(screen.getByText('Aceptada')).toBeTruthy();
@@ -225,16 +240,26 @@ describe('ReviewOrderDetail', () => {
     expect(screen.getByText('Pedido 0099900101')).toBeTruthy();
   });
 
-  it('solo la orden SAP rechazada deja corregir centro y destino', async () => {
+  it('todas las líneas se corrigen en Productos, esté aceptada o rechazada su orden SAP', async () => {
     await renderDetail();
     expect(centerSelect()).toBeTruthy();
-    // La línea 1 es de la orden aceptada: no tiene selectores.
-    expect(screen.queryByLabelText('Centro de distribución de la línea 1')).toBeNull();
-    expect(screen.queryByLabelText('Destino de entrega de la línea 1')).toBeNull();
+    // La línea 1 salió en la orden SAP aceptada y se edita igual: la corrección es de
+    // la orden, no de la orden SAP.
+    expect(screen.getByLabelText('Centro de distribución de la línea 1')).toBeTruthy();
+    expect(screen.getByLabelText('Destino de entrega de la línea 1')).toBeTruthy();
+  });
+
+  it('la pestaña de órdenes SAP es solo consulta', async () => {
+    await renderDetail();
+    verOrdenesSap();
+    expect(screen.queryByLabelText('Centro de distribución de la línea 3')).toBeNull();
+    expect(screen.queryByLabelText('Destino de entrega de la línea 3')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ver stock' })).toBeNull();
   });
 
   it('el reenvío es por orden SAP y todavía no está conectado', async () => {
     await renderDetail();
+    verOrdenesSap();
     const reenviar = button('Reenviar esta orden SAP');
     expect(reenviar.disabled).toBe(true);
     expect(screen.getByText(/Se reenvía solo esta orden SAP/)).toBeTruthy();
@@ -277,6 +302,7 @@ describe('ReviewOrderDetail', () => {
 
   it('el stock de un producto se ve en un modal, por centro y almacén', async () => {
     await renderDetail();
+    // La línea 3 es el producto 1200135, el que SAP rechazó.
     fireEvent.click(screen.getAllByRole('button', { name: 'Ver stock' })[1]);
     expect(await screen.findByText('Stock de 1200135')).toBeTruthy();
     expect(api.getProductStock).toHaveBeenCalledWith(ORDER, '1200135');

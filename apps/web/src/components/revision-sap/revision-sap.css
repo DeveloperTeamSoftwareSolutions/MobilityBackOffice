@@ -750,3 +750,33 @@
     flex: 1;
   }
 }
+
+/* Agrupa factura: qué cambia al tocarlo.
+   Es lo unico editable de la cabecera, y no corrige una linea sino el envio entero,
+   asi que la confirmacion enumera los efectos en vez de un "¿estas seguro?". */
+.bo-rs__gi-effects {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+.bo-rs__gi-effect {
+  padding: 10px 12px;
+  border-left: 3px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-bg);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--bo-text);
+}
+.bo-rs__gi-effect--warn {
+  border-left-color: var(--bo-warning);
+}
+.bo-rs__gi-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}

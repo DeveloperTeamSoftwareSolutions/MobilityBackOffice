@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { httpClient } from '../../api/httpClient';
 import {
+  GroupInvoiceChangeResult,
   Pagination,
   ProductStock,
   ReviewCatalogs,
@@ -87,6 +88,22 @@ export async function changeItemCenter(
     { centerCode },
   );
   return res.data.data.item;
+}
+
+/**
+ * Guarda "agrupa factura". Es de cabecera: cambia si la orden entera puede salir
+ * parcial, así que no devuelve una línea.
+ */
+export async function changeGroupInvoice(
+  guid: string,
+  groupInvoice: boolean,
+  reasonNotes: string | null,
+): Promise<GroupInvoiceChangeResult> {
+  const res = await httpClient.put<ApiData<GroupInvoiceChangeResult>>(
+    `/api/revision-sap/orders/${encodeURIComponent(guid)}/group-invoice`,
+    { groupInvoice, reasonNotes },
+  );
+  return res.data.data;
 }
 
 /** Stock de un producto de la orden, por centro y almacén. */

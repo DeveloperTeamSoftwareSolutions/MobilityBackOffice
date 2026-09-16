@@ -145,6 +145,16 @@ export interface DestinationChangeResult {
 /** El cambio de centro devuelve la misma forma que el de destino. */
 export type CenterChangeResult = DestinationChangeResult;
 
+/**
+ * Cambio de "agrupa factura". No devuelve una línea: es de cabecera y decide si la
+ * orden ENTERA puede salir parcial.
+ */
+export interface GroupInvoiceChangeResult {
+  ok: boolean;
+  unchanged: boolean;
+  groupInvoice: boolean;
+}
+
 export type SapOrderStatus = 'accepted' | 'accepted_no_dispatch' | 'rejected' | 'no_response';
 
 /** Una orden SAP de la orden (fila de `SAPOrders`), con sus ítems sin precios. */

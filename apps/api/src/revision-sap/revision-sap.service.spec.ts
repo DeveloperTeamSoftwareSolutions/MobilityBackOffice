@@ -21,13 +21,19 @@ const item = {
 };
 
 describe('RevisionSapService — cambio de destino', () => {
-  let client: jest.Mocked<Pick<RevisionSapClient, 'changeItemDestination' | 'changeItemCenter'>>;
+  let client: jest.Mocked<
+    Pick<RevisionSapClient, 'changeItemDestination' | 'changeItemCenter' | 'changeGroupInvoice'>
+  >;
   let audit: jest.Mocked<Pick<AuditService, 'safeRecord'>>;
   let service: RevisionSapService;
   const actor = { email: 'bo@duwest.com', guid: 'g-1', guidApiLoginClients: 'c-1' };
 
   beforeEach(() => {
-    client = { changeItemDestination: jest.fn(), changeItemCenter: jest.fn() };
+    client = {
+      changeItemDestination: jest.fn(),
+      changeItemCenter: jest.fn(),
+      changeGroupInvoice: jest.fn(),
+    };
     audit = { safeRecord: jest.fn().mockResolvedValue(undefined) };
     service = new RevisionSapService(
       client as unknown as RevisionSapClient,
@@ -89,6 +95,39 @@ describe('RevisionSapService — cambio de destino', () => {
 
     await expect(
       service.changeItemCenter(ORDER, ITEM, '2802', null, { guid: 'g-1' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  /**
+   * Agrupa factura no toca ninguna linea, pero decide si la orden entera puede salir
+   * parcial: por eso se audita igual, sobre la ORDEN y no sobre un item.
+   */
+  it('agrupa factura: audita sobre la orden, y solo si cambio', async () => {
+    client.changeGroupInvoice.mockResolvedValue({ ok: true, unchanged: false, groupInvoice: true });
+    await service.changeGroupInvoice(ORDER, true, 'lo pidio el cliente', actor);
+
+    expect(client.changeGroupInvoice).toHaveBeenCalledWith(ORDER, {
+      groupInvoice: true,
+      actorEmail: 'bo@duwest.com',
+      reasonNotes: 'lo pidio el cliente',
+    });
+    expect(audit.safeRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'REVISION_SAP_GROUP_INVOICE_CHANGE',
+        category: AuditCategory.SapReview,
+        entity: 'BusinessOrders',
+        entityId: ORDER,
+      }),
+    );
+    expect(audit.safeRecord.mock.calls[0][0].detail).toContain('agrupaFactura=si');
+
+    audit.safeRecord.mockClear();
+    client.changeGroupInvoice.mockResolvedValue({ ok: true, unchanged: true, groupInvoice: true });
+    await service.changeGroupInvoice(ORDER, true, null, actor);
+    expect(audit.safeRecord).not.toHaveBeenCalled();
+
+    await expect(
+      service.changeGroupInvoice(ORDER, false, null, { guid: 'g-1' }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 

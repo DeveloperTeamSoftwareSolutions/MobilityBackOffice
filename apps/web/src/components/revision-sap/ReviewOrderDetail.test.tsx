@@ -165,6 +165,7 @@ const api = vi.hoisted(() => ({
   listSapOrders: vi.fn(),
   changeItemDestination: vi.fn(),
   changeItemCenter: vi.fn(),
+  changeGroupInvoice: vi.fn(),
   getProductStock: vi.fn(),
 }));
 
@@ -174,6 +175,7 @@ vi.mock('./revision-sap.api', () => ({
   listSapOrders: api.listSapOrders,
   changeItemDestination: api.changeItemDestination,
   changeItemCenter: api.changeItemCenter,
+  changeGroupInvoice: api.changeGroupInvoice,
   getProductStock: api.getProductStock,
   apiErrorMessage: (_err: unknown, fallback: string) => fallback,
 }));
@@ -184,6 +186,7 @@ beforeEach(() => {
   api.listSapOrders.mockReset().mockResolvedValue(sapOrders);
   api.changeItemDestination.mockReset().mockResolvedValue({});
   api.changeItemCenter.mockReset().mockResolvedValue({});
+  api.changeGroupInvoice.mockReset().mockResolvedValue({ ok: true, unchanged: false, groupInvoice: true });
   api.getProductStock.mockReset().mockResolvedValue(stock);
 });
 
@@ -311,6 +314,37 @@ describe('ReviewOrderDetail', () => {
 
     fireEvent.click(button('Cerrar'));
     await waitFor(() => expect(screen.queryByText('Stock de 1200135')).toBeNull());
+  });
+
+  /**
+   * Agrupa factura es lo único editable de la cabecera, y no se guarda con el resto:
+   * cambia cómo sale la orden ENTERA, así que se confirma aparte y avisando qué implica.
+   */
+  it('cambiar agrupa factura avisa qué va a pasar antes de guardar', async () => {
+    await renderDetail();
+    fireEvent.click(button('Cambiar a Sí'));
+
+    expect(screen.getByText(/deja de poder salir parcial/)).toBeTruthy();
+    expect(screen.getByText(/no se manda nada a SAP/)).toBeTruthy();
+    // Nada se guardó por abrir el aviso.
+    expect(api.changeGroupInvoice).not.toHaveBeenCalled();
+
+    fireEvent.click(button('Sí, agrupar factura'));
+    await waitFor(() => expect(api.changeGroupInvoice).toHaveBeenCalledWith(ORDER, true, null));
+    await screen.findByText(/ya no puede salir parcial/);
+  });
+
+  it('el aviso explica lo contrario si la orden ya agrupa factura, y se puede cancelar', async () => {
+    api.getReviewOrder.mockResolvedValue(order({ groupInvoice: true }));
+    await renderDetail();
+    fireEvent.click(button('Cambiar a No'));
+
+    expect(screen.getByText(/va a poder salir parcial/)).toBeTruthy();
+    expect(screen.getByText(/deja de coincidir con la orden de compra/)).toBeTruthy();
+
+    fireEvent.click(button('Cancelar'));
+    await waitFor(() => expect(screen.queryByText(/va a poder salir parcial/)).toBeNull());
+    expect(api.changeGroupInvoice).not.toHaveBeenCalled();
   });
 
   it('una orden que ya no está en revisión se muestra en solo lectura', async () => {

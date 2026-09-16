@@ -6,6 +6,7 @@ import { RevisionSapClient } from './revision-sap.client';
 import {
   CenterChangeResult,
   DestinationChangeResult,
+  GroupInvoiceChangeResult,
   ProductStock,
   SapOrder,
   ReviewOptions,
@@ -83,6 +84,45 @@ export class RevisionSapService {
           `linea=${result.item.lineNumber}`,
           `producto=${result.item.productCode}`,
           `centro=${result.item.centerCode ?? '-'}`,
+          `motivo=${reasonNotes ?? '-'}`,
+        ].join(' | '),
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Cambia "agrupa factura". No es una corrección logística como el centro o el destino:
+   * con `true`, una línea sin stock impide el envío ENTERO —la orden rebota y no se crea
+   * ninguna orden SAP—; con `false`, esas líneas se filtran y sale el resto. Por eso se
+   * audita aunque no toque ninguna línea.
+   */
+  async changeGroupInvoice(
+    guid: string,
+    groupInvoice: boolean,
+    reasonNotes: string | null,
+    actor: Actor,
+  ): Promise<GroupInvoiceChangeResult> {
+    const actorEmail = this.requireEmail(actor);
+    const result = await this.client.changeGroupInvoice(guid, {
+      groupInvoice,
+      actorEmail,
+      reasonNotes,
+    });
+
+    if (!result.unchanged) {
+      await this.audit.safeRecord({
+        action: 'REVISION_SAP_GROUP_INVOICE_CHANGE',
+        entity: 'BusinessOrders',
+        entityId: guid,
+        category: AuditCategory.SapReview,
+        guidUsers: actor.guid ?? null,
+        guidApiLoginClients: actor.guidApiLoginClients ?? null,
+        actorEmail,
+        detail: [
+          `orden=${guid}`,
+          `agrupaFactura=${result.groupInvoice ? 'si' : 'no'}`,
           `motivo=${reasonNotes ?? '-'}`,
         ].join(' | '),
       });

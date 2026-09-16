@@ -16,6 +16,7 @@ describe('RevisionSapController', () => {
       | 'changeItemCenter'
       | 'listSapOrders'
       | 'getProductStock'
+      | 'changeGroupInvoice'
     >
   >;
   let controller: RevisionSapController;
@@ -29,6 +30,7 @@ describe('RevisionSapController', () => {
       changeItemCenter: jest.fn().mockResolvedValue({ ok: true, unchanged: false, item: {} }),
       listSapOrders: jest.fn().mockResolvedValue([]),
       getProductStock: jest.fn().mockResolvedValue({ rows: [] }),
+      changeGroupInvoice: jest.fn().mockResolvedValue({ ok: true, unchanged: false, groupInvoice: true }),
     };
     controller = new RevisionSapController(service as unknown as RevisionSapService);
   });
@@ -103,6 +105,35 @@ describe('RevisionSapController', () => {
     await expect(controller.sapOrders('x')).rejects.toBeInstanceOf(BadRequestException);
     await controller.sapOrders(ORDER);
     expect(service.listSapOrders).toHaveBeenCalledWith(ORDER);
+  });
+
+  it('agrupa factura: exige un booleano, no "si" ni 1', async () => {
+    const req = { user: { email: 'bo@duwest.com', guid: 'g-1' } };
+    await expect(
+      controller.changeGroupInvoice(ORDER, { groupInvoice: 'si' }, req),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      controller.changeGroupInvoice(ORDER, { groupInvoice: 1 }, req),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(controller.changeGroupInvoice(ORDER, {}, req)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(
+      controller.changeGroupInvoice('no-es-guid', { groupInvoice: true }, req),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(service.changeGroupInvoice).not.toHaveBeenCalled();
+
+    await controller.changeGroupInvoice(
+      ORDER,
+      { groupInvoice: false, reasonNotes: ' el cliente acepta parcial ' },
+      req,
+    );
+    expect(service.changeGroupInvoice).toHaveBeenCalledWith(
+      ORDER,
+      false,
+      'el cliente acepta parcial',
+      { email: 'bo@duwest.com', guid: 'g-1', guidApiLoginClients: null },
+    );
   });
 
   it('valida el destino y el motivo antes de llamar al servicio', async () => {

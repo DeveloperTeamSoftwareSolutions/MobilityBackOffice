@@ -147,6 +147,29 @@ export class RevisionSapController {
     return { success: true, data };
   }
 
+  // PUT /api/revision-sap/orders/:guid/group-invoice
+  //
+  // Agrupa factura es de cabecera: cambia si la orden entera puede salir parcial, no
+  // cómo sale una línea.
+  @Put('orders/:guid/group-invoice')
+  async changeGroupInvoice(
+    @Param('guid') guid: string,
+    @Body() body: { groupInvoice?: unknown; reasonNotes?: unknown } | undefined,
+    @Req() req: AuthedRequest,
+  ) {
+    const orderGuid = this.parseGuid(guid, 'guid');
+    if (typeof body?.groupInvoice !== 'boolean') {
+      throw new BadRequestException('groupInvoice debe ser true o false');
+    }
+    const data = await this.service.changeGroupInvoice(
+      orderGuid,
+      body.groupInvoice,
+      this.parseReason(body?.reasonNotes),
+      actorFrom(req),
+    );
+    return { success: true, data };
+  }
+
   private parseCode(value: unknown, pattern: RegExp, message: string): string {
     const code = typeof value === 'string' ? value.trim() : '';
     if (!pattern.test(code)) throw new BadRequestException(message);

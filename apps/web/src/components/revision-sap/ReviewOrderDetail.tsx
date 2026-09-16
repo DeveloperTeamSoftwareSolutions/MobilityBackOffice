@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatDateTime } from '../soporte/DocumentHeader';
 import {
   apiErrorMessage,
+  changeGroupInvoice,
   changeItemCenter,
   changeItemDestination,
   getReviewCatalogs,
@@ -24,6 +25,7 @@ import {
 import { SapOrdersPanel } from './SapOrdersPanel';
 import { ReviewItemsTable } from './ReviewItemsTable';
 import { SapErrorMessage } from './SapErrorMessage';
+import { GroupInvoiceModal } from './GroupInvoiceModal';
 import { PreviewNotice } from './PreviewNotice';
 
 interface Props {
@@ -51,6 +53,11 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
   const [saving, setSaving] = useState(false);
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  // Agrupa factura se guarda solo, confirmado aparte: no es un borrador como el centro
+  // y el destino, porque cambia cómo se envía la orden entera.
+  const [askGroupInvoice, setAskGroupInvoice] = useState(false);
+  const [savingGroupInvoice, setSavingGroupInvoice] = useState(false);
+  const [groupInvoiceError, setGroupInvoiceError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,6 +105,30 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
     setDrafts(initialDrafts(order.items));
     setSaveErrors({});
     setSaveMessage(null);
+  }
+
+  /**
+   * Agrupa factura se guarda al confirmar, no con el resto: no es una corrección de
+   * línea sino un cambio en cómo se envía la orden entera, y el usuario ya vio en el
+   * modal qué implica.
+   */
+  async function onConfirmGroupInvoice(reasonNotes: string | null) {
+    if (!order) return;
+    setSavingGroupInvoice(true);
+    setGroupInvoiceError(null);
+    try {
+      const result = await changeGroupInvoice(order.guid, !order.groupInvoice, reasonNotes);
+      setOrder({ ...order, groupInvoice: result.groupInvoice });
+      setAskGroupInvoice(false);
+      setSaveMessage(
+        result.groupInvoice
+          ? 'Agrupa factura quedó en Sí: la orden ya no puede salir parcial.'
+          : 'Agrupa factura quedó en No: la orden puede salir parcial.',
+      );
+    } catch (err) {
+      setGroupInvoiceError(apiErrorMessage(err, 'No se pudo guardar agrupa factura.'));
+    }
+    setSavingGroupInvoice(false);
   }
 
   /**
@@ -240,16 +271,30 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
           <div className="bo-rs__fact">
             <dt title="Se factura junto con la orden de compra del cliente">Agrupa factura</dt>
             <dd>
-              {order.groupInvoice ? (
-                <>
+              <span className="bo-rs__gi-current">
+                {order.groupInvoice ? (
                   <span className="bo-rs__pill bo-rs__pill--warn">Sí</span>
-                  <span className="bo-rs__cell-sub">
-                    La orden no puede salir parcial: o va entera, o SAP la rebota.
-                  </span>
-                </>
-              ) : (
-                'No'
-              )}
+                ) : (
+                  <span className="bo-rs__pill">No</span>
+                )}
+                {editable && (
+                  <button
+                    type="button"
+                    className="bo-rs__link-button"
+                    onClick={() => {
+                      setGroupInvoiceError(null);
+                      setAskGroupInvoice(true);
+                    }}
+                  >
+                    Cambiar a {order.groupInvoice ? 'No' : 'Sí'}
+                  </button>
+                )}
+              </span>
+              <span className="bo-rs__cell-sub">
+                {order.groupInvoice
+                  ? 'La orden no puede salir parcial: o va entera, o SAP la rebota.'
+                  : 'La orden puede salir parcial: las líneas sin stock se dejan afuera.'}
+              </span>
             </dd>
           </div>
         </dl>
@@ -330,6 +375,16 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
           </header>
           <SapOrdersPanel sapOrders={sapOrders} />
         </section>
+      )}
+
+      {askGroupInvoice && (
+        <GroupInvoiceModal
+          current={order.groupInvoice}
+          saving={savingGroupInvoice}
+          error={groupInvoiceError}
+          onConfirm={(reasonNotes) => void onConfirmGroupInvoice(reasonNotes)}
+          onCancel={() => setAskGroupInvoice(false)}
+        />
       )}
 
       <div className="bo-rs__actions">

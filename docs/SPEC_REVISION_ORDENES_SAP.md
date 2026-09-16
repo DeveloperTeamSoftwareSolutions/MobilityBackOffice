@@ -1,6 +1,6 @@
 # Órdenes rechazadas por SAP — Spec
 
-> Última actualización: 2026-09-16 · Versión: 2.28.0
+> Última actualización: 2026-09-16 · Versión: 2.29.0
 > Estado: **bandeja, detalle, centro y destino por ítem y órdenes SAP conectados**
 > (requiere Middleware ≥ 1.348.0, PR #646). **El reenvío a SAP todavía no.**
 
@@ -50,22 +50,30 @@ vendedor, motivo e intentos. Búsqueda, orden y paginación en el servidor.
 
 **Detalle:**
 - Cabecera sin precios: cliente, vendedor, área de venta con nombres, fecha, centro de
-  cabecera y **si agrupa factura** (con factura agrupada la orden no puede salir parcial).
+  cabecera y **agrupa factura**, que es lo **único editable de la cabecera**.
+  - Cambiarlo **no** va con "Guardar cambios": se confirma aparte, con un aviso que
+    enumera qué implica, porque no corrige una línea sino cómo se envía la orden entera.
+  - Lo que dice el aviso está verificado en el código, no es interpretación:
+
+    | `GroupInvoice` | Qué pasa si una línea queda sin stock |
+    |---|---|
+    | **Sí** | La orden **no se envía a SAP**: rebota completa y no se crea ninguna orden SAP (`orderBusiness2Sap.js`). El vendedor tampoco puede elegir seguir sin los faltantes: MobilityIA le bloquea el envío (`sapDispatchFlow` → `blocked_group_invoice`). Si se cae una línea, la orden queda `Rejected` con su comentario |
+    | **No** | Las líneas sin stock **se filtran**, el total se recalcula y sale una orden SAP con el resto |
+
+  - El motivo es opcional y queda en la auditoría y en el hilo, donde lo ve el vendedor.
 - Motivo del rechazo **separado en tipo y mensaje**: el Middleware lo manda como
   `[E] texto` y une varias líneas con ` | `. El tipo cambia qué hacer (`E` hay que
   corregirla, `W` es un aviso), así que se muestra como etiqueta, no entre corchetes.
-- Ítems:
-  - **Destino:** selector con los destinos del área de venta de la orden. Se guarda con
-    **Guardar cambios**, línea por línea; si una falla, su error queda en la línea y el
-    cambio sigue pendiente.
-  - **Centro:** selector con los centros permitidos del cliente. Una línea sin centro
-    propio sale con el de cabecera.
 - **Dos pestañas**, con papeles distintos:
   - **Productos** — los ítems de la orden, que es como se va a volver a enviar. Se corrige
     el **centro** y el **destino** de cada línea, esté aceptada o rechazada la orden SAP en
-    la que cayó. **"Ver stock"** por producto abre un modal con el stock por centro y
-    almacén (disponible, en inspección, en tránsito), marcando los almacenes habilitados
-    para el cliente; sale de la misma fuente que ve el vendedor en MobilityIA.
+    la que cayó, y se guardan con **Guardar cambios**, línea por línea; si una falla, su
+    error queda en la línea y el cambio sigue pendiente. El destino se elige entre los del
+    área de venta de la orden; el centro, entre los permitidos del cliente, y una línea sin
+    centro propio sale con el de cabecera. **"Ver stock"** por producto abre un modal con el
+    stock por centro y almacén (disponible, en inspección, en tránsito), marcando los
+    almacenes habilitados para el cliente; sale de la misma fuente que ve el vendedor en
+    MobilityIA.
   - **Órdenes SAP** — **solo consulta**: cada fila de `SAPOrders` con su **centro**, su
     estado (aceptada, aceptada sin entrega, rechazada, sin respuesta), número de pedido y
     entrega, motivo y sus productos. Es el historial de cómo salió cada intento.
@@ -103,6 +111,7 @@ web  revision-sap.api.ts ──> api  /api/revision-sap/*  (rol RevisionSap)
 | `GET /api/revision-sap/orders/:guid/options?includeStock=1` | `GET /orders/:guid/options` | Centros, destinos y stock |
 | `PUT /api/revision-sap/orders/:guid/items/:itemGuid/destination` | `PUT …/destination` | Cambia el destino de una línea |
 | `PUT /api/revision-sap/orders/:guid/items/:itemGuid/center` | `PUT …/center` | Cambia el centro de una línea |
+| `PUT /api/revision-sap/orders/:guid/group-invoice` | `PUT …/group-invoice` | Agrupa factura (cabecera) |
 | `GET /api/revision-sap/orders/:guid/sap-orders` | `GET …/sap-orders` | Órdenes SAP de la orden |
 
 - Quién hace el cambio sale **del token**, nunca del body.
@@ -124,6 +133,7 @@ web  revision-sap.api.ts ──> api  /api/revision-sap/*  (rol RevisionSap)
 | `ReviewQueueList.tsx` | Tabla de la bandeja, con el motivo separado en tipo y mensaje |
 | `ReviewOrderDetail.tsx` | Cabecera, motivo, las dos pestañas, guardado y acciones |
 | `ReviewItemsTable.tsx` | Pestaña **Productos**: centro, destino y "Ver stock" por línea |
+| `GroupInvoiceModal.tsx` | Confirmación de agrupa factura, con lo que implica cada valor |
 | `SapOrdersPanel.tsx` | Pestaña **Órdenes SAP**: estado y productos de cada una, solo consulta |
 | `SapErrorMessage.tsx` | El motivo de SAP: tipo como etiqueta y mensaje |
 | `ProductStockModal.tsx` | Stock por centro y almacén de un producto |

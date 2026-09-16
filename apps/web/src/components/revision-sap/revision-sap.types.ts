@@ -219,6 +219,15 @@ export interface ProductStock {
   errors: { source: string; message: string }[];
 }
 
+/**
+ * Resultado de cambiar "agrupa factura": es de cabecera, así que no devuelve una línea.
+ */
+export interface GroupInvoiceChangeResult {
+  ok: boolean;
+  unchanged: boolean;
+  groupInvoice: boolean;
+}
+
 /** Una línea del motivo del rechazo: el tipo que devolvió SAP y su mensaje. */
 export interface SapErrorLine {
   /** `E`, `W`, … tal como lo manda SAP. `null` si el mensaje no traía tipo. */

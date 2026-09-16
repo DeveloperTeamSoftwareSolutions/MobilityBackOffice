@@ -12,6 +12,7 @@ import { middlewareBase, middlewareHeaders } from '../common/middleware-request'
 import {
   CenterChangeResult,
   DestinationChangeResult,
+  GroupInvoiceChangeResult,
   ProductStock,
   SapOrder,
   ReviewOptions,
@@ -180,6 +181,35 @@ export class RevisionSapClient {
     body: { centerCode: string; actorEmail: string; reasonNotes: string | null },
   ): Promise<CenterChangeResult> {
     return this.putLine(guid, itemGuid, 'center', body, 'No se pudo guardar el centro');
+  }
+
+  /**
+   * Cambia "agrupa factura", que es de CABECERA: decide si la orden puede salir parcial.
+   * No es un cambio de línea, así que no pasa por `putLine`.
+   */
+  async changeGroupInvoice(
+    guid: string,
+    body: { groupInvoice: boolean; actorEmail: string; reasonNotes: string | null },
+  ): Promise<GroupInvoiceChangeResult> {
+    try {
+      const res = await firstValueFrom(
+        this.http.put<MwData<GroupInvoiceChangeResult>>(
+          `${this.base()}${ORDER_PATH(guid)}/group-invoice`,
+          body,
+          { headers: this.headers(), timeout: DEFAULT_TIMEOUT },
+        ),
+      );
+      return res.data.data;
+    } catch (err) {
+      const status = httpStatus(err);
+      if (status === 404) throw new NotFoundException(mwMessage(err) ?? 'Orden no encontrada');
+      // 409: la orden salió de revisión mientras se editaba.
+      if (status === 409) throw new ConflictException(mwMessage(err) ?? 'La orden ya no está en revisión');
+      if (status === 400) {
+        throw new BadRequestException(mwMessage(err) ?? 'No se pudo guardar agrupa factura');
+      }
+      throw new ServiceUnavailableException('No se pudo guardar agrupa factura');
+    }
   }
 
   private async putLine<T>(

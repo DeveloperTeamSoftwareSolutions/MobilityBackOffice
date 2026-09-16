@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Órdenes rechazadas por SAP — estado</title>
+<style>
+  :root {
+    --bg: #f5f7f9;
+    --card: #ffffff;
+    --line: #dde3ea;
+    --ink: #17212c;
+    --soft: #4a5968;
+    --mute: #6f7d8c;
+    --ok: #1f7a4d;
+    --ok-bg: #e5f3ec;
+    --wait: #9a5b0b;
+    --wait-bg: #fbf1e3;
+    --block: #b3341f;
+    --block-bg: #fbe9e5;
+    --accent: #0d7a70;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #11171e; --card: #19222c; --line: #2b3847; --ink: #e7edf3; --soft: #b6c3d0; --mute: #8c9aaa;
+      --ok: #62c796; --ok-bg: #16302a; --wait: #e2a861; --wait-bg: #33281a; --block: #e8887a; --block-bg: #3a211d; --accent: #55c4b8;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 18px 64px; display: flex; flex-direction: column; gap: 28px; }
+  h1 { margin: 0; font-size: 28px; line-height: 1.2; }
+  h2 { margin: 0 0 12px; font-size: 20px; }
+  h3 { margin: 0 0 6px; font-size: 16px; }
+  p { margin: 0; }
+  .lede { color: var(--soft); margin-top: 8px; max-width: 70ch; }
+  .meta { color: var(--mute); font-size: 13px; margin-top: 6px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; }
+  ul { margin: 6px 0 0; padding-left: 20px; }
+  li { margin: 4px 0; }
+  code { font-family: Consolas, 'Cascadia Mono', monospace; font-size: 13px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  @media (min-width: 700px) { .grid { grid-template-columns: 1fr 1fr; } }
+  .box { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 999px; margin-bottom: 8px; }
+  .tag-ok { background: var(--ok-bg); color: var(--ok); }
+  .tag-wait { background: var(--wait-bg); color: var(--wait); }
+  .tag-block { background: var(--block-bg); color: var(--block); }
+  .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+  .step { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font-size: 14px; }
+  .arrow { color: var(--mute); }
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--mute); }
+  tr:last-child td { border-bottom: 0; }
+  .why { color: var(--soft); font-size: 14px; margin-top: 4px; }
+  .note { border-left: 3px solid var(--accent); padding: 8px 12px; background: var(--bg); border-radius: 0 6px 6px 0; font-size: 14px; color: var(--soft); margin-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+
+  <header>
+    <h1>Órdenes rechazadas por SAP</h1>
+    <p class="lede">Sección de BackOffice para revisar las órdenes que SAP no aceptó, corregir el centro y el destino de cada producto y, más adelante, reenviarlas.</p>
+    <p class="meta">Estado al 15/09/2026 · BackOffice 2.27.0 · Middleware 1.348.0</p>
+  </header>
+
+  <section>
+    <h2>Cómo funciona</h2>
+    <div class="flow">
+      <span class="step">El vendedor envía la orden a SAP</span><span class="arrow">→</span>
+      <span class="step">SAP la rechaza</span><span class="arrow">→</span>
+      <span class="step">La orden queda en revisión y el vendedor ya no puede reenviarla</span><span class="arrow">→</span>
+      <span class="step">BackOffice la corrige</span><span class="arrow">→</span>
+      <span class="step">BackOffice la reenvía <em>(pendiente)</em></span>
+    </div>
+    <p class="note">Una orden puede salir de SAP en <strong>varias órdenes SAP, una por centro de distribución</strong>. Por eso importa el centro de cada producto: si una orden tiene productos en dos centros, genera dos órdenes SAP, y cada una puede ser aceptada o rechazada por separado.</p>
+  </section>
+
+  <section>
+    <h2>Lo que ya funciona</h2>
+    <div class="grid">
+      <div class="box">
+        <span class="tag tag-ok">Hecho</span>
+        <h3>Acceso</h3>
+        <ul>
+          <li>Rol propio <code>MOBILITYBO_REVISION_SAP</code>. Solo ve esta sección.</li>
+          <li>El rol Usuario no la recibe por defecto: hay que asignarla a propósito.</li>
+          <li>Registrado en QATEST (script SQL 008).</li>
+        </ul>
+      </div>
+      <div class="box">
+        <span class="tag tag-ok">Hecho</span>
+        <h3>Bandeja</h3>
+        <ul>
+          <li>Lista las órdenes en revisión con el motivo del rechazo, cliente, área de venta, vendedor y cantidad de intentos.</li>
+          <li>Búsqueda por orden, cliente o vendedor; orden por columnas; paginación.</li>
+        </ul>
+      </div>
+      <div class="box">
+        <span class="tag tag-ok">Hecho</span>
+        <h3>Detalle de la orden</h3>
+        <ul>
+          <li>Cabecera <strong>sin precios, descuentos ni totales</strong>.</li>
+          <li>Área de venta con nombres: sociedad, canal y sector.</li>
+          <li>Motivo del último rechazo e intentos anteriores.</li>
+          <li>Si la orden ya salió de revisión, se muestra en solo lectura.</li>
+        </ul>
+      </div>
+      <div class="box">
+        <span class="tag tag-ok">Hecho</span>
+        <h3>Corregir cada producto</h3>
+        <ul>
+          <li><strong>Centro:</strong> solo los centros permitidos para el cliente.</li>
+          <li><strong>Destino:</strong> solo los destinos del área de venta de la orden.</li>
+          <li>Muestra en cuántas órdenes SAP saldría la orden con los centros elegidos.</li>
+          <li><strong>Guardar</strong> graba cada cambio. El Middleware vuelve a validar, registra quién lo hizo y deja un comentario en la orden.</li>
+        </ul>
+      </div>
+      <div class="box">
+        <span class="tag tag-ok">Hecho</span>
+        <h3>Pestaña “Órdenes SAP”</h3>
+        <ul>
+          <li>Muestra las órdenes SAP <strong>que ya se enviaron</strong> (no es una simulación).</li>
+          <li>Por cada una: centro, estado (aceptada, aceptada sin entrega, rechazada, sin respuesta), número de pedido y entrega, motivo y productos.</li>
+        </ul>
+      </div>
+      <div class="box">
+        <span class="tag tag-ok">Hecho</span>
+        <h3>Middleware</h3>
+        <ul>
+          <li>Endpoints de bandeja, detalle, opciones, cambio de centro, cambio de destino y órdenes SAP.</li>
+          <li>El reenvío de BackOffice ya no exige que la liberación de crédito esté dentro de las 24 h: la orden no vuelve a Créditos.</li>
+          <li>Endpoint nuevo de destinos por área de venta (reemplaza a la tabla deprecada).</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 style="margin-top:18px">Qué frena y qué solo avisa</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Situación</th><th>Resultado</th></tr></thead>
+        <tbody>
+          <tr><td>Destino vacío o de otra área de venta</td><td>No deja guardar</td></tr>
+          <tr><td>Centro elegido que no está permitido para el cliente</td><td>No deja guardar</td></tr>
+          <tr><td>Producto sin centro propio que hereda un centro de cabecera no permitido</td><td>Solo avisa</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="why">La pantalla no consulta stock: SAP lo revalida al recibir la orden.</p>
+  </section>
+
+  <section>
+    <h2>Lo que falta</h2>
+
+    <h3><span class="tag tag-block">Bloquea el reenvío</span></h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Tema</th><th>Qué pasa hoy</th><th>Por qué importa</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Partir la orden por centro</strong></td>
+            <td>A SAP viaja un solo pedido con el centro y el destino de la cabecera.</td>
+            <td>Sin esto, los centros que BackOffice corrige por producto no llegan a SAP.</td>
+          </tr>
+          <tr>
+            <td><strong>Aviso de productos sin stock</strong></td>
+            <td>En MobilityIA la pregunta "¿enviar sin estos productos?" aparece <em>después</em> de crear el pedido en SAP. En el reenvío de BackOffice, el Middleware saca los productos sin stock sin avisar.</td>
+            <td>Si el vendedor confirma, la orden se vuelve a enviar y puede quedar un pedido duplicado. El reenvío de BackOffice tiene que preguntar antes, igual que debería hacerlo MobilityIA.</td>
+          </tr>
+          <tr>
+            <td><strong>Pedidos duplicados</strong></td>
+            <td>El error "la orden ya existe en SAP" solo frena el reenvío de BackOffice y se basa en un único número de pedido.</td>
+            <td>No cubre el envío del vendedor, un corte de comunicación con el pedido ya creado, dos envíos al mismo tiempo ni una orden partida en varias órdenes SAP.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:18px"><span class="tag tag-wait">Pendiente en otras partes</span></h3>
+    <ul>
+      <li><strong>Estado “En revisión por BackOffice”:</strong> existe, pero todavía no se asigna. Hoy la orden rechazada sigue viéndose como “Procesada” y se reconoce por una marca interna.</li>
+      <li><strong>MobilityIA:</strong>
+        <ul>
+          <li>guardar el centro de cada producto (hoy queda vacío);</li>
+          <li>pestaña con las órdenes SAP de cada orden;</li>
+          <li>usar el endpoint nuevo de destinos por área.</li>
+        </ul>
+      </li>
+    </ul>
+
+    <h3 style="margin-top:18px"><span class="tag tag-wait">Por definir</span></h3>
+    <ul>
+      <li><strong>Orden que no se puede corregir</strong> (por ejemplo, un cliente bloqueado en SAP): BackOffice no puede rechazarla ni anularla. Hay que decidir si se cierra la revisión sin enviar o qué otro camino sigue.</li>
+      <li><strong>Correo a BackOffice</strong> cuando entra una orden a revisión: está decidido que llegue, falta definir a qué casilla.</li>
+    </ul>
+
+    <h3 style="margin-top:18px"><span class="tag tag-wait">Deploy</span></h3>
+    <ul>
+      <li>Revisar y mergear los cambios de Middleware y BackOffice (todavía en borrador).</li>
+      <li>En producción: aplicar la vista de destinos por área y el script SQL 008, y asignar el rol a quien opere la sección.</li>
+      <li>El Middleware tiene que tener configurada <code>MIDDLEWARE_API_KEY</code>: sin ella, estos endpoints quedan abiertos.</li>
+      <li>Orden: Middleware → SQL 008 y rol → BackOffice.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Para probar en QATEST</h2>
+    <p>Hay dos órdenes de prueba del cliente DEMASA (área 2800 / 10 / 10), marcadas como “PRUEBA BACKOFFICE”:</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Orden</th><th>Caso</th><th>Cómo se resuelve</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>ORD00005729</code></td>
+            <td>3 productos: dos en el centro 2801 (orden SAP aceptada) y uno en el 2802 (orden SAP rechazada: el producto no corresponde a ese centro).</td>
+            <td>Cambiar el producto 3 al centro 2801 y guardar.</td>
+          </tr>
+          <tr>
+            <td><code>ORD00005730</code></td>
+            <td>2 productos en el centro 2801, una orden SAP rechazada porque el destino no es del área de venta.</td>
+            <td>Elegir en los dos productos un destino del área (30000124 o 10019279) y guardar.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="why">Son datos de prueba: el número de pedido aceptado es ficticio. Se borran cuando terminen las pruebas.</p>
+  </section>
+
+</main>
+</body>
+</html>

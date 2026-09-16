@@ -9,7 +9,13 @@ describe('RevisionSapController', () => {
   let service: jest.Mocked<
     Pick<
       RevisionSapService,
-      'listQueue' | 'getOrder' | 'getOptions' | 'changeItemDestination' | 'changeItemCenter' | 'listSapOrders'
+      | 'listQueue'
+      | 'getOrder'
+      | 'getOptions'
+      | 'changeItemDestination'
+      | 'changeItemCenter'
+      | 'listSapOrders'
+      | 'getProductStock'
     >
   >;
   let controller: RevisionSapController;
@@ -22,6 +28,7 @@ describe('RevisionSapController', () => {
       changeItemDestination: jest.fn().mockResolvedValue({ ok: true, unchanged: false, item: {} }),
       changeItemCenter: jest.fn().mockResolvedValue({ ok: true, unchanged: false, item: {} }),
       listSapOrders: jest.fn().mockResolvedValue([]),
+      getProductStock: jest.fn().mockResolvedValue({ rows: [] }),
     };
     controller = new RevisionSapController(service as unknown as RevisionSapService);
   });
@@ -81,6 +88,15 @@ describe('RevisionSapController', () => {
       guid: 'g-1',
       guidApiLoginClients: null,
     });
+  });
+
+  it('stock: valida el guid y el codigo de producto', async () => {
+    await expect(controller.productStock('x', '1001917')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(controller.productStock(ORDER, "100'--")).rejects.toBeInstanceOf(BadRequestException);
+    expect(service.getProductStock).not.toHaveBeenCalled();
+
+    await controller.productStock(ORDER, ' 1001917 ');
+    expect(service.getProductStock).toHaveBeenCalledWith(ORDER, '1001917');
   });
 
   it('ordenes SAP: valida el guid antes de pedirlas', async () => {

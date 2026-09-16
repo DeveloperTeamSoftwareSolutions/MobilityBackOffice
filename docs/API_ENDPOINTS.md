@@ -148,7 +148,8 @@ trae precios. Ver `docs/SPEC_REVISION_ORDENES_SAP.md`.
 | GET | `/api/revision-sap/orders/:guid/options` | Centros permitidos del cliente, destinos del area de la orden y, con `includeStock=1`, el stock de SAP por producto y centro. Las fuentes que fallan vienen en `errors` |
 | PUT | `/api/revision-sap/orders/:guid/items/:itemGuid/destination` | Body `{ destinationCode, reasonNotes? }`. Quien hace el cambio sale del token. 400 destino invalido o fuera del area; 404 orden o linea inexistente; 409 la orden ya no esta en revision |
 | PUT | `/api/revision-sap/orders/:guid/items/:itemGuid/center` | Body `{ centerCode, reasonNotes? }`. 400 centro invalido o no permitido para el cliente; 404 orden o linea inexistente; 409 la orden ya no esta en revision. Un centro sin stock se acepta |
-| GET | `/api/revision-sap/orders/:guid/sap-orders` | Ordenes SAP de la orden con su estado (`accepted` \| `accepted_no_dispatch` \| `rejected` \| `no_response`) y sus items, sin precios |
+| GET | `/api/revision-sap/orders/:guid/sap-orders` | Ordenes SAP de la orden con su centro, su estado (`accepted` \| `accepted_no_dispatch` \| `rejected` \| `no_response`) y sus items, sin precios. Cada item trae la linea original (`itemGuid`, centro, destino) para poder corregirla |
+| GET | `/api/revision-sap/orders/:guid/stock/:productCode` | Stock de un producto de la orden por centro y almacen, marcando los habilitados para el cliente. 404 si el producto no es de esa orden |
 
 **Auditoria**: los cambios registran `REVISION_SAP_DESTINATION_CHANGE` y
 `REVISION_SAP_CENTER_CHANGE` (categoria `SapReview`) solo si el valor realmente cambio. Las

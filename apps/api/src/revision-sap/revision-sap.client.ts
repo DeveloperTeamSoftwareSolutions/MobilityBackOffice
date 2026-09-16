@@ -12,6 +12,7 @@ import { middlewareBase, middlewareHeaders } from '../common/middleware-request'
 import {
   CenterChangeResult,
   DestinationChangeResult,
+  ProductStock,
   SapOrder,
   ReviewOptions,
   ReviewOrder,
@@ -136,6 +137,26 @@ export class RevisionSapClient {
     } catch (err) {
       if (httpStatus(err) === 404) throw new NotFoundException('Orden no encontrada');
       throw new ServiceUnavailableException('Las órdenes SAP no están disponibles');
+    }
+  }
+
+  /** Stock de un producto de la orden, por centro y almacén. */
+  async getProductStock(guid: string, productCode: string): Promise<ProductStock> {
+    try {
+      const res = await firstValueFrom(
+        this.http.get<MwData<ProductStock>>(
+          `${this.base()}${ORDER_PATH(guid)}/stock/${encodeURIComponent(productCode)}`,
+          { headers: this.headers(), timeout: DEFAULT_TIMEOUT },
+        ),
+      );
+      return res.data.data;
+    } catch (err) {
+      const status = httpStatus(err);
+      if (status === 404) {
+        throw new NotFoundException(mwMessage(err) ?? 'El producto no es de esta orden');
+      }
+      if (status === 400) throw new BadRequestException(mwMessage(err) ?? 'Producto inválido');
+      throw new ServiceUnavailableException('El stock no está disponible');
     }
   }
 

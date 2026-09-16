@@ -6,8 +6,40 @@ import {
   ReviewCatalogs,
   ReviewItem,
   SalesArea,
+  SapErrorLine,
   StockByCenter,
 } from './revision-sap.types';
+
+/**
+ * El motivo que manda SAP viene como `[E] mensaje`, y con varias líneas unidas por ` | `.
+ * Separarlo importa porque el tipo cambia qué hacer: una `E` hay que corregirla, una `W`
+ * es un aviso que puede acompañar a un pedido creado.
+ */
+export function parseSapError(error: string | null): SapErrorLine[] {
+  if (!error) return [];
+  return error
+    .split('|')
+    .map((parte) => parte.trim())
+    .filter(Boolean)
+    .map((parte) => {
+      const m = /^\[([^\]]{1,8})\]\s*(.*)$/.exec(parte);
+      if (!m) return { type: null, message: parte };
+      return { type: m[1].trim().toUpperCase(), message: m[2].trim() || parte };
+    });
+}
+
+/** Qué significa cada tipo de SAP, para no mostrar solo una letra suelta. */
+export function sapErrorTypeLabel(type: string | null): string | null {
+  if (!type) return null;
+  const labels: Record<string, string> = {
+    E: 'Error',
+    A: 'Cancelación',
+    W: 'Aviso',
+    I: 'Información',
+    S: 'Correcto',
+  };
+  return labels[type] ?? type;
+}
 
 export function formatSalesArea(area: SalesArea): string {
   return [area.companyCode, area.channelCode, area.sectorCode]

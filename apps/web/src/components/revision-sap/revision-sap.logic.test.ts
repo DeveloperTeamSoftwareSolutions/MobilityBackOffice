@@ -5,7 +5,9 @@ import {
   initialDrafts,
   itemWarnings,
   lineChanges,
+  parseSapError,
   salesAreaParts,
+  sapErrorTypeLabel,
   sapOrdersByCenter,
   stockFor,
 } from './revision-sap.logic';
@@ -76,6 +78,30 @@ describe('itemWarnings', () => {
   it('si el stock no se sabe, no inventa un aviso de stock', () => {
     expect(kinds(item(), draft('2802', '30000124'), '2800', { ...catalogs, stock: null })).toEqual([]);
     expect(kinds(item({ productCode: 'SIN-RESPUESTA' }), draft('2802', '30000124'), '2800')).toEqual([]);
+  });
+});
+
+describe('motivo del rechazo de SAP', () => {
+  it('separa el tipo del mensaje y parte las líneas que SAP une con |', () => {
+    expect(
+      parseSapError('[E] El material 1200135 no está ampliado. | [W] Verificá la extensión.'),
+    ).toEqual([
+      { type: 'E', message: 'El material 1200135 no está ampliado.' },
+      { type: 'W', message: 'Verificá la extensión.' },
+    ]);
+  });
+
+  it('un mensaje sin tipo se muestra igual, sin inventar uno', () => {
+    expect(parseSapError('SAP no contestó')).toEqual([{ type: null, message: 'SAP no contestó' }]);
+    expect(parseSapError(null)).toEqual([]);
+    expect(parseSapError('   ')).toEqual([]);
+  });
+
+  it('el tipo se traduce a algo legible', () => {
+    expect(sapErrorTypeLabel('E')).toBe('Error');
+    expect(sapErrorTypeLabel('W')).toBe('Aviso');
+    expect(sapErrorTypeLabel('X')).toBe('X');
+    expect(sapErrorTypeLabel(null)).toBeNull();
   });
 });
 

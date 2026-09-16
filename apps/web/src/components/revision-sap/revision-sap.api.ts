@@ -2,6 +2,7 @@ import axios from 'axios';
 import { httpClient } from '../../api/httpClient';
 import {
   Pagination,
+  ProductStock,
   ReviewCatalogs,
   ReviewItem,
   ReviewOrderDetail,
@@ -86,6 +87,17 @@ export async function changeItemCenter(
     { centerCode },
   );
   return res.data.data.item;
+}
+
+/** Stock de un producto de la orden, por centro y almacén. */
+export async function getProductStock(
+  guid: string,
+  productCode: string,
+): Promise<ProductStock> {
+  const res = await httpClient.get<ApiData<ProductStock>>(
+    `/api/revision-sap/orders/${encodeURIComponent(guid)}/stock/${encodeURIComponent(productCode)}`,
+  );
+  return res.data.data;
 }
 
 /** Órdenes SAP de la orden, con el estado de cada una y sus ítems. */

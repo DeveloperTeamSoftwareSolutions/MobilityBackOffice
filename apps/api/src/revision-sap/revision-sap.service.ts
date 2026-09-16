@@ -6,6 +6,7 @@ import { RevisionSapClient } from './revision-sap.client';
 import {
   CenterChangeResult,
   DestinationChangeResult,
+  ProductStock,
   SapOrder,
   ReviewOptions,
   ReviewOrder,
@@ -43,6 +44,11 @@ export class RevisionSapService {
   /** Órdenes SAP de la orden. Es una LECTURA: no se audita. */
   listSapOrders(guid: string): Promise<SapOrder[]> {
     return this.client.listSapOrders(guid);
+  }
+
+  /** Stock de un producto por centro y almacén. Es una LECTURA: no se audita. */
+  getProductStock(guid: string, productCode: string): Promise<ProductStock> {
+    return this.client.getProductStock(guid, productCode);
   }
 
   /**

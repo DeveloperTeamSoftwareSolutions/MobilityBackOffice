@@ -22,6 +22,7 @@ const DEFAULT_LIMIT = 20;
 const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DESTINATION_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const CENTER_RE = /^[A-Za-z0-9]{1,8}$/;
+const PRODUCT_RE = /^[A-Za-z0-9._-]{1,64}$/;
 const MAX_REASON = 500;
 
 /**
@@ -78,6 +79,19 @@ export class RevisionSapController {
   @Get('orders/:guid/sap-orders')
   async sapOrders(@Param('guid') guid: string) {
     const data = await this.service.listSapOrders(this.parseGuid(guid, 'guid'));
+    return { success: true, data };
+  }
+
+  // GET /api/revision-sap/orders/:guid/stock/:productCode — stock por centro y almacén
+  @Get('orders/:guid/stock/:productCode')
+  async productStock(
+    @Param('guid') guid: string,
+    @Param('productCode') productCode: string,
+  ) {
+    const data = await this.service.getProductStock(
+      this.parseGuid(guid, 'guid'),
+      this.parseCode(productCode, PRODUCT_RE, 'productCode inválido'),
+    );
     return { success: true, data };
   }
 

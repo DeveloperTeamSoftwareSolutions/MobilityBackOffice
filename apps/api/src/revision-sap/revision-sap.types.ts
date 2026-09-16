@@ -104,6 +104,8 @@ export interface ReviewOrder {
   destination: string | null;
   orderDate: string | null;
   cancelledAt: string | null;
+  /** Agrupa factura con la orden de compra del cliente: no puede salir parcial. */
+  groupInvoice: boolean;
   sap: {
     orderNumber: string | null;
     dispatchNumber: string | null;
@@ -150,6 +152,7 @@ export interface SapOrder {
   guid: string;
   status: SapOrderStatus;
   statusCode: string | null;
+  /** Centro del que sale esta orden SAP: con la orden partida, distingue una de otra. */
   centerCode: string | null;
   centerName: string | null;
   attemptAt: string | null;
@@ -157,11 +160,38 @@ export interface SapOrder {
   sapDispatchNumber: string | null;
   sapOrderCreatedAt: string | null;
   error: string | null;
-  items: {
-    lineNumber: number;
-    productCode: string;
-    description: string | null;
-    quantity: number | null;
+  items: SapOrderItem[];
+}
+
+/** Ítem de una orden SAP, con la línea de la orden original para poder corregirla. */
+export interface SapOrderItem {
+  lineNumber: number;
+  productCode: string;
+  description: string | null;
+  quantity: number | null;
+  unitOfMeasure: string | null;
+  itemGuid: string | null;
+  centerCode: string | null;
+  deliveryDestinationCode: string | null;
+  deliveryDestinationName: string | null;
+}
+
+/** Stock de un producto por centro y almacén. */
+export interface ProductStock {
+  productCode: string;
+  companyCode: string | null;
+  unitOfMeasure: string | null;
+  totals: { available: number; availableForCustomer: number; centers: number };
+  rows: {
+    centerCode: string | null;
+    centerName: string | null;
+    warehouseCode: string | null;
+    warehouseName: string | null;
     unitOfMeasure: string | null;
+    available: number;
+    inInspection: number;
+    inTransit: number;
+    allowedForCustomer: boolean;
   }[];
+  errors: { source: string; message: string }[];
 }

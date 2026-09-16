@@ -49,17 +49,28 @@ MobilityIA la deja en solo lectura y el vendedor ya no puede reenviarla. BackOff
 vendedor, motivo e intentos. Búsqueda, orden y paginación en el servidor.
 
 **Detalle:**
-- Cabecera sin precios: cliente, vendedor, área, fecha, centro y destino de cabecera.
-- Motivo del rechazo: el último a la vista, los anteriores plegados.
+- Cabecera sin precios: cliente, vendedor, área de venta con nombres, fecha, centro de
+  cabecera y **si agrupa factura** (con factura agrupada la orden no puede salir parcial).
+- Motivo del rechazo **separado en tipo y mensaje**: el Middleware lo manda como
+  `[E] texto` y une varias líneas con ` | `. El tipo cambia qué hacer (`E` hay que
+  corregirla, `W` es un aviso), así que se muestra como etiqueta, no entre corchetes.
 - Ítems:
   - **Destino:** selector con los destinos del área de venta de la orden. Se guarda con
     **Guardar cambios**, línea por línea; si una falla, su error queda en la línea y el
     cambio sigue pendiente.
-  - **Centro:** selector con los centros permitidos del cliente y el stock de ese producto
-    en cada uno. Una línea sin centro propio sale con el de cabecera. La tarjeta dice en
-    cuántas órdenes SAP saldría la orden (una por centro distinto).
-- **Pestaña "Órdenes SAP":** cada fila de `SAPOrders` con su estado (aceptada, aceptada sin
-  entrega, rechazada, sin respuesta), número de pedido y entrega, motivo y los ítems.
+  - **Centro:** selector con los centros permitidos del cliente. Una línea sin centro
+    propio sale con el de cabecera.
+- **Una sola vista de productos: "Órdenes SAP y sus productos".** Cada fila de `SAPOrders`
+  con su **centro**, su estado (aceptada, aceptada sin entrega, rechazada, sin respuesta),
+  número de pedido y entrega, motivo y sus productos.
+  - **Solo en las rechazadas** se corrigen centro y destino de cada producto: son las que
+    hay que volver a mandar.
+  - **Reenviar es por orden SAP**, no por la orden entera: cada orden SAP es lo que SAP
+    acepta o rechaza. El botón vive en cada rechazada *(deshabilitado hasta que el
+    Middleware parta la orden por centro)*.
+  - **"Ver stock"** por producto abre un modal con el stock por centro y almacén
+    (disponible, en inspección, en tránsito), marcando los almacenes habilitados para el
+    cliente. Sale de la misma fuente que ve el vendedor en MobilityIA.
 - Stock: la pantalla pide primero centros y destinos (inmediato) y después el stock de
   SAP, que puede tardar o fallar sin trabar el resto.
 - **Reenviar a SAP:** abre la confirmación con el botón de confirmar deshabilitado. No se

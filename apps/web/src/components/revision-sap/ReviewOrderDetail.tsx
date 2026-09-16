@@ -6,57 +6,57 @@ import {
   changeItemDestination,
   getReviewCatalogs,
   getReviewOrder,
+  listSapOrders,
 } from './revision-sap.api';
 import {
   blockingItemCount,
   initialDrafts,
   lineChanges,
   salesAreaParts,
-  sapOrdersByCenter,
 } from './revision-sap.logic';
 import {
   LineDraft,
   LineDrafts,
   ReviewCatalogs,
   ReviewOrderDetail as Detail,
+  SapOrder,
 } from './revision-sap.types';
-import { ReviewItemsTable } from './ReviewItemsTable';
-import { ResendConfirmModal } from './ResendConfirmModal';
-import { PreviewNotice } from './PreviewNotice';
 import { SapOrdersPanel } from './SapOrdersPanel';
+import { SapErrorMessage } from './SapErrorMessage';
+import { PreviewNotice } from './PreviewNotice';
 
 interface Props {
   guid: string;
   onBack: () => void;
 }
 
-type Tab = 'items' | 'sap-orders';
-
-/** Detalle de una orden en revisión: cabecera, motivo del rechazo, ítems y órdenes SAP. */
+/**
+ * Detalle de una orden en revisión.
+ *
+ * Todo lo que se corrige vive dentro de las órdenes SAP: una por centro, que es la
+ * unidad que SAP acepta o rechaza. La cabecera solo da el contexto.
+ */
 export function ReviewOrderDetail({ guid, onBack }: Props) {
   const [order, setOrder] = useState<Detail | null>(null);
   const [catalogs, setCatalogs] = useState<ReviewCatalogs | null>(null);
+  const [sapOrders, setSapOrders] = useState<SapOrder[]>([]);
   const [drafts, setDrafts] = useState<LineDrafts>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [tab, setTab] = useState<Tab>('items');
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  // La orden y sus opciones (centros permitidos y destinos del área). El stock de SAP no
-  // se consulta desde esta pantalla: SAP lo revalida al enviar.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    Promise.all([getReviewOrder(guid), getReviewCatalogs(guid, false)])
-      .then(([detail, options]) => {
+    Promise.all([getReviewOrder(guid), getReviewCatalogs(guid, false), listSapOrders(guid)])
+      .then(([detail, options, sap]) => {
         if (cancelled) return;
         setOrder(detail);
         setCatalogs(options);
+        setSapOrders(sap);
         setDrafts(initialDrafts(detail.items));
       })
       .catch((err) => {
@@ -75,10 +75,6 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
     () =>
       order && catalogs ? blockingItemCount(order.items, drafts, order.centerCode, catalogs) : 0,
     [order, catalogs, drafts],
-  );
-  const groups = useMemo(
-    () => (order ? sapOrdersByCenter(order.items, drafts, order.centerCode) : []),
-    [order, drafts],
   );
 
   const onChange = useCallback((itemGuid: string, next: LineDraft) => {
@@ -101,7 +97,7 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
 
   /**
    * Guarda cambio por cambio. Uno que falla no frena a los demás: su error queda al lado
-   * de la línea y ese cambio sigue pendiente para corregirlo y volver a guardar.
+   * del producto y ese cambio sigue pendiente para corregirlo y volver a guardar.
    */
   async function onSave() {
     if (!order || changes.length === 0) return;
@@ -120,13 +116,16 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
         saved += 1;
       } catch (err) {
         const fallback =
-          change.field === 'center' ? 'No se pudo guardar el centro.' : 'No se pudo guardar el destino.';
+          change.field === 'center'
+            ? 'No se pudo guardar el centro.'
+            : 'No se pudo guardar el destino.';
         errors[change.item.guid] = apiErrorMessage(err, fallback);
       }
     }
     try {
-      const fresh = await getReviewOrder(order.guid);
+      const [fresh, sap] = await Promise.all([getReviewOrder(order.guid), listSapOrders(order.guid)]);
       setOrder(fresh);
+      setSapOrders(sap);
       setDrafts((prev) => {
         const next = initialDrafts(fresh.items);
         for (const itemGuid of Object.keys(errors)) {
@@ -134,7 +133,6 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
         }
         return next;
       });
-      setRefreshKey((n) => n + 1);
     } catch (err) {
       setError(apiErrorMessage(err, 'Se guardaron los cambios, pero no se pudo recargar la orden.'));
     }
@@ -143,7 +141,9 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
     if (saved > 0) {
       setSaveMessage(
         (saved === 1 ? 'Se guardó 1 cambio.' : `Se guardaron ${saved} cambios.`) +
-          (failed > 0 ? ` ${failed === 1 ? '1 línea no' : `${failed} líneas no`} se pudo guardar.` : ''),
+          (failed > 0
+            ? ` ${failed === 1 ? '1 producto no' : `${failed} productos no`} se pudo guardar.`
+            : ''),
       );
     }
     setSaving(false);
@@ -161,19 +161,15 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
     return (
       <>
         {backBar}
-        {error ? (
-          <p className="bo-rs__error">{error}</p>
-        ) : (
-          <p className="bo-rs__empty">Cargando orden…</p>
-        )}
+        {error ? <p className="bo-rs__error">{error}</p> : <p className="bo-rs__empty">Cargando orden…</p>}
       </>
     );
   }
 
   const editable = order.backoffice.inReview && !saving;
   const lastError = order.sap.lastError ?? order.sapAttempts.find((a) => a.error)?.error ?? null;
-  const previousAttempts = order.sapAttempts.filter((a) => a.error).slice(1);
   const otherErrors = catalogs.errors.filter((e) => e.source !== 'stock');
+  const rechazadas = sapOrders.filter((s) => s.status === 'rejected').length;
 
   return (
     <>
@@ -237,8 +233,19 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
             </dd>
           </div>
           <div className="bo-rs__fact">
-            <dt>Destino de cabecera</dt>
-            <dd className="bo-rs__mono">{order.destination ?? '—'}</dd>
+            <dt title="Se factura junto con la orden de compra del cliente">Agrupa factura</dt>
+            <dd>
+              {order.groupInvoice ? (
+                <>
+                  <span className="bo-rs__pill bo-rs__pill--warn">Sí</span>
+                  <span className="bo-rs__cell-sub">
+                    La orden no puede salir parcial: o va entera, o SAP la rebota.
+                  </span>
+                </>
+              ) : (
+                'No'
+              )}
+            </dd>
           </div>
         </dl>
       </section>
@@ -253,131 +260,76 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
             {order.sap.lastAttemptAt ? ` · último ${formatDateTime(order.sap.lastAttemptAt)}` : ''}
           </span>
         </header>
-        <p className="bo-rs__sap-message">{lastError ?? 'SAP no devolvió un motivo.'}</p>
-        {previousAttempts.length > 0 && (
-          <details className="bo-rs__attempts">
-            <summary>Intentos anteriores ({previousAttempts.length})</summary>
-            <ol className="bo-rs__attempt-list">
-              {previousAttempts.map((attempt) => (
-                <li key={attempt.guid}>
-                  <span className="bo-rs__cell--muted">{formatDateTime(attempt.attemptAt)}</span>{' '}
-                  {attempt.error}
-                </li>
-              ))}
-            </ol>
-          </details>
-        )}
+        <SapErrorMessage error={lastError} />
       </section>
 
-      <div className="bo-rs__tabs" role="tablist" aria-label="Contenido de la orden">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'items'}
-          className={`bo-rs__tab${tab === 'items' ? ' bo-rs__tab--active' : ''}`}
-          onClick={() => setTab('items')}
-        >
-          Ítems
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'sap-orders'}
-          className={`bo-rs__tab${tab === 'sap-orders' ? ' bo-rs__tab--active' : ''}`}
-          onClick={() => setTab('sap-orders')}
-        >
-          Órdenes SAP
-        </button>
-      </div>
-
-      {tab === 'sap-orders' ? (
-        <section className="bo-rs__card" aria-label="Órdenes SAP">
-          <SapOrdersPanel orderGuid={order.guid} refreshKey={refreshKey} />
-        </section>
-      ) : (
-        <>
-          <section className="bo-rs__card" aria-labelledby="bo-rs-items-title">
-            <header className="bo-rs__card-head">
-              <h3 id="bo-rs-items-title" className="bo-rs__card-title">
-                Ítems de la orden
-              </h3>
-              <span className="bo-rs__cell--muted" aria-live="polite">
-                {groups.length === 1
-                  ? 'Si se reenvía así, sale en 1 orden SAP'
-                  : `Si se reenvía así, sale en ${groups.length} órdenes SAP, una por centro`}
-              </span>
-            </header>
-            {otherErrors.length > 0 && (
-              <p className="bo-rs__error">
-                No se pudo cargar todo lo necesario para corregir la orden:{' '}
-                {otherErrors.map((e) => e.message).join(' · ')}
-              </p>
-            )}
-            <ReviewItemsTable
-              items={order.items}
-              headerCenterCode={order.centerCode}
-              drafts={drafts}
-              catalogs={catalogs}
-              editable={editable}
-              saveErrors={saveErrors}
-              onChange={onChange}
-            />
-          </section>
-
-          <div className="bo-rs__actions">
-            <p className="bo-rs__actions-status" aria-live="polite">
-              {saveMessage ??
-                (changes.length === 0
-                  ? 'Sin cambios'
-                  : changes.length === 1
-                    ? '1 cambio sin guardar'
-                    : `${changes.length} cambios sin guardar`)}
-              {blocking > 0 && (
-                <span className="bo-rs__actions-blocking">
-                  {' '}
-                  · {blocking === 1 ? '1 ítem necesita corrección' : `${blocking} ítems necesitan corrección`}
-                </span>
-              )}
-            </p>
-            <div className="bo-rs__actions-buttons">
-              <button
-                type="button"
-                className="bo-rs__button bo-rs__button--ghost"
-                disabled={changes.length === 0 || saving}
-                onClick={onDiscard}
-              >
-                Descartar cambios
-              </button>
-              <button
-                type="button"
-                className="bo-rs__button bo-rs__button--ghost"
-                disabled={changes.length === 0 || blocking > 0 || !editable}
-                onClick={() => void onSave()}
-              >
-                {saving ? 'Guardando…' : 'Guardar cambios'}
-              </button>
-              <button
-                type="button"
-                className="bo-rs__button"
-                disabled={changes.length > 0 || blocking > 0 || !order.backoffice.inReview}
-                title={changes.length > 0 ? 'Guardá los cambios antes de reenviar' : undefined}
-                onClick={() => setConfirmOpen(true)}
-              >
-                Reenviar a SAP
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {confirmOpen && (
-        <ResendConfirmModal
-          orderNumber={order.orderNumber}
-          itemCount={order.items.length}
-          sapOrderCount={groups.length}
-          onClose={() => setConfirmOpen(false)}
+      <section className="bo-rs__card" aria-labelledby="bo-rs-sap-orders-title">
+        <header className="bo-rs__card-head">
+          <h3 id="bo-rs-sap-orders-title" className="bo-rs__card-title">
+            Órdenes SAP y sus productos
+          </h3>
+          <span className="bo-rs__cell--muted">
+            {sapOrders.length === 1 ? '1 orden SAP' : `${sapOrders.length} órdenes SAP`}
+            {rechazadas > 0 &&
+              ` · ${rechazadas === 1 ? '1 rechazada' : `${rechazadas} rechazadas`}: corregí ahí el centro y el destino`}
+          </span>
+        </header>
+        {otherErrors.length > 0 && (
+          <p className="bo-rs__error">
+            No se pudo cargar todo lo necesario para corregir la orden:{' '}
+            {otherErrors.map((e) => e.message).join(' · ')}
+          </p>
+        )}
+        <SapOrdersPanel
+          orderGuid={order.guid}
+          sapOrders={sapOrders}
+          items={order.items}
+          headerCenterCode={order.centerCode}
+          drafts={drafts}
+          catalogs={catalogs}
+          editable={editable}
+          saveErrors={saveErrors}
+          onChange={onChange}
         />
-      )}
+      </section>
+
+      <div className="bo-rs__actions">
+        <p className="bo-rs__actions-status" aria-live="polite">
+          {saveMessage ??
+            (changes.length === 0
+              ? 'Sin cambios'
+              : changes.length === 1
+                ? '1 cambio sin guardar'
+                : `${changes.length} cambios sin guardar`)}
+          {blocking > 0 && (
+            <span className="bo-rs__actions-blocking">
+              {' '}
+              ·{' '}
+              {blocking === 1
+                ? '1 producto necesita corrección'
+                : `${blocking} productos necesitan corrección`}
+            </span>
+          )}
+        </p>
+        <div className="bo-rs__actions-buttons">
+          <button
+            type="button"
+            className="bo-rs__button bo-rs__button--ghost"
+            disabled={changes.length === 0 || saving}
+            onClick={onDiscard}
+          >
+            Descartar cambios
+          </button>
+          <button
+            type="button"
+            className="bo-rs__button"
+            disabled={changes.length === 0 || blocking > 0 || !editable}
+            onClick={() => void onSave()}
+          >
+            {saving ? 'Guardando…' : 'Guardar cambios'}
+          </button>
+        </div>
+      </div>
     </>
   );
 }

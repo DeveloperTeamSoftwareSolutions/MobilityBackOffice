@@ -81,6 +81,8 @@ export interface ReviewOrderDetail {
   destination: string | null;
   orderDate: string | null;
   cancelledAt: string | null;
+  /** Agrupa factura con la orden de compra del cliente: no puede salir parcial. */
+  groupInvoice: boolean;
   sap: {
     orderNumber: string | null;
     lastError: string | null;
@@ -175,11 +177,51 @@ export interface SapOrder {
   sapOrderNumber: string | null;
   sapDispatchNumber: string | null;
   error: string | null;
-  items: {
-    lineNumber: number;
-    productCode: string;
-    description: string | null;
-    quantity: number | null;
-    unitOfMeasure: string | null;
-  }[];
+  items: SapOrderItem[];
+}
+
+/**
+ * Producto de una orden SAP. Trae además la línea de la orden original, que es lo que
+ * permite corregir centro y destino sin salir de la orden SAP rechazada.
+ */
+export interface SapOrderItem {
+  lineNumber: number;
+  productCode: string;
+  description: string | null;
+  quantity: number | null;
+  unitOfMeasure: string | null;
+  itemGuid: string | null;
+  centerCode: string | null;
+  deliveryDestinationCode: string | null;
+  deliveryDestinationName: string | null;
+}
+
+/** Una fila del stock: un almacén de un centro. */
+export interface ProductStockRow {
+  centerCode: string | null;
+  centerName: string | null;
+  warehouseCode: string | null;
+  warehouseName: string | null;
+  unitOfMeasure: string | null;
+  available: number;
+  inInspection: number;
+  inTransit: number;
+  /** El cliente puede recibir desde este almacén. */
+  allowedForCustomer: boolean;
+}
+
+export interface ProductStock {
+  productCode: string;
+  companyCode: string | null;
+  unitOfMeasure: string | null;
+  totals: { available: number; availableForCustomer: number; centers: number };
+  rows: ProductStockRow[];
+  errors: { source: string; message: string }[];
+}
+
+/** Una línea del motivo del rechazo: el tipo que devolvió SAP y su mensaje. */
+export interface SapErrorLine {
+  /** `E`, `W`, … tal como lo manda SAP. `null` si el mensaje no traía tipo. */
+  type: string | null;
+  message: string;
 }

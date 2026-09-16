@@ -120,10 +120,11 @@ web  revision-sap.api.ts ──> api  /api/revision-sap/*  (rol RevisionSap)
 | Archivo | Qué hace |
 |---|---|
 | `RevisionSapPanel.tsx` | Contenedor: bandeja o detalle |
-| `ReviewQueueList.tsx` | Tabla de la bandeja, con orden y paginación |
-| `ReviewOrderDetail.tsx` | Cabecera, motivo, ítems, guardado y acciones |
-| `ReviewItemsTable.tsx` | Ítems: centro con stock y selector de destino |
-| `ResendConfirmModal.tsx` | Confirmación del reenvío (deshabilitada) |
+| `ReviewQueueList.tsx` | Tabla de la bandeja, con el motivo separado en tipo y mensaje |
+| `ReviewOrderDetail.tsx` | Cabecera, motivo, guardado y acciones |
+| `SapOrdersPanel.tsx` | Órdenes SAP con sus productos; en las rechazadas, centro y destino editables |
+| `SapErrorMessage.tsx` | El motivo de SAP: tipo como etiqueta y mensaje |
+| `ProductStockModal.tsx` | Stock por centro y almacén de un producto |
 | `PreviewNotice.tsx` | Aviso de lo que todavía no está conectado |
 | `revision-sap.api.ts` | Llamadas a la API |
 | `revision-sap.logic.ts` | Reglas puras: cambios, avisos, stock |

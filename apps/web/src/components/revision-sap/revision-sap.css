@@ -375,9 +375,15 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.bo-rs__reason-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  max-width: 360px;
+}
 .bo-rs__reason {
   display: -webkit-box;
-  max-width: 360px;
   overflow: hidden;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;

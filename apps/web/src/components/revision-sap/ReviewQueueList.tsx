@@ -1,5 +1,5 @@
 import { formatDateTime } from '../soporte/DocumentHeader';
-import { formatSalesArea, salesAreaNames } from './revision-sap.logic';
+import { formatSalesArea, parseSapError, salesAreaNames, sapErrorTypeLabel } from './revision-sap.logic';
 import { Pagination, ReviewQueueEntry, SortDir, SortField } from './revision-sap.types';
 
 const COLUMNS: { key: string; label: string; sort: SortField | null; numeric?: boolean }[] = [
@@ -10,6 +10,38 @@ const COLUMNS: { key: string; label: string; sort: SortField | null; numeric?: b
   { key: 'reason', label: 'Motivo del rechazo', sort: 'sapLastAttemptAt' },
   { key: 'attempts', label: 'Intentos', sort: null, numeric: true },
 ];
+
+/**
+ * El motivo en una celda: el tipo como etiqueta y el primer mensaje. SAP suele mandar
+ * varias líneas; en la tabla entra la que importa —la de error— y el resto se cuenta.
+ * El texto completo queda en el `title`, para no perderlo.
+ */
+function ReasonCell({ error }: { error: string | null }) {
+  const lines = parseSapError(error);
+  if (lines.length === 0) {
+    return <span className="bo-rs__cell--muted">SAP no devolvió un motivo</span>;
+  }
+  const principal = lines.find((l) => l.type === 'E' || l.type === 'A') ?? lines[0];
+  const resto = lines.length - 1;
+
+  return (
+    <span className="bo-rs__reason-cell" title={lines.map((l) => (l.type ? `[${l.type}] ${l.message}` : l.message)).join('\n')}>
+      {principal.type && (
+        <span
+          className={`bo-rs__sap-type bo-rs__sap-type--${principal.type === 'E' || principal.type === 'A' ? 'error' : principal.type === 'W' ? 'warn' : 'info'}`}
+        >
+          {sapErrorTypeLabel(principal.type)}
+        </span>
+      )}
+      <span className="bo-rs__reason">{principal.message}</span>
+      {resto > 0 && (
+        <span className="bo-rs__cell-sub">
+          {resto === 1 ? '+1 mensaje más' : `+${resto} mensajes más`}
+        </span>
+      )}
+    </span>
+  );
+}
 
 interface Props {
   entries: ReviewQueueEntry[];
@@ -110,9 +142,7 @@ export function ReviewQueueList({
                 </td>
                 <td className="bo-rs__cell--muted">{entry.sellerEmail ?? '—'}</td>
                 <td>
-                  <span className="bo-rs__reason" title={entry.sapLastError ?? undefined}>
-                    {entry.sapLastError ?? 'SAP no devolvió un motivo'}
-                  </span>
+                  <ReasonCell error={entry.sapLastError} />
                 </td>
                 <td className="bo-rs__cell--number">{entry.attempts}</td>
               </tr>

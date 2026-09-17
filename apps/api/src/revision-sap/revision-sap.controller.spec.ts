@@ -45,7 +45,25 @@ describe('RevisionSapController', () => {
       search: 'ORD',
       sortBy: 'sapLastAttemptAt',
       sortDir: 'DESC',
+      view: 'pending',
     });
+  });
+
+  /**
+   * `view` es lo UNICO que separa pendientes de resueltas. Si dejara de viajar, el
+   * middleware devuelve pendientes y las dos pestañas muestran lo mismo SIN fallar:
+   * por eso se fija que llegue, y que una vista inventada caiga en pendientes.
+   */
+  it('la vista viaja al servicio, y una desconocida cae en pendientes', async () => {
+    await controller.list(undefined, undefined, undefined, undefined, undefined, 'resolved');
+    expect(service.listQueue).toHaveBeenLastCalledWith(
+      expect.objectContaining({ view: 'resolved' }),
+    );
+
+    await controller.list(undefined, undefined, undefined, undefined, undefined, 'todas');
+    expect(service.listQueue).toHaveBeenLastCalledWith(
+      expect.objectContaining({ view: 'pending' }),
+    );
   });
 
   it('rechaza un guid invalido sin llamar al servicio', async () => {

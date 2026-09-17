@@ -16,7 +16,7 @@ import { Roles } from '../auth/roles.decorator';
 import { BackOfficeRole } from '../auth/backoffice-role.enum';
 import { actorFrom, AuthedRequest } from '../common/actor';
 import { RevisionSapService } from './revision-sap.service';
-import { isReviewSortField, isReviewView } from './revision-sap.types';
+import { isReviewSortField, isReviewView, ReviewView } from './revision-sap.types';
 
 const MAX_LIMIT = 200;
 const DEFAULT_LIMIT = 20;
@@ -56,7 +56,7 @@ export class RevisionSapController {
       sortBy: isReviewSortField(sortBy ?? '') ? (sortBy as never) : 'sapLastAttemptAt',
       sortDir: sortDir === 'ASC' ? 'ASC' : 'DESC',
       // Una vista desconocida cae en pendientes, que es con lo que se entra.
-      view: isReviewView(view ?? '') ? view : 'pending',
+      view: this.parseView(view),
     });
     return { success: true, ...result };
   }
@@ -182,6 +182,16 @@ export class RevisionSapController {
   async resend(@Param('guid') guid: string, @Req() req: AuthedRequest) {
     const data = await this.service.resendToSap(this.parseGuid(guid, 'guid'), actorFrom(req));
     return { success: true, data };
+  }
+
+  /**
+   * Qué bandeja se pide. Una vista desconocida cae en `pending` en vez de fallar: es la
+   * que se abre por defecto. El narrowing va sobre la variable ya normalizada — sobre
+   * `view ?? ''` no alcanza, porque `view` sigue siendo `string | undefined`.
+   */
+  private parseView(value: string | undefined): ReviewView {
+    const view = (value ?? '').trim();
+    return isReviewView(view) ? view : 'pending';
   }
 
   private parseCode(value: unknown, pattern: RegExp, message: string): string {

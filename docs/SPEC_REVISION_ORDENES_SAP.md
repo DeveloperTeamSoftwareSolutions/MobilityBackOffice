@@ -1,6 +1,6 @@
 # Órdenes rechazadas por SAP — Spec
 
-> Última actualización: 2026-09-17 · Versión: 2.33.0
+> Última actualización: 2026-09-17 · Versión: 2.34.0
 > Estado: **bandeja, detalle y correcciones conectados** (requiere Middleware ≥ 1.356.0,
 > PR #646, y `MIDDLEWARE_API_KEY` configurada en los dos lados).
 > **El reenvío a SAP NO**: espera el envío propio de BackOffice, que parte la orden en
@@ -77,6 +77,14 @@ MobilityManager.
 > los dos lados que lo cubren.
 
 **Detalle:**
+- **Estado de la orden**, con la etiqueta de la tabla `Status` ("Enviado a SAP",
+  "Pendiente revisión Backoffice", "Procesada"). Se muestra en la cabecera porque es lo
+  que cambia al reenviar: si SAP acepta pasa a `SentToSAP`, y si rechaza se queda en
+  `PendingBackofficeReview`. El código crudo queda en el `title`.
+  - Las transiciones las hace el **Middleware**, no BackOffice
+    (`markSentToSapAfterBackoffice` / `markPendingBackofficeReview`).
+  - El mapa código → etiqueta vive en `revision-sap.logic.ts`: BackOffice no tenía
+    ninguno (Soporte muestra el código crudo).
 - Cabecera sin precios: cliente, vendedor, área de venta con nombres, fecha, centro de
   cabecera y **agrupa factura**, que es lo **único editable de la cabecera**.
   - Cambiarlo **no** va con "Guardar cambios": se confirma aparte, con un aviso que
@@ -102,9 +110,24 @@ MobilityManager.
     stock por centro y almacén (disponible, en inspección, en tránsito), marcando los
     almacenes habilitados para el cliente; sale de la misma fuente que ve el vendedor en
     MobilityIA.
-  - **Órdenes SAP** — **solo consulta**: cada fila de `SAPOrders` con su **centro**, su
-    estado (aceptada, aceptada sin entrega, rechazada, sin respuesta), número de pedido y
-    entrega, motivo y sus productos. Es el historial de cómo salió cada intento.
+  - **Órdenes SAP** — **solo consulta**. Muestra **todas** las filas de `SAPOrders` con el
+    `GuidBusinessOrders` de la orden, aceptadas y rechazadas, con su **centro**, número de
+    pedido y entrega, motivo y sus productos. Es el historial de cómo salió cada intento.
+
+    **Las rechazadas sí se guardan** (verificado en la base, 2026-09-17): el Middleware
+    inserta en `SAPOrders` **antes** de llamar a SAP y actualiza después con el resultado
+    —"deja rastro de todos los intentos"—. Esconderlas ocultaría justamente el motivo por
+    el que la orden está en revisión.
+
+    Cada una muestra **dos estados juntos**, y hacen falta los dos:
+
+    | | Qué es |
+    |---|---|
+    | Estado calculado | `accepted`, `accepted_no_dispatch`, `rejected`, `no_response`. Lo deriva el Middleware del resultado real |
+    | `StatusCode` | El valor crudo de la fila de `SAPOrders` |
+
+    Con el `StatusCode` solo no alcanza: **una orden SAP rechazada se queda en `Draft`**
+    —SAP no lo actualiza al rechazar— y se leería como "borrador" en vez de "rechazada".
   - **Reenviar es de la orden COMPLETA** (confirmado con el equipo el 2026-09-17): se
     manda la `BusinessOrder` y el Middleware decide en cuántas órdenes SAP sale. El botón
     vive en la barra de acciones, junto a Guardar, **deshabilitado** (ver abajo).

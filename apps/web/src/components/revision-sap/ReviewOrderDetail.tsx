@@ -15,6 +15,8 @@ import {
   initialDrafts,
   lineChanges,
   salesAreaParts,
+  statusLabel,
+  statusTone,
 } from './revision-sap.logic';
 import {
   LineDraft,
@@ -273,6 +275,15 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
           <h2 id="bo-rs-order-title" className="bo-rs__doc-number">
             {order.orderNumber}
           </h2>
+          {/* El estado de la orden, con la etiqueta de la tabla Status. Se ve acá
+              porque es lo que cambia al reenviar: si SAP acepta pasa a "Enviado a SAP",
+              y si rechaza se queda en "Pendiente revisión Backoffice". */}
+          <span
+            className={`bo-rs__pill bo-rs__pill--${statusTone(order.statusCode)}`}
+            title={order.statusCode ?? undefined}
+          >
+            {statusLabel(order.statusCode)}
+          </span>
           {order.backoffice.inReview && (
             <span className="bo-rs__status">En revisión por BackOffice</span>
           )}

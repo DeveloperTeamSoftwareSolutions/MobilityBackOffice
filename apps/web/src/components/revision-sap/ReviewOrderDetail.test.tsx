@@ -261,6 +261,28 @@ describe('ReviewOrderDetail', () => {
     expect(screen.getByText('Pedido 0099900101')).toBeTruthy();
   });
 
+  /**
+   * El StatusCode crudo va al lado del calculado, no en su lugar: una rechazada queda
+   * en 'Draft' —SAP no lo actualiza— y sola se leería como "borrador".
+   */
+  it('cada orden SAP muestra también su StatusCode', async () => {
+    await renderDetail();
+    verOrdenesSap();
+    expect(screen.getByText('Authorized')).toBeTruthy();
+    expect(screen.getByText('Draft')).toBeTruthy();
+  });
+
+  /** Es lo que cambia al reenviar: se ve sin salir del detalle. */
+  it('el detalle muestra el estado de la orden con su etiqueta', async () => {
+    api.getReviewOrder.mockResolvedValue(order({ statusCode: 'PendingBackofficeReview' }));
+    await renderDetail();
+    expect(screen.getByText('Pendiente revisión Backoffice')).toBeTruthy();
+
+    api.getReviewOrder.mockResolvedValue(order({ statusCode: 'SentToSAP' }));
+    render(<ReviewOrderDetail guid={ORDER} onBack={() => undefined} />);
+    expect(await screen.findByText('Enviado a SAP')).toBeTruthy();
+  });
+
   it('todas las líneas se corrigen en Productos, esté aceptada o rechazada su orden SAP', async () => {
     await renderDetail();
     expect(centerSelect()).toBeTruthy();

@@ -47,6 +47,14 @@ export function SapOrdersPanel({ sapOrders }: Props) {
           >
             <div className="bo-rs__sap-order-head">
               <span className={`bo-rs__pill bo-rs__pill--${status.tone}`}>{status.label}</span>
+              {/* El StatusCode crudo de SAPOrders, al lado del estado calculado. No
+                  alcanza solo: una rechazada queda en 'Draft' —SAP no lo actualiza— y
+                  sola se leería como "borrador" en vez de "rechazada". */}
+              {sapOrder.statusCode && (
+                <span className="bo-rs__mono bo-rs__cell--muted" title="StatusCode de SAPOrders">
+                  {sapOrder.statusCode}
+                </span>
+              )}
               <span className="bo-rs__cell--strong">
                 {sapOrder.centerCode
                   ? `Centro ${sapOrder.centerCode}${sapOrder.centerName ? ` · ${sapOrder.centerName}` : ''}`

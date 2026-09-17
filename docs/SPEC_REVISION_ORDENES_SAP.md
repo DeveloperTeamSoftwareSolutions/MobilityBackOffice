@@ -1,6 +1,6 @@
 # Órdenes rechazadas por SAP — Spec
 
-> Última actualización: 2026-09-17 · Versión: 2.34.2
+> Última actualización: 2026-09-17 · Versión: 2.34.3
 > Estado: **bandeja, detalle y correcciones conectados** (requiere Middleware ≥ 1.356.0,
 > PR #646, y `MIDDLEWARE_API_KEY` configurada en los dos lados).
 > **El reenvío a SAP NO**: espera el envío propio de BackOffice, que parte la orden en

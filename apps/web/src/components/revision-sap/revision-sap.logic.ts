@@ -229,7 +229,18 @@ export function itemWarnings(
 
   if (!destinationCode) {
     warnings.push({ kind: 'sin-destino', blocking: true, message: 'Elegí un destino de entrega.' });
-  } else if (!catalogs.destinations.some((d) => d.destinationCode === destinationCode)) {
+  } else if (
+    // SIN LISTA NO HAY OPINIÓN. Si los destinos no se pudieron traer —la vista no está
+    // en esa base, SAP no respondió, el cliente no tiene ninguno cargado— la lista llega
+    // vacía, y entonces CUALQUIER destino parece "fuera del área". Eso acusaba a todas
+    // las líneas de un problema inexistente y, como el aviso bloquea, ni siquiera dejaba
+    // guardar el centro, que sí funciona.
+    //
+    // La lista vacía no prueba que el destino esté mal: prueba que no sabemos. Lo que
+    // falta se informa aparte, con el error real de `catalogs.errors`.
+    catalogs.destinations.length > 0 &&
+    !catalogs.destinations.some((d) => d.destinationCode === destinationCode)
+  ) {
     warnings.push({
       kind: 'destino-fuera-del-area',
       blocking: true,

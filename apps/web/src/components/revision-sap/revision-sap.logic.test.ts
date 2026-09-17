@@ -65,6 +65,19 @@ describe('itemWarnings', () => {
     expect(kinds(item(), draft('2801', '30000112'), '2800')).toEqual([['destino-fuera-del-area', true]]);
   });
 
+  /**
+   * Sin lista de destinos no hay opinión. Si no se pudieron traer —la vista falta en esa
+   * base, o el cliente no tiene ninguno cargado— la lista llega vacía y CUALQUIER destino
+   * parecería "fuera del área": acusaría a todas las líneas de un problema inexistente y,
+   * como ese aviso bloquea, no dejaría guardar ni el centro, que sí funciona.
+   */
+  it('si no hay lista de destinos, no acusa a la línea', () => {
+    const sinDestinos = { ...catalogs, destinations: [] };
+    expect(kinds(item(), draft('2801', '30000124'), '2800', sinDestinos)).toEqual([]);
+    // Y lo que sí se puede saber se sigue avisando: el destino vacío es vacío igual.
+    expect(kinds(item(), draft('2801', null), '2800', sinDestinos)).toEqual([['sin-destino', true]]);
+  });
+
   it('un centro ELEGIDO no permitido bloquea; el heredado de la cabecera solo avisa', () => {
     expect(kinds(item(), draft('2899', '30000124'), '2801')).toEqual([['centro-no-permitido', true]]);
     expect(kinds(item(), draft(null, '30000124'), '2800')).toEqual([['centro-de-cabecera-no-permitido', false]]);

@@ -142,7 +142,11 @@ export function ProductStockModal({
                             c.elegible ? '' : ' bo-rs__stock-row--blocked'
                           }`}
                         >
-                          <td className="bo-rs__stock-center-cell">
+                          {/* `data-label` es lo que hace responsive a la tabla: en
+                              pantallas angostas las celdas se apilan y el CSS muestra
+                              este rótulo delante de cada valor, para que no se pierda
+                              qué significa cada número sin el encabezado a la vista. */}
+                          <td className="bo-rs__stock-center-cell" data-label="Centro">
                             <span className="bo-rs__cell--strong">
                               <span className="bo-rs__mono">{c.centerCode}</span>
                               {c.centerName ? ` · ${c.centerName}` : ''}
@@ -154,7 +158,7 @@ export function ProductStockModal({
                               </span>
                             )}
                           </td>
-                          <td className="bo-rs__cell--number">
+                          <td className="bo-rs__cell--number" data-label="Disponible">
                             <span
                               className={
                                 alcanza === false ? 'bo-rs__cell--warn' : 'bo-rs__cell--strong'
@@ -171,7 +175,7 @@ export function ProductStockModal({
                           {/* La cantidad por almacén sólo se muestra si hay MÁS DE UNO:
                               con uno solo es el mismo número de la columna Disponible, y
                               repetirlo es ruido. Con varios, sí importa cómo se reparte. */}
-                          <td className="bo-rs__cell--muted bo-rs__stock-warehouses">
+                          <td className="bo-rs__cell--muted bo-rs__stock-warehouses" data-label="Almacenes">
                             {detalle.length === 0
                               ? '—'
                               : detalle.map((r) => (

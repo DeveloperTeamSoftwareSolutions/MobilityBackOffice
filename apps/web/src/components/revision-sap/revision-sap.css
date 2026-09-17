@@ -787,3 +787,63 @@
   width: fit-content;
   margin: 2px 0 0;
 }
+
+/* LA TABLA DE CENTROS, EN PANTALLAS ANGOSTAS.
+   Con scroll horizontal la tabla "entra", pero leer de costado es incomodo: hay que
+   arrastrar para ver el disponible y despues volver para ver de que centro era.
+   Debajo de 700px cada centro pasa a ser una ficha apilada, con el rotulo de cada dato
+   adelante (sale del data-label de la celda). Se aplica SOLO a esta tabla: las demas
+   siguen con su scroll, que para ellas alcanza. */
+@media (max-width: 700px) {
+  .bo-rs__modal--wide .bo-rs__table--compact thead {
+    /* El encabezado no sirve apilado: cada celda ya lleva su rotulo. Se esconde sin
+       sacarlo del DOM, para no romper la semantica de la tabla ni el lector de pantalla. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .bo-rs__modal--wide .bo-rs__table--compact,
+  .bo-rs__modal--wide .bo-rs__table--compact tbody,
+  .bo-rs__modal--wide .bo-rs__table--compact tr,
+  .bo-rs__modal--wide .bo-rs__table--compact td {
+    display: block;
+    width: auto;
+  }
+  .bo-rs__modal--wide .bo-rs__table--compact tr {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--bo-border);
+  }
+  .bo-rs__modal--wide .bo-rs__table--compact tr:last-child {
+    border-bottom: none;
+  }
+  .bo-rs__modal--wide .bo-rs__table--compact td {
+    padding: 2px 0;
+    border: none;
+    text-align: left;
+  }
+  /* El rotulo, delante del valor. */
+  .bo-rs__modal--wide .bo-rs__table--compact td[data-label]::before {
+    content: attr(data-label) ": ";
+    color: var(--bo-text-muted);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  /* El centro es el titulo de la ficha: no necesita rotulo. */
+  .bo-rs__modal--wide .bo-rs__table--compact td.bo-rs__stock-center-cell::before {
+    content: none;
+  }
+  .bo-rs__modal--wide .bo-rs__stock-center-cell {
+    min-width: 0;
+  }
+  .bo-rs__modal--wide .bo-rs__stock-center-cell .bo-rs__cell--strong {
+    white-space: normal;
+  }
+  /* El boton, a lo ancho de la ficha: es la accion de la tarjeta. */
+  .bo-rs__modal--wide .bo-rs__table--compact td .bo-rs__button {
+    width: 100%;
+    margin-top: 6px;
+  }
+}

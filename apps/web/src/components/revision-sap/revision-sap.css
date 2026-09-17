@@ -261,15 +261,20 @@
 .bo-rs__area {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   margin: 0;
   padding: 0;
   list-style: none;
   font-size: 14px;
 }
+.bo-rs__area li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
 .bo-rs__area-label {
-  display: inline-block;
-  min-width: 64px;
+  flex: 0 0 auto;
+  min-width: 56px;
   font-size: 12px;
   color: var(--bo-text-muted);
 }
@@ -428,8 +433,9 @@
 }
 .bo-rs__facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  align-items: start;
+  gap: 16px 24px;
   margin: 0;
 }
 .bo-rs__fact dt {
@@ -846,4 +852,20 @@
     width: 100%;
     margin-top: 6px;
   }
+}
+
+/* CABECERA DE LA ORDEN: que aguante datos largos.
+   Los nombres de cliente y vendedor pueden ser largos ("ERICKA PAOLA THOMAE MENCOS") y
+   antes empujaban la grilla. Ahora cortan por palabra dentro de su columna. */
+.bo-rs__fact dd {
+  overflow-wrap: anywhere;
+}
+/* El numero de orden y la pildora de estado, a los extremos: con un estado largo
+   ("Pendiente revision Backoffice") el titulo no se aplasta. */
+.bo-rs__card-head .bo-rs__doc-number {
+  margin-right: auto;
+}
+.bo-rs__card-head .bo-rs__status,
+.bo-rs__card-head .bo-rs__pill {
+  flex: 0 0 auto;
 }

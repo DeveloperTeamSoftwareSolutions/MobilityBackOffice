@@ -461,7 +461,7 @@
 
 /* Ítems */
 .bo-rs__table--items td {
-  vertical-align: middle;
+  vertical-align: top;
 }
 .bo-rs__item-row--changed td {
   background: rgba(13, 148, 136, 0.05);

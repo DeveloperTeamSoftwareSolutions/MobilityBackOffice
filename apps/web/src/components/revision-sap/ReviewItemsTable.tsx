@@ -38,6 +38,10 @@ export function ReviewItemsTable({
   // La línea entera, no sólo el código: el modal necesita la cantidad para decir si el
   // centro alcanza, y el guid para poder cargarle el centro elegido.
   const [stockFor, setStockFor] = useState<ReviewItem | null>(null);
+  // El nombre del centro de cabecera, para nombrarlo igual que a los demás en el
+  // selector en vez de un escueto "De la cabecera (2102)".
+  const headerCenterName =
+    catalogs.centers.find((c) => c.centerCode === headerCenterCode)?.centerName ?? null;
 
   if (items.length === 0) {
     return <p className="bo-rs__empty">La orden no tiene productos.</p>;
@@ -64,7 +68,6 @@ export function ReviewItemsTable({
               const changed =
                 draft.centerCode !== item.centerCode ||
                 draft.destinationCode !== item.deliveryDestinationCode;
-              const center = effectiveCenter(draft.centerCode, headerCenterCode);
               const centerKnown = catalogs.centers.some((c) => c.centerCode === draft.centerCode);
               const destination = catalogs.destinations.find(
                 (d) => d.destinationCode === draft.destinationCode,
@@ -102,7 +105,13 @@ export function ReviewItemsTable({
                         {/* Sin centro propio solo si todavía no tiene uno guardado: el
                             servidor no borra un centro, lo reemplaza. */}
                         {!item.centerCode && (
-                          <option value="">De la cabecera ({headerCenterCode ?? 'sin centro'})</option>
+                          <option value="">
+                            {headerCenterCode
+                              ? `${headerCenterCode}${
+                                  headerCenterName ? ` · ${headerCenterName}` : ''
+                                } (mismo de la cabecera)`
+                              : 'Sin centro (el de la cabecera)'}
+                          </option>
                         )}
                         {draft.centerCode && !centerKnown && (
                           <option value={draft.centerCode}>
@@ -115,9 +124,6 @@ export function ReviewItemsTable({
                           </option>
                         ))}
                       </select>
-                      {center.inherited && (
-                        <span className="bo-rs__cell-sub">Sale con el centro de la cabecera</span>
-                      )}
                       {/* El stock vive acá, debajo del selector, porque es lo que se
                           mira para decidir ESTE campo. Como columna aparte quedaba
                           lejos de la decisión y ensanchaba la tabla. */}

@@ -610,7 +610,7 @@
 
 /* Modal de stock */
 .bo-rs__modal.bo-rs__modal--wide {
-  max-width: min(760px, 95vw);
+  max-width: min(780px, 95vw);
 }
 .bo-rs__stock-kpis {
   display: grid;

@@ -1,6 +1,6 @@
 # Órdenes rechazadas por SAP — Spec
 
-> Última actualización: 2026-09-17 · Versión: 2.34.4
+> Última actualización: 2026-09-17 · Versión: 2.35.0
 > Estado: **bandeja, detalle y correcciones conectados** (requiere Middleware ≥ 1.356.0,
 > PR #646, y `MIDDLEWARE_API_KEY` configurada en los dos lados).
 > **El reenvío a SAP NO**: espera el envío propio de BackOffice, que parte la orden en
@@ -113,10 +113,27 @@ MobilityManager.
     la que cayó, y se guardan con **Guardar cambios**, línea por línea; si una falla, su
     error queda en la línea y el cambio sigue pendiente. El destino se elige entre los del
     área de venta de la orden; el centro, entre los permitidos del cliente, y una línea sin
-    centro propio sale con el de cabecera. **"Ver stock"** por producto abre un modal con el
-    stock por centro y almacén (disponible, en inspección, en tránsito), marcando los
-    almacenes habilitados para el cliente; sale de la misma fuente que ve el vendedor en
-    MobilityIA.
+    centro propio sale con el de cabecera.
+  - **"Ver stock y elegir"** por producto abre el modal de stock, que sirve para las dos
+    cosas: mirar y **elegir el centro desde ahí**, viendo cuánto hay en cada uno en vez de
+    decidir a ciegas en el selector.
+    - Se agrupa **por centro**, sumando sus almacenes, porque el centro es lo que se
+      elige (decisión 4c: el almacén no viaja a SAP). El detalle por almacén queda
+      debajo —disponible, en inspección, en tránsito— para no perder de dónde sale el
+      número.
+    - **Elegible ≠ tiene stock.** Lo elegible sale de los centros permitidos del cliente
+      (4a); un centro **sin stock se puede elegir igual**, marcado en ámbar con "no
+      alcanza para N", porque SAP revalida al enviar (4b). Un centro con stock al que el
+      cliente **no accede** se muestra apagado y no se puede elegir: saber que hay stock
+      ahí igual sirve.
+    - Un centro permitido que no aparece en el stock se lista **en cero**, no se esconde:
+      que no tenga filas significa cero, no que no exista.
+    - Elegir carga el centro en la línea como cualquier otro cambio: queda **sin
+      guardar** hasta apretar "Guardar cambios".
+    - El selector de la fila **sigue estando**: el modal es otra vía, para quien necesita
+      ver el stock antes de decidir. En una orden en solo lectura, el modal sigue
+      sirviendo para mirar.
+    - Sale de la misma fuente que ve el vendedor en MobilityIA.
   - **Órdenes SAP** — **solo consulta**. Muestra **todas** las filas de `SAPOrders` con el
     `GuidBusinessOrders` de la orden, aceptadas y rechazadas, con su **centro**, número de
     pedido y entrega, motivo y sus productos. Es el historial de cómo salió cada intento.

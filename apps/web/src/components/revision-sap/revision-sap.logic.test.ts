@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   blockingItemCount,
+  cubreLaCantidad,
   effectiveCenter,
   initialDrafts,
   itemWarnings,
@@ -9,9 +10,10 @@ import {
   salesAreaParts,
   sapErrorTypeLabel,
   sapOrdersByCenter,
+  stockByCenter,
   stockFor,
 } from './revision-sap.logic';
-import { LineDraft, ReviewCatalogs, ReviewItem } from './revision-sap.types';
+import { LineDraft, ProductStockRow, ReviewCatalogs, ReviewItem } from './revision-sap.types';
 
 /**
  * Lo que se fija acá es qué frena y qué solo avisa.
@@ -91,6 +93,63 @@ describe('itemWarnings', () => {
   it('si el stock no se sabe, no inventa un aviso de stock', () => {
     expect(kinds(item(), draft('2802', '30000124'), '2800', { ...catalogs, stock: null })).toEqual([]);
     expect(kinds(item({ productCode: 'SIN-RESPUESTA' }), draft('2802', '30000124'), '2800')).toEqual([]);
+  });
+});
+
+/**
+ * Elegir el centro DESDE el stock.
+ *
+ * Lo delicado es que "hay stock" y "se puede elegir" son cosas distintas: lo elegible
+ * sale de los centros permitidos del cliente (4a), y un centro sin stock se elige igual
+ * porque SAP revalida al enviar (4b). Mezclarlas dejaría al operador sin opciones
+ * válidas o le ofrecería centros que el Middleware va a rechazar.
+ */
+describe('stockByCenter', () => {
+  const centrosPermitidos = [
+    { centerCode: '2801', centerName: 'DW Alm. Externo' },
+    { centerCode: '2802', centerName: 'DW Cartago' },
+  ];
+  const fila = (over: Partial<ProductStockRow> = {}): ProductStockRow => ({
+    centerCode: '2801', centerName: 'DW Alm. Externo', warehouseCode: '0100',
+    warehouseName: 'Principal', unitOfMeasure: 'UN', available: 10,
+    inInspection: 0, inTransit: 0, allowedForCustomer: true, ...over,
+  });
+
+  it('suma los almacenes de un mismo centro', () => {
+    const r = stockByCenter(
+      [fila({ available: 10 }), fila({ warehouseCode: '0200', available: 15 })],
+      centrosPermitidos,
+    );
+    const c2801 = r.find((x) => x.centerCode === '2801');
+    expect(c2801?.available).toBe(25);
+    expect(c2801?.warehouses).toBe(2);
+  });
+
+  it('un centro con stock pero NO permitido no se puede elegir', () => {
+    const r = stockByCenter([fila({ centerCode: '2900', available: 999 })], centrosPermitidos);
+    expect(r.find((x) => x.centerCode === '2900')?.elegible).toBe(false);
+  });
+
+  it('un centro permitido SIN stock sí se puede elegir, en cero', () => {
+    const r = stockByCenter([fila({ centerCode: '2801' })], centrosPermitidos);
+    const c2802 = r.find((x) => x.centerCode === '2802');
+    expect(c2802).toEqual(
+      expect.objectContaining({ available: 0, warehouses: 0, elegible: true }),
+    );
+  });
+
+  it('ordena: primero los elegibles, y entre ellos los de más stock', () => {
+    const r = stockByCenter(
+      [fila({ centerCode: '2900', available: 999 }), fila({ centerCode: '2801', available: 5 })],
+      centrosPermitidos,
+    );
+    expect(r.map((x) => x.centerCode)).toEqual(['2801', '2802', '2900']);
+  });
+
+  it('dice si alcanza para lo que pide la línea, y admite no saberlo', () => {
+    expect(cubreLaCantidad(40, 40)).toBe(true);
+    expect(cubreLaCantidad(39, 40)).toBe(false);
+    expect(cubreLaCantidad(0, null)).toBeNull();
   });
 });
 

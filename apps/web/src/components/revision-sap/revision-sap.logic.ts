@@ -1,13 +1,16 @@
 import {
+  CenterOption,
   ItemWarning,
   LineChange,
   LineDraft,
   LineDrafts,
+  ProductStockRow,
   ReviewCatalogs,
   ReviewItem,
   SalesArea,
   SapErrorLine,
   StockByCenter,
+  StockCenterOption,
 } from './revision-sap.types';
 
 /**
@@ -98,6 +101,67 @@ export function resolutionOf(entry: {
         };
   }
   return { label: 'Cerrada sin enviar', tone: 'muted', hint: null };
+}
+
+/**
+ * El stock de un producto, agrupado POR CENTRO, para poder elegir uno desde el modal.
+ *
+ * El stock viene por centro + almacén, pero lo que se elige es el **centro** (decisión
+ * 4c: el almacén no viaja a SAP), así que hay que sumar los almacenes de cada uno.
+ *
+ * `elegible` sale de los centros permitidos del cliente (decisión 4a), NO del stock: un
+ * centro sin stock se puede elegir igual, con aviso, porque SAP revalida al enviar
+ * (decisión 4b). Y un centro con stock al que el cliente no accede no se puede elegir,
+ * aunque el stock esté ahí — por eso las dos cosas se calculan por separado.
+ */
+export function stockByCenter(
+  rows: ProductStockRow[],
+  centers: CenterOption[],
+): StockCenterOption[] {
+  const permitidos = new Map(centers.map((c) => [c.centerCode, c.centerName]));
+  const porCentro = new Map<string, StockCenterOption>();
+
+  for (const row of rows) {
+    const code = row.centerCode?.trim();
+    if (!code) continue;
+    const previo = porCentro.get(code);
+    if (previo) {
+      previo.available += row.available;
+      previo.warehouses += 1;
+      continue;
+    }
+    porCentro.set(code, {
+      centerCode: code,
+      centerName: permitidos.get(code) ?? row.centerName,
+      available: row.available,
+      warehouses: 1,
+      elegible: permitidos.has(code),
+    });
+  }
+
+  // Un centro permitido SIN ninguna fila de stock también es elegible: que no aparezca
+  // en el stock significa cero, no que no exista. Esconderlo dejaría al operador sin la
+  // opción de mandarlo igual.
+  for (const [code, name] of permitidos) {
+    if (!porCentro.has(code)) {
+      porCentro.set(code, {
+        centerCode: code, centerName: name, available: 0, warehouses: 0, elegible: true,
+      });
+    }
+  }
+
+  // Primero los que se pueden elegir, y dentro de esos, los que más stock tienen.
+  return [...porCentro.values()].sort((a, b) => {
+    if (a.elegible !== b.elegible) return a.elegible ? -1 : 1;
+    if (a.available !== b.available) return b.available - a.available;
+    return a.centerCode.localeCompare(b.centerCode);
+  });
+}
+
+/** ¿Alcanza el stock de ese centro para lo que pide la línea? `null` si no se sabe. */
+export function cubreLaCantidad(available: number, quantity: number | null): boolean | null {
+  if (quantity == null) return null;
+  return available >= quantity;
 }
 
 /** Qué significa cada tipo de SAP, para no mostrar solo una letra suelta. */

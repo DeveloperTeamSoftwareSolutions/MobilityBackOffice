@@ -409,11 +409,13 @@ describe('ReviewOrderDetail', () => {
 
   it('el stock de un producto se ve en un modal, por centro y almacén', async () => {
     await renderDetail();
+    // "y elegir" porque la orden es editable: el modal también sirve para elegir centro.
     // La línea 3 es el producto 1200135, el que SAP rechazó.
-    fireEvent.click(screen.getAllByRole('button', { name: 'Ver stock' })[1]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ver stock y elegir' })[1]);
     expect(await screen.findByText('Stock de 1200135')).toBeTruthy();
     expect(api.getProductStock).toHaveBeenCalledWith(ORDER, '1200135');
-    expect(screen.getByText('Mat / P. Ter')).toBeTruthy();
+    // El almacén ya no es un nodo suelto: va en una línea con su código y cantidades.
+    expect(screen.getByText(/Mat \/ P\. Ter/)).toBeTruthy();
     expect(screen.getByText('Del cliente')).toBeTruthy();
 
     fireEvent.click(button('Cerrar'));
@@ -449,6 +451,38 @@ describe('ReviewOrderDetail', () => {
     fireEvent.click(button('Cancelar'));
     await waitFor(() => expect(screen.queryByText(/va a poder salir parcial/)).toBeNull());
     expect(api.changeGroupInvoice).not.toHaveBeenCalled();
+  });
+
+  /**
+   * El punto del modal: elegir el centro VIENDO cuánto hay, en vez de a ciegas en el
+   * selector. Lo elegido queda como cualquier otro cambio — sin guardar hasta apretar
+   * "Guardar cambios".
+   */
+  it('desde el modal se elige el centro, y queda sin guardar', async () => {
+    await renderDetail();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ver stock y elegir' })[1]);
+    await screen.findByText('Stock de 1200135');
+
+    // El stock de prueba está en el 2802, que es el centro que ya tiene la línea 3.
+    expect(screen.getByText('Es el actual')).toBeTruthy();
+
+    // 2801 es permitido y no tiene stock: se puede elegir igual (decisión 4b).
+    fireEvent.click(screen.getAllByRole('button', { name: 'Elegir este centro' })[0]);
+
+    await waitFor(() => expect(screen.queryByText('Stock de 1200135')).toBeNull());
+    expect(screen.getByText('1 cambio sin guardar')).toBeTruthy();
+    expect(centerSelect().value).toBe('2801');
+  });
+
+  it('en solo lectura el modal sigue sirviendo para mirar, pero no para elegir', async () => {
+    api.getReviewOrder.mockResolvedValue(
+      order({ backoffice: { inReview: false, decidedBy: 'bo@duwest.com', decidedAt: null } }),
+    );
+    await renderDetail();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ver stock' })[1]);
+    await screen.findByText('Stock de 1200135');
+
+    expect(screen.queryByRole('button', { name: 'Elegir este centro' })).toBeNull();
   });
 
   it('una orden que ya no está en revisión se muestra en solo lectura', async () => {

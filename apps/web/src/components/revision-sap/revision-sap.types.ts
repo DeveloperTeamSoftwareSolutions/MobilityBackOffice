@@ -225,6 +225,20 @@ export interface ProductStockRow {
   allowedForCustomer: boolean;
 }
 
+/**
+ * Un centro como opción elegible desde el modal de stock: el disponible sumado de sus
+ * almacenes, y si el cliente puede recibir desde ahí.
+ */
+export interface StockCenterOption {
+  centerCode: string;
+  centerName: string | null;
+  /** Suma del disponible de todos sus almacenes. */
+  available: number;
+  warehouses: number;
+  /** Está entre los centros permitidos del cliente. El stock NO decide esto. */
+  elegible: boolean;
+}
+
 export interface ProductStock {
   productCode: string;
   companyCode: string | null;

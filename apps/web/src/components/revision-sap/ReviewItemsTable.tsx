@@ -35,9 +35,9 @@ export function ReviewItemsTable({
   saveErrors,
   onChange,
 }: Props) {
-  const [stockFor, setStockFor] = useState<{ code: string; description: string | null } | null>(
-    null,
-  );
+  // La línea entera, no sólo el código: el modal necesita la cantidad para decir si el
+  // centro alcanza, y el guid para poder cargarle el centro elegido.
+  const [stockFor, setStockFor] = useState<ReviewItem | null>(null);
 
   if (items.length === 0) {
     return <p className="bo-rs__empty">La orden no tiene productos.</p>;
@@ -94,11 +94,9 @@ export function ReviewItemsTable({
                       <button
                         type="button"
                         className="bo-rs__link-button"
-                        onClick={() =>
-                          setStockFor({ code: item.productCode, description: item.productDescription })
-                        }
+                        onClick={() => setStockFor(item)}
                       >
-                        Ver stock
+                        {editable ? 'Ver stock y elegir' : 'Ver stock'}
                       </button>
                     </td>
                     <td>
@@ -192,8 +190,21 @@ export function ReviewItemsTable({
       {stockFor && (
         <ProductStockModal
           orderGuid={orderGuid}
-          productCode={stockFor.code}
-          productDescription={stockFor.description}
+          productCode={stockFor.productCode}
+          productDescription={stockFor.productDescription}
+          quantity={stockFor.quantity}
+          currentCenter={effectiveCenter(draftFor(stockFor, drafts).centerCode, headerCenterCode).code}
+          centers={catalogs.centers}
+          // Sólo se puede elegir si la orden se puede editar. En solo lectura el modal
+          // sigue sirviendo para mirar.
+          onSelectCenter={
+            editable
+              ? (centerCode) => {
+                  onChange(stockFor.guid, { ...draftFor(stockFor, drafts), centerCode });
+                  setStockFor(null);
+                }
+              : undefined
+          }
           onClose={() => setStockFor(null)}
         />
       )}

@@ -83,10 +83,16 @@ export function ProductStockModal({
       }}
     >
       <div className="bo-rs__modal bo-rs__modal--wide">
-        <h2 id="bo-rs-stock-title" className="bo-rs__modal-title">
-          Stock de {productCode}
-        </h2>
-        {productDescription && <p className="bo-rs__modal-text">{productDescription}</p>}
+        {/* Título y descripción en la MISMA línea: son dos bloques distintos, y apilados
+            gastaban dos renglones para decir una sola cosa. Cada uno conserva su estilo. */}
+        <div className="bo-rs__modal-head">
+          <h2 id="bo-rs-stock-title" className="bo-rs__modal-title">
+            Stock de {productCode}
+          </h2>
+          {productDescription && (
+            <span className="bo-rs__modal-text">{productDescription}</span>
+          )}
+        </div>
         {puedeElegir && (
           <p className="bo-rs__modal-text">
             {quantity != null

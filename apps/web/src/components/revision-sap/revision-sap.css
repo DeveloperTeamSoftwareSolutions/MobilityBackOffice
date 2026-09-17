@@ -610,7 +610,7 @@
 
 /* Modal de stock */
 .bo-rs__modal.bo-rs__modal--wide {
-  max-width: min(740px, 95vw);
+  max-width: min(760px, 95vw);
 }
 .bo-rs__stock-kpis {
   display: grid;
@@ -764,4 +764,18 @@
 /* Que el boton de elegir no se corte ni se parta. */
 .bo-rs__table--compact td .bo-rs__button {
   white-space: nowrap;
+}
+
+/* Titulo y descripcion del modal, en la misma linea: apilados gastaban dos renglones
+   para decir una sola cosa. Cada uno conserva su estilo; si no entran, la descripcion
+   baja sola. */
+.bo-rs__modal-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.bo-rs__modal-head .bo-rs__modal-title,
+.bo-rs__modal-head .bo-rs__modal-text {
+  margin: 0;
 }

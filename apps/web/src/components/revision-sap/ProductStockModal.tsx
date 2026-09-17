@@ -136,7 +136,7 @@ export function ProductStockModal({
                             c.elegible ? '' : ' bo-rs__stock-row--blocked'
                           }`}
                         >
-                          <td>
+                          <td className="bo-rs__stock-center-cell">
                             <span className="bo-rs__cell--strong">
                               <span className="bo-rs__mono">{c.centerCode}</span>
                               {c.centerName ? ` · ${c.centerName}` : ''}
@@ -162,13 +162,17 @@ export function ProductStockModal({
                               </span>
                             )}
                           </td>
+                          {/* La cantidad por almacén sólo se muestra si hay MÁS DE UNO:
+                              con uno solo es el mismo número de la columna Disponible, y
+                              repetirlo es ruido. Con varios, sí importa cómo se reparte. */}
                           <td className="bo-rs__cell--muted bo-rs__stock-warehouses">
                             {detalle.length === 0
                               ? '—'
                               : detalle.map((r) => (
                                   <span key={`${r.centerCode}-${r.warehouseCode}`} className="bo-rs__stock-wh">
                                     <span className="bo-rs__mono">{r.warehouseCode ?? '—'}</span>{' '}
-                                    {r.warehouseName ?? ''} · {formatQuantity(r.available)}
+                                    {r.warehouseName ?? ''}
+                                    {detalle.length > 1 && ` · ${formatQuantity(r.available)}`}
                                     {r.allowedForCustomer && (
                                       <span className="bo-rs__chip">Del cliente</span>
                                     )}

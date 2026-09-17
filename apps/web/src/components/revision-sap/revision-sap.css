@@ -610,7 +610,7 @@
 
 /* Modal de stock */
 .bo-rs__modal--wide {
-  max-width: 820px;
+  max-width: min(1180px, 95vw);
 }
 .bo-rs__stock-kpis {
   display: grid;
@@ -751,4 +751,17 @@
   display: inline-block;
   margin-top: 6px;
   font-size: 12px;
+}
+
+/* El nombre del centro en UNA linea: partido en tres estiraba cada fila y hacia el
+   modal mucho mas alto de lo necesario. */
+.bo-rs__stock-center-cell {
+  min-width: 260px;
+}
+.bo-rs__stock-center-cell .bo-rs__cell--strong {
+  white-space: nowrap;
+}
+/* Que el boton de elegir no se corte ni se parta. */
+.bo-rs__table--compact td .bo-rs__button {
+  white-space: nowrap;
 }

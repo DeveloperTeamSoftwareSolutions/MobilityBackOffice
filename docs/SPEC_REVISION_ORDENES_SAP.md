@@ -1,6 +1,6 @@
 # Órdenes rechazadas por SAP — Spec
 
-> Última actualización: 2026-09-17 · Versión: 2.34.3
+> Última actualización: 2026-09-17 · Versión: 2.34.4
 > Estado: **bandeja, detalle y correcciones conectados** (requiere Middleware ≥ 1.356.0,
 > PR #646, y `MIDDLEWARE_API_KEY` configurada en los dos lados).
 > **El reenvío a SAP NO**: espera el envío propio de BackOffice, que parte la orden en
@@ -126,15 +126,20 @@ MobilityManager.
     —"deja rastro de todos los intentos"—. Esconderlas ocultaría justamente el motivo por
     el que la orden está en revisión.
 
-    Cada una muestra **dos estados juntos**, y hacen falta los dos:
+    El estado **se calcula**, no se lee de una columna. El Middleware lo deriva de tres
+    campos de la fila, y las etiquetas son **las mismas que usa MobilityIA** para estas
+    mismas órdenes SAP: dos pantallas que miran el mismo dato tienen que llamarlo igual.
 
-    | | Qué es |
+    | Si la fila… | Se muestra |
     |---|---|
-    | Estado calculado | `accepted`, `accepted_no_dispatch`, `rejected`, `no_response`. Lo deriva el Middleware del resultado real |
-    | `StatusCode` | El valor crudo de la fila de `SAPOrders` |
+    | tiene `SapLastError` | **Rechazada por SAP** (rojo) + el motivo abajo |
+    | tiene pedido pero no entrega | **Aceptada sin entrega** (ámbar) |
+    | tiene pedido y entrega | **Aceptada** (verde) |
+    | no tiene nada de eso | **Sin respuesta de SAP** (gris) |
 
-    Con el `StatusCode` solo no alcanza: **una orden SAP rechazada se queda en `Draft`**
-    —SAP no lo actualiza al rechazar— y se leería como "borrador" en vez de "rechazada".
+    El **`StatusCode` crudo no se muestra** (queda en el `title`): no aporta y engaña —
+    una orden SAP rechazada se queda en **`Draft`**, porque SAP no lo actualiza al
+    rechazar, y se leería como "borrador".
   - **Reenviar es de la orden COMPLETA** (confirmado con el equipo el 2026-09-17): se
     manda la `BusinessOrder` y el Middleware decide en cuántas órdenes SAP sale. El botón
     vive en la barra de acciones, junto a Guardar, **deshabilitado** (ver abajo).

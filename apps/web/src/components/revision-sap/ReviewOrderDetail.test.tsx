@@ -257,19 +257,32 @@ describe('ReviewOrderDetail', () => {
     expect(screen.getByText('Centro 2801 · DW Alm. Externo')).toBeTruthy();
     expect(screen.getByText('Centro 2802 · DW Cartago')).toBeTruthy();
     expect(screen.getByText('Aceptada')).toBeTruthy();
-    expect(screen.getByText('Rechazada')).toBeTruthy();
+    expect(screen.getByText('Rechazada por SAP')).toBeTruthy();
     expect(screen.getByText('Pedido 0099900101')).toBeTruthy();
   });
 
   /**
-   * El StatusCode crudo va al lado del calculado, no en su lugar: una rechazada queda
-   * en 'Draft' —SAP no lo actualiza— y sola se leería como "borrador".
+   * El StatusCode crudo NO se muestra: no aporta y engaña — una rechazada se queda en
+   * 'Draft' porque SAP no lo actualiza. Queda en el title, para quien lo necesite.
    */
-  it('cada orden SAP muestra también su StatusCode', async () => {
+  it('no muestra el StatusCode crudo, que diría "Draft" en una rechazada', async () => {
     await renderDetail();
     verOrdenesSap();
-    expect(screen.getByText('Authorized')).toBeTruthy();
-    expect(screen.getByText('Draft')).toBeTruthy();
+    expect(screen.queryByText('Draft')).toBeNull();
+    expect(screen.queryByText('Authorized')).toBeNull();
+  });
+
+  /** Las etiquetas son las mismas que usa MobilityIA para estas mismas órdenes SAP. */
+  it('los estados se llaman igual que en MobilityIA', async () => {
+    api.listSapOrders.mockResolvedValue([
+      { ...sapOrders[0], status: 'no_response', sapOrderNumber: null, sapDispatchNumber: null, error: null },
+      { ...sapOrders[1], status: 'accepted_no_dispatch', sapOrderNumber: '0099900101', sapDispatchNumber: null, error: null },
+    ]);
+    await renderDetail();
+    verOrdenesSap();
+
+    expect(screen.getByText('Sin respuesta de SAP')).toBeTruthy();
+    expect(screen.getByText('Aceptada sin entrega')).toBeTruthy();
   });
 
   /**

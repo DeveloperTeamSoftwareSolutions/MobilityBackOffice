@@ -7,6 +7,11 @@ interface Props {
   sapOrders: SapOrder[];
 }
 
+/**
+ * Etiquetas y colores UNIFICADOS con MobilityIA, que muestra las mismas órdenes SAP del
+ * otro lado. Dos pantallas que miran el mismo dato tienen que llamarlo igual: si acá
+ * dice "Rechazada" y allá "Rechazada por SAP", parecen cosas distintas.
+ */
 const STATUS: Record<SapOrderStatus, { label: string; tone: string; hint?: string }> = {
   accepted: { label: 'Aceptada', tone: 'ok' },
   accepted_no_dispatch: {
@@ -14,10 +19,12 @@ const STATUS: Record<SapOrderStatus, { label: string; tone: string; hint?: strin
     tone: 'warn',
     hint: 'SAP creó el pedido pero no la entrega: eso se resuelve en SAP.',
   },
-  rejected: { label: 'Rechazada', tone: 'danger' },
+  rejected: { label: 'Rechazada por SAP', tone: 'danger' },
   no_response: {
-    label: 'Sin respuesta',
-    tone: 'warn',
+    // Gris, no ámbar: no se sabe qué pasó. Pintarlo de advertencia sugeriría un
+    // diagnóstico que no tenemos.
+    label: 'Sin respuesta de SAP',
+    tone: 'muted',
     hint: 'No quedó resultado del envío. Verificá en SAP antes de reenviar: el pedido pudo haberse creado.',
   },
 };
@@ -46,15 +53,14 @@ export function SapOrdersPanel({ sapOrders }: Props) {
             className={`bo-rs__sap-order${rechazada ? ' bo-rs__sap-order--rejected' : ''}`}
           >
             <div className="bo-rs__sap-order-head">
-              <span className={`bo-rs__pill bo-rs__pill--${status.tone}`}>{status.label}</span>
-              {/* El StatusCode crudo de SAPOrders, al lado del estado calculado. No
-                  alcanza solo: una rechazada queda en 'Draft' —SAP no lo actualiza— y
-                  sola se leería como "borrador" en vez de "rechazada". */}
-              {sapOrder.statusCode && (
-                <span className="bo-rs__mono bo-rs__cell--muted" title="StatusCode de SAPOrders">
-                  {sapOrder.statusCode}
-                </span>
-              )}
+              {/* El StatusCode crudo no se muestra: no aporta y engaña — una rechazada
+                  se queda en 'Draft' porque SAP no lo actualiza. Queda en el title. */}
+              <span
+                className={`bo-rs__pill bo-rs__pill--${status.tone}`}
+                title={sapOrder.statusCode ?? undefined}
+              >
+                {status.label}
+              </span>
               <span className="bo-rs__cell--strong">
                 {sapOrder.centerCode
                   ? `Centro ${sapOrder.centerCode}${sapOrder.centerName ? ` · ${sapOrder.centerName}` : ''}`

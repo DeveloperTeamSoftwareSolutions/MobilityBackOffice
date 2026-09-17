@@ -2,7 +2,9 @@
 export type BackOfficeRole =
   | 'SuperAdmin'
   | 'Soporte'
-  /** Todo el back-office menos la consola de soporte. */
+  /** Revisión de órdenes rechazadas por SAP. Se asigna deliberadamente. */
+  | 'RevisionSap'
+  /** Todo el back-office menos la consola de soporte y lo que se asigna deliberadamente. */
   | 'Usuario'
   | 'Administrador'
   | 'Marketing';

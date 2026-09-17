@@ -5,6 +5,7 @@ import {
   IconFileText,
   IconSupport,
   IconShieldCheck,
+  IconArrowRepeat,
 } from '../components/layout/icons';
 import type { BackOfficeRole } from '../types';
 import { roleAllows } from '../auth/roleAccess';
@@ -13,7 +14,8 @@ export type SectionGroup =
   | 'Administración'
   | 'Marketing'
   | 'Soporte'
-  | 'Autorizaciones';
+  | 'Autorizaciones'
+  | 'Órdenes';
 
 export interface NavSection {
   key: string;
@@ -90,6 +92,18 @@ export const NAV_SECTIONS: NavSection[] = [
     status: 'ready',
     icon: <IconShieldCheck />,
   },
+  {
+    key: 'revision-sap',
+    label: 'Órdenes rechazadas por SAP',
+    description:
+      'Revisá por qué SAP rechazó una orden, reasigná centro y destino por ítem y reenviala.',
+    path: '/ordenes-rechazadas-sap',
+    group: 'Órdenes',
+    // Rol deliberado: Usuario no la recibe por defecto (ver roleAccess.ts).
+    roles: ['RevisionSap'],
+    status: 'ready',
+    icon: <IconArrowRepeat />,
+  },
 ];
 
 /** Orden de los grupos en el sidebar y el inicio. */
@@ -98,6 +112,7 @@ export const SECTION_GROUPS: SectionGroup[] = [
   'Marketing',
   'Soporte',
   'Autorizaciones',
+  'Órdenes',
 ];
 
 /** Secciones visibles para un rol. */

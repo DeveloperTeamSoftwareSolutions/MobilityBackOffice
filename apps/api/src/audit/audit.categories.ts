@@ -22,4 +22,6 @@ export enum AuditCategory {
   Support = 'Support',
   /** Plantillas de WhatsApp. Lo que sale hacia META. */
   Templates = 'Templates',
+  /** Órdenes rechazadas por SAP: cambios de BackOffice sobre la orden antes de reenviarla. */
+  SapReview = 'SapReview',
 }

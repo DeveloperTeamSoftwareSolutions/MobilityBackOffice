@@ -1,0 +1,871 @@
+/* Órdenes rechazadas por SAP — prefijo bo-rs */
+
+.bo-rs-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.bo-rs {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  flex: 1;
+}
+
+/* Cabecera */
+.bo-rs__head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bo-rs__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--bo-text);
+}
+.bo-rs__subtitle {
+  margin: 0;
+  max-width: 720px;
+  font-size: 13px;
+  color: var(--bo-text-muted);
+}
+
+/* Aviso de vista previa */
+.bo-rs__preview {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px dashed var(--bo-state-review);
+  border-radius: var(--bo-radius-sm);
+  background: rgba(124, 58, 237, 0.05);
+  color: var(--bo-state-review);
+  font-size: 13px;
+}
+
+/* Barra de búsqueda */
+.bo-rs__toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bo-rs__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bo-rs__field--grow {
+  flex: 1;
+  min-width: 220px;
+  max-width: 560px;
+}
+.bo-rs__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bo-text-muted);
+}
+.bo-rs__count {
+  margin: 0;
+  font-size: 13px;
+  color: var(--bo-text-muted);
+}
+.bo-rs__input,
+.bo-rs__select {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-surface);
+  color: var(--bo-text);
+  font-size: 14px;
+  font-family: var(--bo-font);
+}
+.bo-rs__select {
+  width: 100%;
+  min-width: 220px;
+  padding-right: 8px;
+  font-size: 13px;
+}
+.bo-rs__input:focus,
+.bo-rs__select:focus {
+  outline: none;
+  border-color: var(--bo-accent);
+  box-shadow: 0 0 0 3px var(--bo-focus-ring);
+}
+
+/* Mensajes */
+.bo-rs__error {
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--bo-danger);
+  border-radius: var(--bo-radius-sm);
+  background: rgba(197, 48, 48, 0.06);
+  color: var(--bo-danger);
+  font-size: 13px;
+}
+.bo-rs__empty {
+  margin: 0;
+  padding: 24px;
+  border: 1px dashed var(--bo-border);
+  border-radius: var(--bo-radius);
+  color: var(--bo-text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Tablas */
+.bo-rs__table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius);
+  background: var(--bo-surface);
+}
+.bo-rs__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.bo-rs__table th {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--bo-border);
+  background: var(--bo-bg);
+  color: var(--bo-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.bo-rs__table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--bo-border);
+  color: var(--bo-text);
+  vertical-align: top;
+}
+.bo-rs__table tbody tr:last-child td {
+  border-bottom: none;
+}
+/* `.bo-rs__table th` fija text-align:left con mas especificidad que una clase sola:
+   sin el prefijo de tabla, el encabezado numerico quedaba a la izquierda y sus valores
+   a la derecha. */
+.bo-rs__table .bo-rs__th--number,
+.bo-rs__cell--number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bo-rs__th-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.bo-rs__th-button:focus-visible {
+  outline: 2px solid var(--bo-accent);
+  outline-offset: 2px;
+}
+.bo-rs__sort-arrow {
+  font-size: 9px;
+}
+.bo-rs__pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bo-rs__pager-info {
+  font-size: 13px;
+  color: var(--bo-text-muted);
+}
+.bo-rs__pager-buttons {
+  display: flex;
+  gap: 8px;
+}
+.bo-rs__stock {
+  margin-top: 4px;
+  font-size: 12px;
+}
+.bo-rs__stock summary {
+  color: var(--bo-accent-hover);
+  cursor: pointer;
+}
+.bo-rs__row {
+  cursor: pointer;
+}
+
+/* Pestañas del detalle */
+.bo-rs__tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--bo-border);
+}
+.bo-rs__tab {
+  padding: 8px 16px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--bo-text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--bo-font);
+  cursor: pointer;
+}
+.bo-rs__tab:hover {
+  color: var(--bo-text);
+}
+.bo-rs__tab--active {
+  border-bottom-color: var(--bo-accent);
+  color: var(--bo-accent-hover);
+}
+.bo-rs__tab:focus-visible {
+  outline: 2px solid var(--bo-accent);
+  outline-offset: -2px;
+}
+
+/* Órdenes SAP */
+.bo-rs__sap-orders {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.bo-rs__sap-order {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+}
+.bo-rs__sap-order-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.bo-rs__sap-order-date {
+  margin-left: auto;
+}
+.bo-rs__area {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+}
+.bo-rs__area li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.bo-rs__area-label {
+  flex: 0 0 auto;
+  min-width: 56px;
+  font-size: 12px;
+  color: var(--bo-text-muted);
+}
+.bo-rs__sap-order-hint {
+  margin: 0;
+  font-size: 12px;
+}
+.bo-rs__sap-order--rejected {
+  border-color: rgba(197, 48, 48, 0.4);
+  background: rgba(197, 48, 48, 0.02);
+}
+.bo-rs__link-button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--bo-accent-hover);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--bo-font);
+  cursor: pointer;
+}
+.bo-rs__link-button:hover {
+  text-decoration: underline;
+}
+.bo-rs__link-button:focus-visible {
+  outline: 2px solid var(--bo-accent);
+  outline-offset: 2px;
+}
+.bo-rs__pill {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.bo-rs__pill--ok {
+  background: rgba(47, 133, 90, 0.12);
+  color: var(--bo-success);
+}
+.bo-rs__pill--warn {
+  background: rgba(180, 83, 9, 0.1);
+  color: var(--bo-warning);
+}
+.bo-rs__pill--danger {
+  background: rgba(197, 48, 48, 0.08);
+  color: var(--bo-danger);
+}
+/* Neutro a proposito: "Cerrada sin enviar" no es un exito ni un problema, y un estado
+   desconocido no deberia pintarse como si lo entendieramos. */
+.bo-rs__pill--muted {
+  background: var(--bo-bg);
+  color: var(--bo-text-muted);
+}
+.bo-rs__table--compact th,
+.bo-rs__table--compact td {
+  padding: 6px 10px;
+}
+.bo-rs__row:hover td {
+  background: rgba(13, 148, 136, 0.04);
+}
+.bo-rs__row:focus-visible {
+  outline: 2px solid var(--bo-accent);
+  outline-offset: -2px;
+}
+.bo-rs__cell--strong {
+  font-weight: 600;
+  color: var(--bo-text);
+}
+.bo-rs__cell--muted {
+  color: var(--bo-text-muted);
+}
+.bo-rs__cell-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--bo-text-muted);
+}
+.bo-rs__mono {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bo-rs__reason-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  max-width: 360px;
+}
+.bo-rs__reason {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  color: var(--bo-danger);
+}
+
+/* Detalle */
+.bo-rs__detail-bar {
+  display: flex;
+}
+.bo-rs__back {
+  padding: 6px 0;
+  border: none;
+  background: none;
+  color: var(--bo-accent-hover);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--bo-font);
+  cursor: pointer;
+}
+.bo-rs__back:hover {
+  text-decoration: underline;
+}
+
+.bo-rs__card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius);
+  background: var(--bo-surface);
+  box-shadow: var(--bo-shadow);
+}
+.bo-rs__card .bo-rs__table-wrap {
+  border-radius: var(--bo-radius-sm);
+}
+.bo-rs__card--sap {
+  border-color: rgba(197, 48, 48, 0.35);
+}
+.bo-rs__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bo-rs__doc-number {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--bo-text);
+}
+.bo-rs__card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--bo-text);
+}
+.bo-rs__status {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(180, 83, 9, 0.1);
+  color: var(--bo-warning);
+  font-size: 12px;
+  font-weight: 600;
+}
+.bo-rs__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  align-items: start;
+  gap: 16px 24px;
+  margin: 0;
+}
+.bo-rs__fact dt {
+  margin-bottom: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bo-text-muted);
+}
+.bo-rs__fact dd {
+  margin: 0;
+  font-size: 14px;
+  color: var(--bo-text);
+}
+
+.bo-rs__sap-message {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--bo-radius-sm);
+  background: rgba(197, 48, 48, 0.06);
+  color: var(--bo-danger);
+  font-size: 14px;
+  font-weight: 500;
+}
+.bo-rs__attempts summary {
+  font-size: 13px;
+  color: var(--bo-text-muted);
+  cursor: pointer;
+}
+
+/* Ítems */
+.bo-rs__table--items td {
+  vertical-align: top;
+}
+.bo-rs__item-row--changed td {
+  background: rgba(13, 148, 136, 0.05);
+}
+.bo-rs__item-row--warned td {
+  border-bottom: none;
+}
+.bo-rs__chip {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(13, 148, 136, 0.12);
+  color: var(--bo-accent-hover);
+  font-size: 11px;
+  font-weight: 600;
+}
+.bo-rs__warning-row td {
+  padding-top: 0;
+}
+.bo-rs__warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.bo-rs__warning {
+  padding: 6px 10px;
+  border-left: 3px solid var(--bo-warning);
+  border-radius: 0 var(--bo-radius-sm) var(--bo-radius-sm) 0;
+  background: rgba(180, 83, 9, 0.07);
+  color: var(--bo-warning);
+  font-size: 12px;
+}
+.bo-rs__warning--blocking {
+  border-left-color: var(--bo-danger);
+  background: rgba(197, 48, 48, 0.06);
+  color: var(--bo-danger);
+}
+
+/* Barra de acciones: queda a la vista mientras se recorren los ítems. */
+.bo-rs__actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius);
+  background: var(--bo-surface);
+  box-shadow: 0 -4px 12px rgba(16, 24, 40, 0.06);
+}
+.bo-rs__actions-status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--bo-text);
+}
+.bo-rs__actions-blocking {
+  color: var(--bo-danger);
+}
+.bo-rs__actions-buttons {
+  display: flex;
+  gap: 8px;
+}
+.bo-rs__button {
+  height: 38px;
+  padding: 0 20px;
+  border: 1px solid var(--bo-accent);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--bo-font);
+  cursor: pointer;
+}
+.bo-rs__button:hover:not(:disabled) {
+  background: var(--bo-accent-hover);
+  border-color: var(--bo-accent-hover);
+}
+.bo-rs__button--ghost {
+  border-color: var(--bo-border);
+  background: var(--bo-surface);
+  color: var(--bo-text);
+}
+.bo-rs__button--ghost:hover:not(:disabled) {
+  border-color: var(--bo-text-muted);
+  background: var(--bo-bg);
+}
+.bo-rs__button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.bo-rs__button:focus-visible,
+.bo-rs__back:focus-visible {
+  outline: 2px solid var(--bo-accent);
+  outline-offset: 2px;
+}
+
+/* Motivo del rechazo: tipo + mensaje */
+.bo-rs__sap-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.bo-rs__sap-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--bo-radius-sm);
+  background: rgba(197, 48, 48, 0.06);
+  font-size: 14px;
+}
+.bo-rs__sap-type {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.bo-rs__sap-type--error {
+  background: var(--bo-danger);
+  color: #fff;
+}
+.bo-rs__sap-type--warn {
+  background: var(--bo-warning);
+  color: #fff;
+}
+.bo-rs__sap-type--info {
+  background: var(--bo-text-muted);
+  color: #fff;
+}
+.bo-rs__sap-text {
+  color: var(--bo-danger);
+}
+
+/* Modal de stock */
+.bo-rs__modal.bo-rs__modal--wide {
+  max-width: min(800px, 95vw);
+}
+.bo-rs__stock-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-bg);
+}
+.bo-rs__stock-kpis dt {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bo-text-muted);
+}
+.bo-rs__stock-kpis dd {
+  margin: 2px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--bo-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Modal */
+.bo-rs__modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.45);
+}
+.bo-rs__modal {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: var(--bo-radius);
+  background: var(--bo-surface);
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+}
+.bo-rs__modal-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--bo-text);
+}
+.bo-rs__modal-text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--bo-text);
+}
+.bo-rs__change-detail strong {
+  color: var(--bo-text);
+}
+.bo-rs__modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .bo-rs {
+    padding: 16px;
+  }
+  .bo-rs__actions {
+    position: static;
+  }
+  .bo-rs__actions-buttons {
+    width: 100%;
+  }
+  .bo-rs__actions-buttons .bo-rs__button {
+    flex: 1;
+  }
+}
+
+/* Agrupa factura: qué cambia al tocarlo.
+   Es lo unico editable de la cabecera, y no corrige una linea sino el envio entero,
+   asi que la confirmacion enumera los efectos en vez de un "¿estas seguro?". */
+.bo-rs__gi-effects {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+.bo-rs__gi-effect {
+  padding: 10px 12px;
+  border-left: 3px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-bg);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--bo-text);
+}
+.bo-rs__gi-effect--warn {
+  border-left-color: var(--bo-warning);
+}
+.bo-rs__gi-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+
+/* Elegir el centro DESDE el stock: una fila por centro, compacta. */
+.bo-rs__stock-row--current td {
+  background: var(--bo-bg);
+}
+/* Centro al que el cliente no accede: se ve —saber que hay stock ahi sirve— pero
+   apagado, porque no es una opcion. */
+.bo-rs__stock-row--blocked td {
+  opacity: 0.6;
+}
+.bo-rs__cell--warn {
+  color: var(--bo-warning);
+  font-weight: 600;
+}
+/* Los almacenes de un centro, uno por linea dentro de su celda. */
+.bo-rs__stock-warehouses {
+  font-size: 12px;
+}
+.bo-rs__stock-wh {
+  display: block;
+  white-space: nowrap;
+}
+/* El link al stock, debajo del selector de centro. */
+.bo-rs__stock-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+/* El nombre del centro en UNA linea: partido en tres estiraba cada fila y hacia el
+   modal mucho mas alto de lo necesario. */
+.bo-rs__stock-center-cell {
+  min-width: 260px;
+}
+.bo-rs__stock-center-cell .bo-rs__cell--strong {
+  white-space: nowrap;
+}
+/* Que el boton de elegir no se corte ni se parta. */
+.bo-rs__table--compact td .bo-rs__button {
+  white-space: nowrap;
+}
+
+/* Titulo y descripcion del modal, en la misma linea: apilados gastaban dos renglones
+   para decir una sola cosa. Cada uno conserva su estilo; si no entran, la descripcion
+   baja sola. */
+.bo-rs__modal-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.bo-rs__modal-head .bo-rs__modal-title,
+.bo-rs__modal-head .bo-rs__modal-text {
+  margin: 0;
+}
+
+/* La pildora "Del cliente" en su propia linea, debajo del nombre del almacen: al lado
+   estiraba la columna y forzaba el scroll horizontal. */
+.bo-rs__stock-wh .bo-rs__chip {
+  display: block;
+  width: fit-content;
+  margin: 2px 0 0;
+}
+
+/* LA TABLA DE CENTROS, EN PANTALLAS ANGOSTAS.
+   Con scroll horizontal la tabla "entra", pero leer de costado es incomodo: hay que
+   arrastrar para ver el disponible y despues volver para ver de que centro era.
+   Debajo de 700px cada centro pasa a ser una ficha apilada, con el rotulo de cada dato
+   adelante (sale del data-label de la celda). Se aplica SOLO a esta tabla: las demas
+   siguen con su scroll, que para ellas alcanza. */
+@media (max-width: 700px) {
+  .bo-rs__modal--wide .bo-rs__table--compact thead {
+    /* El encabezado no sirve apilado: cada celda ya lleva su rotulo. Se esconde sin
+       sacarlo del DOM, para no romper la semantica de la tabla ni el lector de pantalla. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .bo-rs__modal--wide .bo-rs__table--compact,
+  .bo-rs__modal--wide .bo-rs__table--compact tbody,
+  .bo-rs__modal--wide .bo-rs__table--compact tr,
+  .bo-rs__modal--wide .bo-rs__table--compact td {
+    display: block;
+    width: auto;
+  }
+  .bo-rs__modal--wide .bo-rs__table--compact tr {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--bo-border);
+  }
+  .bo-rs__modal--wide .bo-rs__table--compact tr:last-child {
+    border-bottom: none;
+  }
+  .bo-rs__modal--wide .bo-rs__table--compact td {
+    padding: 2px 0;
+    border: none;
+    text-align: left;
+  }
+  /* El rotulo, delante del valor. */
+  .bo-rs__modal--wide .bo-rs__table--compact td[data-label]::before {
+    content: attr(data-label) ": ";
+    color: var(--bo-text-muted);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  /* El centro es el titulo de la ficha: no necesita rotulo. */
+  .bo-rs__modal--wide .bo-rs__table--compact td.bo-rs__stock-center-cell::before {
+    content: none;
+  }
+  .bo-rs__modal--wide .bo-rs__stock-center-cell {
+    min-width: 0;
+  }
+  .bo-rs__modal--wide .bo-rs__stock-center-cell .bo-rs__cell--strong {
+    white-space: normal;
+  }
+  /* El boton, a lo ancho de la ficha: es la accion de la tarjeta. */
+  .bo-rs__modal--wide .bo-rs__table--compact td .bo-rs__button {
+    width: 100%;
+    margin-top: 6px;
+  }
+}
+
+/* CABECERA DE LA ORDEN: que aguante datos largos.
+   Los nombres de cliente y vendedor pueden ser largos ("ERICKA PAOLA THOMAE MENCOS") y
+   antes empujaban la grilla. Ahora cortan por palabra dentro de su columna. */
+.bo-rs__fact dd {
+  overflow-wrap: anywhere;
+}
+/* El numero de orden y la pildora de estado, a los extremos: con un estado largo
+   ("Pendiente revision Backoffice") el titulo no se aplasta. */
+.bo-rs__card-head .bo-rs__doc-number {
+  margin-right: auto;
+}
+.bo-rs__card-head .bo-rs__status,
+.bo-rs__card-head .bo-rs__pill {
+  flex: 0 0 auto;
+}

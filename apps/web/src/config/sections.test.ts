@@ -11,8 +11,9 @@ import type { BackOfficeRole } from '../types';
  * ella sin volver a mirar el código. Si el código cambia y la tabla no, esto falla.
  */
 const MATRIZ: Record<string, string[]> = {
-  SuperAdmin: ['regiones', 'templates', 'rag', 'soporte', 'autorizadores'],
+  SuperAdmin: ['regiones', 'templates', 'rag', 'soporte', 'autorizadores', 'revision-sap'],
   Soporte: ['soporte'],
+  RevisionSap: ['revision-sap'],
   Usuario: ['regiones', 'templates', 'rag'],
   Administrador: ['regiones'],
   Marketing: ['templates', 'rag'],
@@ -38,21 +39,20 @@ describe('visibleSections — la matriz documentada', () => {
     expect(cubiertas).toEqual(declaradas);
   });
 
-  it('Usuario ve lo de SuperAdmin salvo soporte y lo exclusivo de SuperAdmin', () => {
+  it('Usuario ve lo de SuperAdmin salvo lo que pide un rol deliberado', () => {
     // La regla del rol, verificada contra las secciones reales y no contra una lista.
     const superAdmin = visibleSections('SuperAdmin').map((s) => s.key);
     const usuario = visibleSections('Usuario').map((s) => s.key);
-    const soporte = NAV_SECTIONS.filter((s) => s.roles.includes('Soporte')).map((s) => s.key);
-    const soloSuperAdmin = NAV_SECTIONS.filter((s) =>
-      s.roles.includes('SuperAdmin'),
+    const deliberados = ['Soporte', 'SuperAdmin', 'RevisionSap'] as const;
+    const conRolDeliberado = NAV_SECTIONS.filter((s) =>
+      s.roles.some((r) => (deliberados as readonly string[]).includes(r)),
     ).map((s) => s.key);
 
     expect(usuario.sort()).toEqual(
-      superAdmin
-        .filter((k) => !soporte.includes(k) && !soloSuperAdmin.includes(k))
-        .sort(),
+      superAdmin.filter((k) => !conRolDeliberado.includes(k)).sort(),
     );
-    expect(soporte.length).toBeGreaterThan(0);
-    expect(soloSuperAdmin.length).toBeGreaterThan(0);
+    for (const rol of deliberados) {
+      expect(NAV_SECTIONS.some((s) => s.roles.includes(rol))).toBe(true);
+    }
   });
 });

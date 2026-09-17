@@ -1,7 +1,7 @@
 # API — Mobility BackOffice
 
-> Ultima actualizacion: 2026-09-10
-> Version: 2.16.0
+> Ultima actualizacion: 2026-09-15
+> Version: 2.27.0
 
 Toda respuesta incluye `success`. Los errores siguen el formato de Nest:
 `{ message, error, statusCode }`.
@@ -134,6 +134,31 @@ La bitacora es un passthrough a `GET /mobility/document-timeline` del Middleware
 ediciones, envio, decisiones por item, contraofertas, decision de cabecera, corridas del motor
 de credito, pagos y su validacion, liberacion o denegacion de credito, cierre del turno del
 gerente, envio a SAP y anulacion con motivo. `includeViews=1` suma quien MIRO el documento.
+
+## Ordenes rechazadas por SAP
+
+**Todo el modulo exige rol `RevisionSap`** (`SuperAdmin` pasa siempre). `Usuario` no entra.
+Passthrough a `/api/mobility/backoffice-review` del Middleware (≥ 1.348.0). Ninguna respuesta
+trae precios. Ver `docs/SPEC_REVISION_ORDENES_SAP.md`.
+
+| Metodo | Ruta | Descripcion |
+|---|---|---|
+| GET | `/api/revision-sap/orders` | Bandeja, en dos vistas. Query: `view` (`pending` = `ProcessedBackoffice 0`, default \| `resolved` = `1`), `search`, `page`, `limit` (max 200), `sortBy` (`sapLastAttemptAt` \| `orderNumber` \| `customerName` \| `sellerEmail` \| `orderDate` \| `decidedAt`), `sortDir`. Cada fila trae `decidedBy`/`decidedAt` (quien cerro la revision y cuando) y `sapOrderNumber`/`sapDispatchNumber`, que dicen COMO se resolvio. ⚠️ Si `view` no viaja, el middleware devuelve pendientes y las dos pestañas muestran lo mismo **sin fallar** |
+| GET | `/api/revision-sap/orders/:guid` | Detalle sin precios: cabecera, items con centro y destino, `sapAttempts`, `backoffice.inReview`. 400 si el guid es invalido; 404 si no existe |
+| GET | `/api/revision-sap/orders/:guid/options` | Centros permitidos del cliente, destinos del area de la orden y, con `includeStock=1`, el stock de SAP por producto y centro. Las fuentes que fallan vienen en `errors` |
+| PUT | `/api/revision-sap/orders/:guid/items/:itemGuid/destination` | Body `{ destinationCode, reasonNotes? }`. Quien hace el cambio sale del token. 400 destino invalido o fuera del area; 404 orden o linea inexistente; 409 la orden ya no esta en revision |
+| PUT | `/api/revision-sap/orders/:guid/items/:itemGuid/center` | Body `{ centerCode, reasonNotes? }`. 400 centro invalido o no permitido para el cliente; 404 orden o linea inexistente; 409 la orden ya no esta en revision. Un centro sin stock se acepta |
+| PUT | `/api/revision-sap/orders/:guid/group-invoice` | Body `{ groupInvoice: boolean, reasonNotes? }` — agrupa factura es de CABECERA: decide si la orden puede salir parcial. `groupInvoice` debe ser booleano (`"si"` o `1` dan 400). 404 orden inexistente; 409 la orden ya no esta en revision |
+| POST | `/api/revision-sap/orders/:guid/resend` | Reenvia la orden COMPLETA a SAP. **Sin body**: que se manda lo decide el servidor y quien lo manda sale del token. Llama al envio del middleware (`businessorders2sap` con `asBackoffice: true`), que crea el pedido, estampa el resultado y cierra la revision si SAP acepta. Devuelve `{ accepted, skipped, sapOrderNumber, sapDispatchNumber, error, filteredItemsCount, stillInReview }`. 409 si el pedido ya existe en SAP; 503 si SAP no confirmo (⚠️ el pedido pudo haberse creado). Audita `REVISION_SAP_RESEND` siempre |
+| GET | `/api/revision-sap/orders/:guid/sap-orders` | Ordenes SAP de la orden con su centro, su estado (`accepted` \| `accepted_no_dispatch` \| `rejected` \| `no_response`) y sus items, sin precios. Cada item trae la linea original (`itemGuid`, centro, destino) para poder corregirla |
+| GET | `/api/revision-sap/orders/:guid/stock/:productCode` | Stock de un producto de la orden por centro y almacen, marcando los habilitados para el cliente. 404 si el producto no es de esa orden |
+
+**Auditoria**: los cambios registran `REVISION_SAP_DESTINATION_CHANGE` y
+`REVISION_SAP_CENTER_CHANGE` (categoria `SapReview`) solo si el valor realmente cambio. Las
+lecturas no se auditan: quedan en los `ApiLogs` del Middleware.
+
+**Lo que no esta**: el reenvio a SAP. Espera a que el Middleware parta la orden en una orden SAP
+por centro, avise los items sin stock antes de enviar y no pueda duplicar pedidos.
 
 ## Matriz de autorizadores
 

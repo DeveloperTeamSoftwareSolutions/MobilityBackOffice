@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Por que se creo el endpoint de destinos de entrega por area de venta en el Middleware, y por que lee de una vista nueva.">
+<title>Destinos de entrega por área de venta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #f6f8fa;
+    --surface: #ffffff;
+    --surface-sunk: #eef2f6;
+    --line: #dbe3ea;
+    --ink: #15212e;
+    --ink-soft: #465667;
+    --ink-mute: #6b7a8a;
+    --blue: #2c5282;
+    --blue-soft: #e4ecf6;
+    --amber: #a8620c;
+    --amber-soft: #fbf0e2;
+    --teal: #0d7a70;
+    --teal-soft: #e2f2f0;
+    --shadow: 0 1px 2px rgba(21, 33, 46, .05), 0 6px 20px -12px rgba(21, 33, 46, .18);
+    --measure: 66ch;
+    --step-0: 1.0625rem;
+    --step-1: 1.3rem;
+    --step-2: 1.7rem;
+    --step-3: 2.35rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #10161d;
+      --surface: #17202a;
+      --surface-sunk: #1d2833;
+      --line: #2b3846;
+      --ink: #e8eef4;
+      --ink-soft: #b3c1cf;
+      --ink-mute: #8b9aab;
+      --blue: #8fb4e0;
+      --blue-soft: #1b2c42;
+      --amber: #e0a460;
+      --amber-soft: #2f2417;
+      --teal: #55c4b8;
+      --teal-soft: #14312e;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px -12px rgba(0, 0, 0, .7);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #10161d;
+    --surface: #17202a;
+    --surface-sunk: #1d2833;
+    --line: #2b3846;
+    --ink: #e8eef4;
+    --ink-soft: #b3c1cf;
+    --ink-mute: #8b9aab;
+    --blue: #8fb4e0;
+    --blue-soft: #1b2c42;
+    --amber: #e0a460;
+    --amber-soft: #2f2417;
+    --teal: #55c4b8;
+    --teal-soft: #14312e;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px -12px rgba(0, 0, 0, .7);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 74ch;
+    margin: 0 auto;
+    padding: clamp(2.5rem, 6vw, 5rem) clamp(1.15rem, 4vw, 2rem) 5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2.75rem;
+  }
+
+  .prose { max-width: var(--measure); }
+
+  h1, h2, h3 {
+    font-family: Newsreader, Georgia, 'Times New Roman', serif;
+    font-weight: 500;
+    text-wrap: balance;
+    margin: 0;
+    line-height: 1.18;
+    letter-spacing: -.01em;
+  }
+  h1 { font-size: var(--step-3); }
+  h2 { font-size: var(--step-2); }
+  h3 { font-size: var(--step-1); }
+  p { margin: 0; }
+
+  .eyebrow {
+    font-size: .74rem;
+    font-weight: 600;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin: 0 0 .85rem;
+  }
+
+  .lede {
+    font-family: Newsreader, Georgia, serif;
+    font-size: var(--step-1);
+    line-height: 1.5;
+    color: var(--ink-soft);
+    margin-top: 1.1rem;
+  }
+
+  section { display: flex; flex-direction: column; gap: 1.1rem; }
+  strong, b { font-weight: 600; color: var(--ink); }
+  ul { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: .35rem; }
+
+  code, .mono {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: .875em;
+  }
+  code {
+    background: var(--surface-sunk);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: .08em .35em;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+  pre {
+    margin: 0;
+    padding: 1rem 1.15rem;
+    overflow-x: auto;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: .82rem;
+    line-height: 1.55;
+    color: var(--ink);
+  }
+
+  /* ---- Flujo de datos ---- */
+  .flow {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 1.4rem 1.5rem 1.6rem;
+  }
+  .flow-cap { font-size: .8rem; color: var(--ink-mute); margin: 0 0 1.1rem; }
+  .flow-steps { display: flex; flex-wrap: wrap; align-items: stretch; gap: .6rem; }
+  .fstep {
+    flex: 1 1 9rem;
+    min-width: 9rem;
+    background: var(--surface-sunk);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: .75rem .85rem;
+  }
+  .fstep b { display: block; font-size: .92rem; overflow-wrap: anywhere; }
+  .fstep span { display: block; font-size: .8rem; color: var(--ink-mute); margin-top: .2rem; }
+  .fstep--new { background: var(--teal-soft); border-color: var(--teal); }
+  .fstep--new b { color: var(--teal); }
+  .farrow { align-self: center; color: var(--ink-mute); font-size: 1.1rem; }
+
+  /* ---- Decisiones ---- */
+  .decision {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .decision-head { padding: 1.1rem 1.4rem; border-bottom: 1px solid var(--line); background: var(--surface-sunk); }
+  .decision-head h3 { font-size: 1.18rem; }
+  .decision-head p { font-size: .9rem; color: var(--ink-mute); margin-top: .3rem; }
+  .opts { display: grid; grid-template-columns: 1fr; }
+  @media (min-width: 620px) { .opts { grid-template-columns: 1fr 1fr; } }
+  .opt { padding: 1.15rem 1.4rem 1.35rem; border-top: 1px solid var(--line); }
+  @media (min-width: 620px) { .opt + .opt { border-left: 1px solid var(--line); } }
+  .opt--pick { background: var(--teal-soft); }
+  .opt-tag {
+    display: inline-block;
+    font-size: .68rem;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: .15em .55em;
+    border-radius: 999px;
+    margin-bottom: .55rem;
+  }
+  .opt--pick .opt-tag { background: var(--teal); color: #fff; }
+  .opt--alt .opt-tag { background: var(--surface-sunk); color: var(--ink-mute); border: 1px solid var(--line); }
+  .opt h4 { margin: 0 0 .5rem; font-size: 1rem; font-weight: 600; color: var(--ink); }
+  .opt ul { font-size: .92rem; color: var(--ink-soft); }
+  .why { padding: 1.05rem 1.4rem 1.25rem; border-top: 1px solid var(--line); font-size: .95rem; color: var(--ink-soft); }
+
+  /* ---- Tablas ---- */
+  .tablewrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .93rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  th, td { text-align: left; padding: .6rem .85rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th {
+    font-size: .74rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    font-weight: 600;
+    background: var(--surface-sunk);
+  }
+  tr:last-child td { border-bottom: 0; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* ---- Pasos ---- */
+  ol.plan { margin: 0; padding: 0; list-style: none; counter-reset: paso; display: flex; flex-direction: column; gap: .85rem; }
+  ol.plan li { counter-increment: paso; position: relative; padding-left: 2.6rem; }
+  ol.plan li::before {
+    content: counter(paso);
+    position: absolute;
+    left: 0;
+    top: .05rem;
+    width: 1.8rem;
+    height: 1.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--blue);
+    color: #fff;
+    font-size: .85rem;
+    font-weight: 600;
+  }
+  ol.plan b { display: block; }
+  ol.plan span { color: var(--ink-soft); font-size: .95rem; }
+
+  .callout {
+    background: var(--blue-soft);
+    border-left: 3px solid var(--blue);
+    border-radius: 0 8px 8px 0;
+    padding: .9rem 1.15rem;
+    font-size: .95rem;
+    color: var(--ink-soft);
+  }
+  /* Va despues de .callout: misma especificidad, gana la ultima. */
+  .callout--warn { background: var(--amber-soft); border-left-color: var(--amber); }
+
+  /* ---- Ejemplo: dos direcciones ---- */
+  .addr { display: grid; grid-template-columns: 1fr; gap: .75rem; }
+  @media (min-width: 620px) { .addr { grid-template-columns: 1fr 1fr; } }
+  .addr-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.15rem; }
+  .addr-card .eyebrow { margin-bottom: .4rem; }
+  .addr-card p { font-size: .95rem; color: var(--ink-soft); }
+  .addr-card code { font-size: .8rem; }
+
+  a { color: var(--blue); }
+  a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+  footer { font-size: .82rem; color: var(--ink-mute); border-top: 1px solid var(--line); padding-top: 1.2rem; }
+</style>
+</head>
+
+<body>
+<div class="page">
+
+  <header class="prose">
+    <p class="eyebrow">MobilityMiddleWare · 1.347.0 · PR #642, mergeado el 15/09/2026</p>
+    <h1>Destinos de entrega por área de venta</h1>
+    <p class="lede">
+      Un endpoint nuevo que lee los destinos de entrega desde la tabla que reemplaza a la
+      deprecada, filtrados por la sociedad, el canal y el sector de la orden. Este documento
+      explica qué se creó, por qué, y por qué lee de una vista.
+    </p>
+  </header>
+
+  <section>
+    <h2>Qué se creó</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Pieza</th><th>Nombre</th></tr></thead>
+        <tbody>
+          <tr><td>Endpoint (listado)</td><td><code>GET /api/v2/mobility/customer-delivery-destinations</code></td></tr>
+          <tr><td>Endpoint (por cliente)</td><td><code>GET /api/v2/mobility/customer-delivery-destinations/:customerCode</code></td></tr>
+          <tr><td>Vista</td><td><code>VIEW_V2_CustomerDeliveryDestinationsMobility</code> (base Mobility)</td></tr>
+          <tr><td>Tabla fuente</td><td><code>[SAPServices].[dbo].[CustomerDeliveryDestinations]</code></td></tr>
+          <tr><td>Script de la vista</td><td><code>sql/VIEW_V2_CustomerDeliveryDestinationsMobility.sql</code></td></tr>
+          <tr><td>Ruta</td><td><code>src/api/routes/customerDeliveryDestinationsMobility.js</code></td></tr>
+          <tr><td>Repositorio</td><td><code>src/db/repositories/customerDeliveryDestinationsMobilityV2.repository.js</code></td></tr>
+          <tr><td>Tests</td><td><code>tests/destinosDeEntregaPorAreaDeVenta.test.js</code> (9 casos)</td></tr>
+          <tr><td>Contrato</td><td><code>docs/API_CUSTOMER_DELIVERY_DESTINATIONS_MOBILITY.md</code></td></tr>
+          <tr><td>Versión</td><td>1.346.0 → <b>1.347.0</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="flow" role="figure" aria-label="Recorrido de los datos">
+      <p class="flow-cap">De dónde salen los datos y quién los consume</p>
+      <div class="flow-steps">
+        <div class="fstep"><b>CustomerDeliveryDestinations</b><span>+ CustomerDetails, en SAPServices</span></div>
+        <div class="farrow" aria-hidden="true">→</div>
+        <div class="fstep fstep--new"><b>VIEW_V2_CustomerDeliveryDestinationsMobility</b><span>vista nueva, en Mobility</span></div>
+        <div class="farrow" aria-hidden="true">→</div>
+        <div class="fstep fstep--new"><b>/customer-delivery-destinations</b><span>endpoint nuevo del Middleware</span></div>
+        <div class="farrow" aria-hidden="true">→</div>
+        <div class="fstep"><b>MobilityIA y BackOffice</b><span>destinos del área de la orden</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Por qué hacía falta</h2>
+    <div class="prose">
+      <ul>
+        <li><b>La tabla vieja está deprecada.</b> <code>DeliveryDestinations</code> quedó marcada para dejar de usarse y su reemplazo es <code>CustomerDeliveryDestinations</code>.</li>
+        <li><b>Ningún endpoint leía la tabla nueva.</b> Los dos endpoints de destinos que existían (<code>/api/mobility/delivery-destinations</code> y su versión v2) seguían leyendo la vieja.</li>
+        <li><b>La tabla nueva tiene los destinos por área de venta.</b> Cada destino de un cliente aparece una vez por cada combinación de sociedad + canal + sector donde está habilitado. En QATEST, el cliente <code>10034439</code> tiene <b>160 filas para 30 destinos</b>.</li>
+        <li><b>La revisión de órdenes rechazadas por SAP lo necesita.</b> El equipo decidió que BackOffice elija el destino de cada ítem solo entre los del área de venta de la orden. Si se ofrecen destinos de otra área, SAP rechaza la orden de nuevo.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Decisión 1 — Un endpoint nuevo, no cambiar el existente</h2>
+    <div class="decision">
+      <div class="decision-head">
+        <h3>¿Se cambia la fuente del endpoint actual o se crea uno nuevo?</h3>
+        <p>El endpoint actual lo usa MobilityIA para su copia offline de destinos.</p>
+      </div>
+      <div class="opts">
+        <div class="opt opt--pick">
+          <span class="opt-tag">Elegida</span>
+          <h4>Endpoint nuevo</h4>
+          <ul>
+            <li>El endpoint viejo sigue igual: MobilityIA no se rompe mientras migra.</li>
+            <li>Suma los campos del área (<code>companyCode</code>, <code>channelCode</code>, <code>sectorCode</code>) y los filtros por esos campos.</li>
+            <li>Cada consumidor migra cuando esté listo para filtrar por área.</li>
+          </ul>
+        </div>
+        <div class="opt opt--alt">
+          <span class="opt-tag">Descartada</span>
+          <h4>Cambiarle la fuente al endpoint viejo</h4>
+          <ul>
+            <li>MobilityIA guarda los destinos en el celular, uno por fila.</li>
+            <li>Con la tabla nueva, cada destino llegaría una vez por área: se verían repetidos hasta 13 veces.</li>
+            <li>Rompe una app en producción sin que nadie cambie su código.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Decisión 2 — El endpoint lee de una vista</h2>
+
+    <p class="prose">Una vista es una consulta guardada en la base. El endpoint lee de ella en lugar de ir directo a las tablas. Esta une dos tablas, las dos de SAPServices:</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Tabla</th><th>Qué aporta</th><th>Cómo se une</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>CustomerDeliveryDestinations</code></td>
+            <td>Todas las filas: sociedad, canal, sector, cliente, código, nombre y dirección del destino.</td>
+            <td>Tabla principal</td>
+          </tr>
+          <tr>
+            <td><code>CustomerDetails</code></td>
+            <td><b>Solo la calle del cliente</b> (<code>Street</code> + <code>Street2</code>), que sale como <code>customerStreet</code>.</td>
+            <td>LEFT JOIN por <code>CustomerCode</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Qué es <code>customerStreet</code></h3>
+    <p class="prose">Es la dirección <b>del cliente</b>, no la del destino. Son dos direcciones distintas (ejemplo ilustrativo):</p>
+    <div class="addr">
+      <div class="addr-card">
+        <p class="eyebrow">Dirección del destino</p>
+        <p>Finca San Rafael — Aldea El Rosario, Escuintla</p>
+        <p><code>deliveryAddress</code>, de <code>CustomerDeliveryDestinations</code></p>
+      </div>
+      <div class="addr-card">
+        <p class="eyebrow">Dirección del cliente</p>
+        <p>Agroservicios del Norte — Av. Principal 1</p>
+        <p><code>customerStreet</code>, de <code>CustomerDetails</code></p>
+      </div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-head">
+        <h3>¿Vista o consulta directa a la tabla?</h3>
+        <p>La única razón para unir la segunda tabla es <code>customerStreet</code>.</p>
+      </div>
+      <div class="opts">
+        <div class="opt opt--pick">
+          <span class="opt-tag">Elegida</span>
+          <h4>Vista nueva</h4>
+          <ul>
+            <li><b>MobilityIA necesita <code>customerStreet</code></b>: lo confirmó Silvina el 15/09/2026. El endpoint viejo ya lo devolvía y la app lo muestra.</li>
+            <li><code>CustomerDetails</code> tiene <b>varias filas por cliente</b>. La vista se queda con la más reciente (<code>ROW_NUMBER</code> por <code>ServerTimestamp</code>); sin eso, cada destino saldría repetido.</li>
+            <li>Pasa los textos a la collation de Mobility (<code>Latin1_General_100_CI_AI_SC</code>). Si no, un filtro o un JOIN con tablas de Mobility puede devolver cero filas sin dar error.</li>
+            <li>Es el patrón del Middleware: todo lo que viene de SAPServices se lee a través de una vista <code>VIEW_V2_*</code>, y <code>npm run check:drift</code> controla que coincidan con la base.</li>
+          </ul>
+        </div>
+        <div class="opt opt--alt">
+          <span class="opt-tag">Descartada</span>
+          <h4>Leer la tabla directo desde el repositorio</h4>
+          <ul>
+            <li>Tenía sentido solo si nadie necesitaba <code>customerStreet</code>: quedaba una consulta a una sola tabla.</li>
+            <li>Se ahorraba correr un script SQL en el deploy.</li>
+            <li>Pero el JOIN, la deduplicación y la collation quedarían escritos dentro del código, fuera del patrón del equipo.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="why"><b>Por qué la vista:</b> como MobilityIA sí necesita la dirección del cliente, hay que unir las dos tablas y deduplicar. Eso queda en un solo lugar, igual que en la vista del endpoint viejo (<code>VIEW_V2_DeliveryDestinationsMobility</code>), que hace exactamente lo mismo sobre la tabla deprecada.</p>
+    </div>
+
+    <p class="callout"><b>Índices:</b> no hizo falta crear ninguno. La consulta usa <code>IX_CustomerDeliveryDestinations_CustomerCode</code> e <code>IX_CustomerDetails_CustomerCode</code>, que ya existen en SAPServices y cubren las columnas que lee la vista (verificado en QATEST).</p>
+  </section>
+
+  <section>
+    <h2>Contrato</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Parámetro</th><th>Qué hace</th></tr></thead>
+        <tbody>
+          <tr><td><code>customerCode</code></td><td>Cliente. Alfanumérico, hasta 32.</td></tr>
+          <tr><td><code>companyCode</code> · <code>channelCode</code> · <code>sectorCode</code></td><td>Área de venta. Para los destinos de una orden, mandar los tres.</td></tr>
+          <tr><td><code>search</code></td><td>Busca en cliente, código, nombre y dirección del destino.</td></tr>
+          <tr><td><code>page</code> · <code>limit</code></td><td>Paginación. Máximo 200 por página; 50 000 con <code>export=1</code>.</td></tr>
+          <tr><td><code>sortBy</code> · <code>sortDir</code></td><td>Orden por lista blanca, con desempate por <code>Guid</code> (el mismo destino se repite entre áreas).</td></tr>
+          <tr><td><code>serverTimestampGt</code></td><td>Sincronización incremental, con el mismo contrato que el endpoint viejo.</td></tr>
+        </tbody>
+      </table>
+    </div>
+<pre>GET /api/v2/mobility/customer-delivery-destinations?customerCode=10034439&amp;companyCode=3800&amp;channelCode=11&amp;sectorCode=10
+
+{
+  "success": true,
+  "data": [{
+    "guid": "48D39877-FF82-4434-9C35-079C372B4B2E",
+    "companyCode": "3800", "channelCode": "11", "sectorCode": "10",
+    "customerCode": "10034439",
+    "destinationCode": "30002555",
+    "destinationName": "AGRI STAR MEXICO",
+    "deliveryAddress": "LIBRAMIENTO NACIONES UNID AS  NO. 1179  CD. VICTORIA Tamaulipas",
+    "customerStreet": "AV. MARIANO OTERO  NO. 23 47",
+    "serverTimestamp": 1784554479906, "deletedTimestamp": null
+  }],
+  "pagination": { "total": 30, "page": 1, "limit": 50, "totalPages": 1 }
+}</pre>
+    <p class="prose">Errores: <b>400</b> si un código no es alfanumérico o es demasiado largo; <b>404</b> en <code>/:customerCode</code> si no hay destinos con esos filtros, igual que el endpoint viejo.</p>
+  </section>
+
+  <section>
+    <h2>Verificado en QATEST</h2>
+    <p class="prose">La vista se aplicó en <code>Mobility_QATEST</code> el 15/09/2026 (9 813 filas) y el endpoint se probó contra esa base.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Prueba</th><th>Resultado</th></tr></thead>
+        <tbody>
+          <tr><td>Cliente 10034439 con el área de la orden (3800 / 11 / 10)</td><td>30 destinos</td></tr>
+          <tr><td>El mismo cliente sin filtro de área</td><td>160 filas</td></tr>
+          <tr><td>Por cliente con área</td><td>30 destinos</td></tr>
+          <tr><td>Cliente sin destinos</td><td>404</td></tr>
+          <tr><td>Código inválido</td><td>400</td></tr>
+          <tr><td>Sincronización completa (<code>export=1</code>)</td><td>9 813 filas en 442 ms</td></tr>
+          <tr><td>Tests del Middleware</td><td>1 821 / 1 821</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Deploy — en este orden</h2>
+    <ol class="plan">
+      <li><b>Aplicar la vista en PROD</b><span>Correr <code>sql/VIEW_V2_CustomerDeliveryDestinationsMobility.sql</code> (ya trae <code>USE [Mobility-PROD]</code>). Sin la vista, el endpoint responde 500.</span></li>
+      <li><b>Deployar el Middleware 1.347.0</b><span>Sin variables de entorno nuevas. Verificar con <code>/api/health</code> y una llamada con un cliente y su área.</span></li>
+      <li><b>Deployar MobilityIA con el cambio de Silvina</b><span>Recién después del Middleware: antes, la ruta no existe.</span></li>
+      <li><b>Más adelante, deprecar <code>/delivery-destinations</code></b><span>Cuando ningún consumidor lo use. No es parte de este cambio.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Qué tiene que cambiar MobilityIA</h2>
+    <div class="prose">
+      <ul>
+        <li><b>Sincronización:</b> en <code>deliverydestinations.handler.js</code>, pedir el endpoint nuevo con los mismos parámetros y guardar también <code>companyCode</code>, <code>channelCode</code> y <code>sectorCode</code>.</li>
+        <li><b>Resincronizar todo una vez.</b> Los <code>guid</code> son de otra tabla; si solo se cambia la URL, quedan mezclados los destinos viejos con los nuevos.</li>
+        <li><b>En la orden,</b> mostrar solo los destinos del área de venta de la orden. Conviene un índice compuesto en la copia offline.</li>
+        <li><b>Proxy</b> <code>deliveryDestinations.js</code>: reenviar los tres filtros de área.</li>
+      </ul>
+    </div>
+    <p class="callout callout--warn"><b>Los destinos dados de baja</b> no vienen en la respuesta, igual que hoy: desaparecen de la copia offline con la resincronización completa de cada 24 horas.</p>
+  </section>
+
+  <footer>
+    Documento de decisión — tarea «Órdenes rechazadas por SAP en BackOffice» · 15/09/2026 ·
+    Middleware 1.347.0 · PR #642 (DeveloperTeam-Private/MobilityMiddleWare)
+  </footer>
+
+</div>
+</body>
+</html>

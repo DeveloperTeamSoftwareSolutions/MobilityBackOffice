@@ -10,6 +10,7 @@ import { RagPage } from './pages/RagPage';
 import { PlantillasPage } from './pages/PlantillasPage';
 import { SoportePage } from './pages/SoportePage';
 import { AutorizadoresPage } from './pages/AutorizadoresPage';
+import { RevisionSapPage } from './pages/RevisionSapPage';
 
 /**
  * Router de la aplicación. Punto único donde se declaran los módulos.
@@ -78,6 +79,18 @@ export function App(): JSX.Element {
                   fallback={<Navigate to="/" replace />}
                 >
                   <AutorizadoresPage />
+                </RoleGuard>
+              }
+            />
+
+            <Route
+              path="ordenes-rechazadas-sap"
+              element={
+                <RoleGuard
+                  allow={['RevisionSap']}
+                  fallback={<Navigate to="/" replace />}
+                >
+                  <RevisionSapPage />
                 </RoleGuard>
               }
             />

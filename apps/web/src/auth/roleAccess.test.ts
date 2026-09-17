@@ -80,6 +80,35 @@ describe('roleAllows — rol Usuario', () => {
   });
 });
 
+describe('roleAllows — rol RevisionSap', () => {
+  /**
+   * Reasignar y reenviar órdenes a SAP se le da a quien hace esa tarea. Por eso
+   * `Usuario`, que recibe por defecto toda sección nueva, no la ve.
+   */
+  it('RevisionSap entra a su sección y SuperAdmin también', () => {
+    expect(roleAllows('RevisionSap', ['RevisionSap'])).toBe(true);
+    expect(roleAllows('SuperAdmin', ['RevisionSap'])).toBe(true);
+  });
+
+  it('Usuario NO entra, aunque su regla sea por exclusión', () => {
+    expect(roleAllows('Usuario', ['RevisionSap'])).toBe(false);
+  });
+
+  it('ningún otro rol entra', () => {
+    expect(roleAllows('Administrador', ['RevisionSap'])).toBe(false);
+    expect(roleAllows('Marketing', ['RevisionSap'])).toBe(false);
+    expect(roleAllows('Soporte', ['RevisionSap'])).toBe(false);
+    expect(roleAllows(null, ['RevisionSap'])).toBe(false);
+  });
+
+  it('RevisionSap no ve las demás secciones', () => {
+    expect(roleAllows('RevisionSap', ['Administrador'])).toBe(false);
+    expect(roleAllows('RevisionSap', ['Marketing'])).toBe(false);
+    expect(roleAllows('RevisionSap', ['Soporte'])).toBe(false);
+    expect(roleAllows('RevisionSap', ['SuperAdmin'])).toBe(false);
+  });
+});
+
 describe('roleAllows — secciones exclusivas de SuperAdmin', () => {
   /**
    * Una seccion que lista `SuperAdmin` como unico rol permitido no la ve nadie mas.

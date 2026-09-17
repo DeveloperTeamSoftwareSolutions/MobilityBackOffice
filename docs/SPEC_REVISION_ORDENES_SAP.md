@@ -1,6 +1,6 @@
 # Órdenes rechazadas por SAP — Spec
 
-> Última actualización: 2026-09-17 · Versión: 2.34.1
+> Última actualización: 2026-09-17 · Versión: 2.34.2
 > Estado: **bandeja, detalle y correcciones conectados** (requiere Middleware ≥ 1.356.0,
 > PR #646, y `MIDDLEWARE_API_KEY` configurada en los dos lados).
 > **El reenvío a SAP NO**: espera el envío propio de BackOffice, que parte la orden en
@@ -81,13 +81,12 @@ MobilityManager.
   "Pendiente revisión Backoffice", "Procesada"). Se muestra en la cabecera porque es lo
   que cambia al reenviar: si SAP acepta pasa a `SentToSAP`, y si rechaza se queda en
   `PendingBackofficeReview`. El código crudo queda en el `title`.
-  - **Una sola etiqueta destacada, no dos.** El estado formal y la bandera de revisión
-    (`ProcessedBackoffice = 0`) dicen cosas distintas y las dos son ciertas, pero con el
-    mismo peso se contradicen a la vista: una orden en revisión se anunciaba como
-    **"Procesada"** al lado de "En revisión por BackOffice". Y `Processed` no significa
-    terminada — MobilityIA se la muestra al vendedor como *"Pendiente envío a SAP"*.
-    - **En revisión:** manda el cartel "En revisión por BackOffice", que es el dato
-      accionable, y el estado formal va al lado en chico (`Estado: …`).
+  - **Una sola etiqueta, nunca dos.**
+    - **En revisión:** se muestra **sólo** "En revisión por BackOffice". El `StatusCode`
+      no se muestra (queda en el `title`): no agrega nada y confunde. Las órdenes nuevas
+      quedan en `PendingBackofficeReview`, que diría lo mismo dos veces; las viejas en
+      `Processed`, que se lee como "terminada" cuando es lo contrario — MobilityIA se lo
+      muestra al vendedor como *"Pendiente envío a SAP"*.
     - **Fuera de revisión:** el estado es lo único que importa y toma la píldora.
   - Las transiciones las hace el **Middleware**, no BackOffice
     (`markSentToSapAfterBackoffice` / `markPendingBackofficeReview`).

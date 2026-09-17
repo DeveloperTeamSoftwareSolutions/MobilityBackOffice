@@ -278,14 +278,22 @@ describe('ReviewOrderDetail', () => {
    * cartel —si no, una orden en revisión se anuncia como "Procesada", que se lee como
    * lo contrario de lo que pasa.
    */
-  it('en revisión: manda el cartel y el estado formal va al lado, en chico', async () => {
+  it('en revisión: se muestra SOLO el cartel, sin el estado formal', async () => {
     api.getReviewOrder.mockResolvedValue(order({ statusCode: 'Processed' }));
     await renderDetail();
 
     expect(screen.getByText('En revisión por BackOffice')).toBeTruthy();
-    expect(screen.getByText('Estado: Procesada')).toBeTruthy();
-    // "Procesada" no aparece suelta como si fuera el titular.
-    expect(screen.queryByText('Procesada')).toBeNull();
+    // Nada de "Procesada": no agrega nada y se lee como lo contrario de lo que pasa.
+    expect(screen.queryByText(/Procesada/)).toBeNull();
+    expect(screen.queryByText(/^Estado: /)).toBeNull();
+  });
+
+  it('en revisión tampoco repite el estado nuevo, que diría lo mismo dos veces', async () => {
+    api.getReviewOrder.mockResolvedValue(order({ statusCode: 'PendingBackofficeReview' }));
+    await renderDetail();
+
+    // Una sola vez, no "En revisión por BackOffice — Pendiente revisión Backoffice".
+    expect(screen.getAllByText(/revisión (por )?Backoffice/i)).toHaveLength(1);
   });
 
   it('fuera de revisión: el estado es lo único que importa y toma la etiqueta', async () => {

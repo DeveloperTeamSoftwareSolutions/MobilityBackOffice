@@ -275,22 +275,17 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
           <h2 id="bo-rs-order-title" className="bo-rs__doc-number">
             {order.orderNumber}
           </h2>
-          {/* UNA sola etiqueta destacada, no dos.
-              El estado formal y la bandera de revisión dicen cosas distintas y las dos
-              son ciertas, pero juntas y con el mismo peso se contradicen a la vista:
-              una orden en revisión aparecía como "Procesada" al lado de "En revisión",
-              y `Processed` justamente NO significa terminada (a MobilityIA se la muestra
-              al vendedor como "Pendiente envío a SAP").
-              Mientras esté en revisión manda ese cartel, que es el dato accionable; el
-              estado formal queda al lado, en chico. Cuando sale de revisión, el estado
-              pasa a ser lo único que importa y toma la píldora. */}
+          {/* UNA sola etiqueta, nunca dos.
+              Mientras la orden está en revisión, el único dato que importa es ese: el
+              StatusCode no agrega nada y encima confunde — las órdenes nuevas quedan en
+              `PendingBackofficeReview`, que diría lo mismo dos veces, y las viejas en
+              `Processed`, que se lee como "terminada" cuando es lo contrario (MobilityIA
+              se lo muestra al vendedor como "Pendiente envío a SAP").
+              Cuando sale de revisión, el estado pasa a ser lo único que importa. */}
           {order.backoffice.inReview ? (
-            <>
-              <span className="bo-rs__status">En revisión por BackOffice</span>
-              <span className="bo-rs__cell--muted" title={order.statusCode ?? undefined}>
-                Estado: {statusLabel(order.statusCode)}
-              </span>
-            </>
+            <span className="bo-rs__status" title={order.statusCode ?? undefined}>
+              En revisión por BackOffice
+            </span>
           ) : (
             <span
               className={`bo-rs__pill bo-rs__pill--${statusTone(order.statusCode)}`}

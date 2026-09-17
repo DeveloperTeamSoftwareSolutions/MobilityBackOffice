@@ -1,9 +1,10 @@
 # Órdenes rechazadas por SAP — Spec
 
-> Última actualización: 2026-09-17 · Versión: 2.32.0
-> Estado: **todo conectado, reenvío a SAP incluido** (requiere Middleware ≥ 1.356.0,
+> Última actualización: 2026-09-17 · Versión: 2.33.0
+> Estado: **bandeja, detalle y correcciones conectados** (requiere Middleware ≥ 1.356.0,
 > PR #646, y `MIDDLEWARE_API_KEY` configurada en los dos lados).
-> Falta la división por centro (Gustavo): hoy el reenvío sale como una sola orden SAP.
+> **El reenvío a SAP NO**: espera el envío propio de BackOffice, que parte la orden en
+> una orden SAP por centro de distribución (lo arma Gustavo).
 
 ## Qué resuelve
 
@@ -15,7 +16,7 @@ MobilityIA la deja en solo lectura y el vendedor ya no puede reenviarla. BackOff
 2. ve el motivo del rechazo de SAP, con los intentos anteriores;
 3. corrige **por ítem** el centro de distribución y el destino de entrega *(conectado)*;
 4. ve en cuántas órdenes SAP salió la orden y el estado de cada una *(conectado)*;
-5. reenvía la orden completa a SAP *(conectado)*.
+5. reenvía la orden completa a SAP *(pendiente: espera el envío por centro de Gustavo)*.
 
 ## Respuestas del jefe (2026-09-15)
 
@@ -106,21 +107,44 @@ MobilityManager.
     entrega, motivo y sus productos. Es el historial de cómo salió cada intento.
   - **Reenviar es de la orden COMPLETA** (confirmado con el equipo el 2026-09-17): se
     manda la `BusinessOrder` y el Middleware decide en cuántas órdenes SAP sale. El botón
-    vive en la barra de acciones, junto a Guardar, y **está conectado**.
+    vive en la barra de acciones, junto a Guardar, **deshabilitado** (ver abajo).
 
-**Reenvío a SAP** (`POST /api/revision-sap/orders/:guid/resend`, sin body):
+**Reenvío a SAP** (`POST /api/revision-sap/orders/:guid/resend`, sin body) —
+⚠️ **DESCONECTADO**, esperando el envío propio de BackOffice.
 
-- Una sola llamada al envío del Middleware —el **mismo** que usa el vendedor— con
-  `asBackoffice: true` + `x-api-key`. Ese endpoint manda el pedido, estampa el resultado,
-  deja el comentario en el hilo del vendedor, mueve la cabecera y **cierra la revisión si
-  SAP acepta**: el envío exitoso *es* el cierre, no un trámite aparte.
-- **Confirma antes**, porque crea un pedido real en SAP que no se deshace desde acá. El
-  aviso dice si hay cambios sin guardar (se reenviaría sin ellos), cuántos productos
-  siguen con un aviso que bloquea, y qué implica el valor de agrupa factura.
-- **No se bloquea** por cambios sin guardar ni por avisos: se informan y decide el
-  operador. Lo único que apaga el botón es que la orden ya no esté en revisión.
+**Por qué.** El envío del Middleware (`businessorders2sap`) manda la orden como **una
+sola orden SAP**: es el camino de MobilityIA. BackOffice necesita que se parta en **una
+orden SAP por centro de distribución**, y esa función la arma **Gustavo**. Hasta
+entonces, usar el envío de MobilityIA crearía en SAP un pedido sin dividir — que es justo
+lo que este circuito viene a evitar, y en SAP no se deshace.
+
+**Cómo está cortado**, y por qué así:
+
+| Capa | Estado |
+|---|---|
+| Botón | Visible pero **deshabilitado**, con el motivo en el `title`. Se deja a la vista para que se sepa que la acción va ahí |
+| `RevisionSapService.resendToSap` | Corta **antes** del cliente con `501 Not Implemented` y un mensaje que explica qué falta |
+| `RevisionSapClient.resendToSap` | Se conserva, pero **no se llama** |
+
+El corte está en el **servicio**, no sólo en el botón: mientras el endpoint respondiera,
+cualquier llamada crearía el pedido. Un botón apagado no es una garantía.
+
+**Qué se conserva y por qué.** El cliente, el `ResendModal` y la lectura de la respuesta
+quedan: los tres desenlaces —aceptada, aceptada **sin entrega**, rechazada— van a ser los
+mismos con la función nueva. Lo único que cambia es a qué endpoint se le pega. Cuando
+exista, el trabajo es reapuntar el cliente y sacar el `501`.
+
+Lo que ya estaba resuelto y sigue valiendo para ese momento:
+
+- **Confirma antes** de enviar, porque crea un pedido real. El aviso dice si hay cambios
+  sin guardar (se reenviaría sin ellos) y cuántos productos siguen con un aviso que
+  bloquea.
 - El resultado se muestra **en el mismo modal**, no en un toast: el N° de pedido es lo que
   BackOffice copia, y el motivo del rechazo es lo que hay que leer para corregir.
+- El envío exitoso **es** el cierre de la revisión: el Middleware baja
+  `ProcessedBackoffice` a `1` solo, sin llamar a `backoffice/close`.
+- El comentario en el hilo del vendedor lo deja el propio envío del Middleware: **no hay
+  que duplicarlo** desde BackOffice.
 
 | Respuesta | Qué se muestra |
 |---|---|

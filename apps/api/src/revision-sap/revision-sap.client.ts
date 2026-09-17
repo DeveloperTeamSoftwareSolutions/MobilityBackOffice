@@ -287,6 +287,14 @@ export class RevisionSapClient {
    *
    * Tarda: SAP puede demorar, así que el timeout es largo y propio.
    */
+  /**
+   * ⚠️ HOY NO SE LLAMA: el servicio corta antes (2026-09-17).
+   *
+   * Esto pega contra el envío del Middleware, que manda la orden como UNA sola orden
+   * SAP — el camino de MobilityIA. BackOffice necesita el envío propio de Gustavo, que
+   * la parte por centro de distribución. Se conserva porque el contrato de la respuesta
+   * no cambia: lo que hay que reapuntar es el endpoint.
+   */
   async resendToSap(guid: string, actorEmail: string): Promise<ResendResult> {
     try {
       const res = await firstValueFrom(

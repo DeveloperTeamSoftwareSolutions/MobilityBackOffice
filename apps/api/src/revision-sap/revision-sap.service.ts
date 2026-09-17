@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotImplementedException } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service';
 import { AuditCategory } from '../audit/audit.categories';
 import { Actor } from '../common/actor';
@@ -144,27 +144,26 @@ export class RevisionSapService {
    * del middleware, con el número de pedido o el motivo del rechazo.
    */
   async resendToSap(guid: string, actor: Actor): Promise<ResendResult> {
-    const actorEmail = this.requireEmail(actor);
-    const result = await this.client.resendToSap(guid, actorEmail);
+    // Se valida igual: si mañana esto se conecta, la sesión sin email tiene que fallar
+    // por lo mismo que antes y no por accidente.
+    this.requireEmail(actor);
 
-    await this.audit.safeRecord({
-      action: 'REVISION_SAP_RESEND',
-      entity: 'BusinessOrders',
-      entityId: guid,
-      category: AuditCategory.SapReview,
-      guidUsers: actor.guid ?? null,
-      guidApiLoginClients: actor.guidApiLoginClients ?? null,
-      actorEmail,
-      detail: [
-        `orden=${guid}`,
-        `resultado=${result.accepted ? 'aceptada' : result.skipped ? 'no enviada' : 'rechazada'}`,
-        `pedido=${result.sapOrderNumber ?? '-'}`,
-        `entrega=${result.sapDispatchNumber ?? '-'}`,
-        `motivo=${result.error ?? result.skippedReason ?? '-'}`,
-      ].join(' | '),
-    });
-
-    return result;
+    // ⚠️ DESCONECTADO A PROPÓSITO (2026-09-17). El envío del Middleware
+    // (`businessorders2sap`) manda la orden como UNA sola orden SAP, que es como lo
+    // hace MobilityIA. Para BackOffice eso no alcanza: Gustavo tiene que armar el
+    // envío propio, que parta la orden en una orden SAP POR CENTRO de distribución.
+    //
+    // Se corta acá, antes del cliente, y no sólo apagando el botón: mientras el
+    // endpoint responda, cualquier llamada crearía en SAP un pedido sin dividir —
+    // justo lo que este circuito viene a evitar, y en SAP no se deshace.
+    //
+    // Lo que ya está hecho se conserva (el cliente, el modal, la lectura de la
+    // respuesta): los tres desenlaces —aceptada, aceptada sin entrega, rechazada— van
+    // a ser los mismos con la función nueva. Sólo cambia a qué endpoint se le pega.
+    throw new NotImplementedException(
+      'El reenvío a SAP desde BackOffice todavía no está disponible: espera la función ' +
+        'que divide la orden en una orden SAP por centro de distribución.',
+    );
   }
 
   /**

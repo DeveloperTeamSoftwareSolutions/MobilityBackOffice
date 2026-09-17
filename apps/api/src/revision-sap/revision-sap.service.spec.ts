@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotImplementedException } from '@nestjs/common';
 import { RevisionSapService } from './revision-sap.service';
 import { RevisionSapClient } from './revision-sap.client';
 import { AuditService } from '../audit/audit.service';
@@ -136,49 +136,30 @@ describe('RevisionSapService — cambio de destino', () => {
   });
 
   /**
-   * El reenvío se audita SIEMPRE, no sólo cuando sale bien: crea un pedido real en SAP
-   * y un rechazo auditado es lo que explica por qué la orden sigue en la bandeja. Es la
-   * diferencia con los cambios de línea, que no se auditan si no cambió nada.
+   * El reenvío está DESCONECTADO a propósito (2026-09-17).
+   *
+   * El envío del middleware manda la orden como UNA sola orden SAP, que es el camino de
+   * MobilityIA. BackOffice necesita el envío propio que la parte por centro, y hasta que
+   * exista no se puede llamar: crearía en SAP un pedido sin dividir, y eso no se deshace.
+   *
+   * Por eso se fija que corte ANTES del cliente, no sólo que el botón esté apagado.
    */
-  describe('reenvío a SAP', () => {
-    const aceptada = {
-      accepted: true, skipped: false, skippedReason: null,
-      sapOrderNumber: '0004500123', sapDispatchNumber: '0080001234',
-      error: null, sapMessages: [], filteredItemsCount: 0, itemsSent: 3, stillInReview: false,
-    };
-
-    it('acepta: audita con el número de pedido y la orden sale de revisión', async () => {
-      client.resendToSap.mockResolvedValue(aceptada);
-      const r = await service.resendToSap(ORDER, actor);
-
-      expect(client.resendToSap).toHaveBeenCalledWith(ORDER, 'bo@duwest.com');
-      expect(r.stillInReview).toBe(false);
-      expect(audit.safeRecord).toHaveBeenCalledWith(
-        expect.objectContaining({
-          action: 'REVISION_SAP_RESEND',
-          category: AuditCategory.SapReview,
-          entity: 'BusinessOrders',
-          entityId: ORDER,
-        }),
+  describe('reenvío a SAP (desconectado hasta el envío por centro)', () => {
+    it('no llama a SAP y lo dice con un 501', async () => {
+      await expect(service.resendToSap(ORDER, actor)).rejects.toBeInstanceOf(
+        NotImplementedException,
       );
-      const detail = audit.safeRecord.mock.calls[0][0].detail;
-      expect(detail).toContain('resultado=aceptada');
-      expect(detail).toContain('pedido=0004500123');
+      expect(client.resendToSap).not.toHaveBeenCalled();
     });
 
-    it('rechaza: TAMBIÉN audita, con el motivo', async () => {
-      client.resendToSap.mockResolvedValue({
-        ...aceptada, accepted: false, sapOrderNumber: null, sapDispatchNumber: null,
-        error: '[E] El material no está ampliado para el centro 2802.', stillInReview: true,
-      });
-      await service.resendToSap(ORDER, actor);
-
-      const detail = audit.safeRecord.mock.calls[0][0].detail;
-      expect(detail).toContain('resultado=rechazada');
-      expect(detail).toContain('no está ampliado');
+    it('no deja auditoría de un envío que no ocurrió', async () => {
+      await expect(service.resendToSap(ORDER, actor)).rejects.toBeInstanceOf(
+        NotImplementedException,
+      );
+      expect(audit.safeRecord).not.toHaveBeenCalled();
     });
 
-    it('sin email en la sesión no llama al middleware', async () => {
+    it('sin email en la sesión falla por eso, no por el 501', async () => {
       await expect(service.resendToSap(ORDER, { guid: 'g-1' })).rejects.toBeInstanceOf(
         BadRequestException,
       );

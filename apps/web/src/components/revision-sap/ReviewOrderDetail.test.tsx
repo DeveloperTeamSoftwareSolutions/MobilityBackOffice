@@ -285,68 +285,30 @@ describe('ReviewOrderDetail', () => {
    */
   it('el reenvío es de la orden completa, no por orden SAP', async () => {
     await renderDetail();
-    expect(button('Reenviar a SAP').disabled).toBe(false);
+    // Que esté apagado lo cubre el test de abajo; acá lo que importa es DÓNDE vive.
+    expect(button('Reenviar a SAP')).toBeTruthy();
 
     verOrdenesSap();
     expect(screen.queryByRole('button', { name: 'Reenviar esta orden SAP' })).toBeNull();
     expect(button('Reenviar a SAP')).toBeTruthy();
   });
 
-  /** Crea un pedido real en SAP: se confirma antes, y nada se manda por abrir el aviso. */
-  it('pregunta antes de reenviar y avisa que crea un pedido real', async () => {
+  /**
+   * El reenvío está DESCONECTADO (2026-09-17): el envío del middleware manda la orden
+   * como una sola orden SAP —el camino de MobilityIA— y BackOffice necesita el que la
+   * parte por centro, que todavía no existe. El botón queda a la vista para que se sepa
+   * que va ahí, pero apagado y explicando por qué.
+   */
+  it('el reenvío está a la vista pero apagado, con el motivo en el título', async () => {
     await renderDetail();
-    fireEvent.click(button('Reenviar a SAP'));
+    const reenviar = button('Reenviar a SAP');
+    expect(reenviar.disabled).toBe(true);
+    expect(reenviar.title).toMatch(/por centro de distribución/);
 
-    expect(screen.getByText(/Crea un pedido real en SAP/)).toBeTruthy();
+    fireEvent.click(reenviar);
+    // Ni siquiera abre la confirmación: no hay forma de llegar a SAP desde acá.
+    expect(screen.queryByText(/Crea un pedido real en SAP/)).toBeNull();
     expect(api.resendToSap).not.toHaveBeenCalled();
-
-    fireEvent.click(button('Sí, reenviar a SAP'));
-    await waitFor(() => expect(api.resendToSap).toHaveBeenCalledWith(ORDER));
-    // El resultado queda a la vista: el número de pedido es lo que hay que copiar.
-    expect(await screen.findByText('SAP aceptó la orden')).toBeTruthy();
-    expect(screen.getByText('0004500123')).toBeTruthy();
-    expect(screen.getByText(/salió de la bandeja/)).toBeTruthy();
-  });
-
-  it('avisa si hay cambios sin guardar: se reenviaría sin ellos', async () => {
-    await renderDetail();
-    fireEvent.change(centerSelect(), { target: { value: '2801' } });
-    fireEvent.click(button('Reenviar a SAP'));
-    // "1 cambio sin guardar" también está en la barra de acciones: lo que se fija acá
-    // es la advertencia del modal, que es la que dice qué implica reenviar así.
-    expect(screen.getByText(/se reenviaría/)).toBeTruthy();
-    expect(screen.getByText(/Guardalos primero/)).toBeTruthy();
-  });
-
-  /** Un 200 con accepted:false es un rechazo de SAP, no un éxito. */
-  it('si SAP rechaza, muestra el motivo y la orden sigue en la bandeja', async () => {
-    api.resendToSap.mockResolvedValue({
-      ...envioAceptado,
-      accepted: false,
-      sapOrderNumber: null,
-      sapDispatchNumber: null,
-      error: '[E] El material 1200135 no está ampliado para el centro 2802.',
-      stillInReview: true,
-    });
-    await renderDetail();
-    fireEvent.click(button('Reenviar a SAP'));
-    fireEvent.click(button('Sí, reenviar a SAP'));
-
-    expect(await screen.findByText('SAP rechazó la orden')).toBeTruthy();
-    expect(screen.getByText(/sigue en la bandeja/)).toBeTruthy();
-  });
-
-  /** Pedido sin entrega: el caso silencioso que este circuito vino a evitar. */
-  it('pedido sin entrega: avisa que no se despacha y sigue en revisión', async () => {
-    api.resendToSap.mockResolvedValue({
-      ...envioAceptado, sapDispatchNumber: null, stillInReview: true,
-    });
-    await renderDetail();
-    fireEvent.click(button('Reenviar a SAP'));
-    fireEvent.click(button('Sí, reenviar a SAP'));
-
-    expect(await screen.findByText(/no devolvió el N° de entrega/)).toBeTruthy();
-    expect(screen.getByText(/sigue en la bandeja/)).toBeTruthy();
   });
 
   it('cambiar el centro queda sin guardar y se puede descartar', async () => {

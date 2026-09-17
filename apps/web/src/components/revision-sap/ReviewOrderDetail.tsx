@@ -491,7 +491,8 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
           <button
             type="button"
             className="bo-rs__button"
-            disabled={!editable}
+            disabled
+            title="Todavía no está disponible: espera el envío propio de BackOffice, que divide la orden en una orden SAP por centro de distribución."
             onClick={() => {
               setResendResult(null);
               setResendError(null);

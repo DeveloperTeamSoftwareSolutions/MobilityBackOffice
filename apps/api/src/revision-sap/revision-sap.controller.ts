@@ -16,7 +16,7 @@ import { Roles } from '../auth/roles.decorator';
 import { BackOfficeRole } from '../auth/backoffice-role.enum';
 import { actorFrom, AuthedRequest } from '../common/actor';
 import { RevisionSapService } from './revision-sap.service';
-import { isReviewSortField } from './revision-sap.types';
+import { isReviewSortField, isReviewView } from './revision-sap.types';
 
 const MAX_LIMIT = 200;
 const DEFAULT_LIMIT = 20;
@@ -47,6 +47,7 @@ export class RevisionSapController {
     @Query('search') search?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortDir') sortDir?: string,
+    @Query('view') view?: string,
   ) {
     const result = await this.service.listQueue({
       page: Math.max(1, parseInt(page ?? '', 10) || 1),
@@ -54,6 +55,8 @@ export class RevisionSapController {
       search: (search ?? '').trim().slice(0, 100),
       sortBy: isReviewSortField(sortBy ?? '') ? (sortBy as never) : 'sapLastAttemptAt',
       sortDir: sortDir === 'ASC' ? 'ASC' : 'DESC',
+      // Una vista desconocida cae en pendientes, que es con lo que se entra.
+      view: isReviewView(view ?? '') ? view : 'pending',
     });
     return { success: true, ...result };
   }

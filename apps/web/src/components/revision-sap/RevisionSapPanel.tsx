@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiErrorMessage, listReviewQueue } from './revision-sap.api';
-import { Pagination, ReviewQueueEntry, SortDir, SortField } from './revision-sap.types';
+import {
+  Pagination,
+  ReviewQueueEntry,
+  ReviewView,
+  SortDir,
+  SortField,
+} from './revision-sap.types';
 import { ReviewQueueList } from './ReviewQueueList';
 import { ReviewOrderDetail } from './ReviewOrderDetail';
 import { PreviewNotice } from './PreviewNotice';
@@ -22,7 +28,17 @@ function pageSizeForViewport(): number {
  * a BackOffice. Dos vistas: la bandeja y, al elegir una orden, su detalle, donde se
  * corrige el destino de cada ítem. Búsqueda, orden y paginación son del servidor.
  */
+/**
+ * Las dos pestañas. "Resueltas" existe para que quede registro de qué se resolvió y
+ * cómo: sin ella, una orden que sale de la bandeja desaparece sin dejar rastro visible.
+ */
+const VISTAS: { key: ReviewView; label: string }[] = [
+  { key: 'pending', label: 'Pendientes' },
+  { key: 'resolved', label: 'Resueltas' },
+];
+
 export function RevisionSapPanel() {
+  const [view, setView] = useState<ReviewView>('pending');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortField>('sapLastAttemptAt');
@@ -51,7 +67,7 @@ export function RevisionSapPanel() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    listReviewQueue({ page, limit, search: debouncedSearch, sortBy, sortDir })
+    listReviewQueue({ page, limit, search: debouncedSearch, sortBy, sortDir, view })
       .then((result) => {
         if (cancelled) return;
         setEntries(result.data);
@@ -69,7 +85,7 @@ export function RevisionSapPanel() {
     return () => {
       cancelled = true;
     };
-  }, [page, limit, debouncedSearch, sortBy, sortDir, reload]);
+  }, [page, limit, debouncedSearch, sortBy, sortDir, reload, view]);
 
   function onSort(field: SortField) {
     if (field === sortBy) {
@@ -112,6 +128,30 @@ export function RevisionSapPanel() {
 
         <PreviewNotice />
 
+        <div className="bo-rs__tabs" role="tablist">
+          {VISTAS.map((v) => (
+            <button
+              key={v.key}
+              type="button"
+              role="tab"
+              aria-selected={view === v.key}
+              className={`bo-rs__tab ${view === v.key ? 'bo-rs__tab--active' : ''}`}
+              onClick={() => {
+                if (v.key === view) return;
+                setView(v.key);
+                setPage(1);
+                // Las resueltas se leen por lo último resuelto; las pendientes, por el
+                // último rechazo. Cambiar de pestaña sin esto dejaría un orden que no
+                // aplica a la columna que se está mirando.
+                setSortBy(v.key === 'resolved' ? 'decidedAt' : 'sapLastAttemptAt');
+                setSortDir('DESC');
+              }}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+
         <div className="bo-rs__toolbar">
           <label className="bo-rs__field bo-rs__field--grow">
             <span className="bo-rs__label">Buscar por orden, cliente o vendedor</span>
@@ -125,7 +165,13 @@ export function RevisionSapPanel() {
           </label>
           {!loading && !error && (
             <p className="bo-rs__count" aria-live="polite">
-              {total === 1 ? '1 orden en revisión' : `${total.toLocaleString('es-AR')} órdenes en revisión`}
+              {view === 'resolved'
+                ? total === 1
+                  ? '1 orden resuelta'
+                  : `${total.toLocaleString('es-AR')} órdenes resueltas`
+                : total === 1
+                  ? '1 orden en revisión'
+                  : `${total.toLocaleString('es-AR')} órdenes en revisión`}
             </p>
           )}
         </div>
@@ -138,6 +184,7 @@ export function RevisionSapPanel() {
           <ReviewQueueList
             entries={entries}
             pagination={pagination}
+            view={view}
             sortBy={sortBy}
             sortDir={sortDir}
             loading={loading}

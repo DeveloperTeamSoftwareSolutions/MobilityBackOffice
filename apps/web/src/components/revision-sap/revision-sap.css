@@ -338,6 +338,12 @@
   background: rgba(197, 48, 48, 0.08);
   color: var(--bo-danger);
 }
+/* Neutro a proposito: "Cerrada sin enviar" no es un exito ni un problema, y un estado
+   desconocido no deberia pintarse como si lo entendieramos. */
+.bo-rs__pill--muted {
+  background: var(--bo-bg);
+  color: var(--bo-text-muted);
+}
 .bo-rs__table--compact th,
 .bo-rs__table--compact td {
   padding: 6px 10px;

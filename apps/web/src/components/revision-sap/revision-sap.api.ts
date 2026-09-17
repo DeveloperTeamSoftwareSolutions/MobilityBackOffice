@@ -9,6 +9,7 @@ import {
   ResendResult,
   ReviewOrderDetail,
   ReviewQueueEntry,
+  ReviewView,
   SapOrder,
   SortDir,
   SortField,
@@ -31,6 +32,8 @@ export interface QueueParams {
   search: string;
   sortBy: SortField;
   sortDir: SortDir;
+  /** Qué pestaña se pide. Sin esto, el servidor devuelve siempre las pendientes. */
+  view: ReviewView;
 }
 
 /** Bandeja de órdenes rechazadas por SAP. Búsqueda, orden y paginación en el servidor. */

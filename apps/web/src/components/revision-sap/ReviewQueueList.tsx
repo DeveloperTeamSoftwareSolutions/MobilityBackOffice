@@ -1,15 +1,57 @@
 import { formatDateTime } from '../soporte/DocumentHeader';
-import { formatSalesArea, parseSapError, salesAreaNames, sapErrorTypeLabel } from './revision-sap.logic';
-import { Pagination, ReviewQueueEntry, SortDir, SortField } from './revision-sap.types';
+import {
+  formatSalesArea,
+  parseSapError,
+  resolutionOf,
+  salesAreaNames,
+  sapErrorTypeLabel,
+  statusLabel,
+  statusTone,
+} from './revision-sap.logic';
+import {
+  Pagination,
+  ReviewQueueEntry,
+  ReviewView,
+  SortDir,
+  SortField,
+} from './revision-sap.types';
 
-const COLUMNS: { key: string; label: string; sort: SortField | null; numeric?: boolean }[] = [
-  { key: 'order', label: 'Orden', sort: 'orderNumber' },
-  { key: 'customer', label: 'Cliente', sort: 'customerName' },
-  { key: 'area', label: 'Área de venta', sort: null },
-  { key: 'seller', label: 'Vendedor', sort: 'sellerEmail' },
-  { key: 'reason', label: 'Motivo del rechazo', sort: 'sapLastAttemptAt' },
-  { key: 'attempts', label: 'Intentos', sort: null, numeric: true },
-];
+interface Column {
+  key: string;
+  label: string;
+  sort: SortField | null;
+  numeric?: boolean;
+}
+
+/**
+ * Las dos pestañas no miran lo mismo.
+ *
+ * En PENDIENTES importa por qué la orden está acá: el motivo del rechazo y cuántas
+ * veces se intentó. En RESUELTAS eso ya no se puede accionar, y lo que importa es cómo
+ * terminó: cómo se resolvió, en qué estado quedó, quién la cerró y cuándo.
+ */
+function columnsFor(view: ReviewView): Column[] {
+  const comunes: Column[] = [
+    { key: 'order', label: 'Orden', sort: 'orderNumber' },
+    { key: 'customer', label: 'Cliente', sort: 'customerName' },
+    { key: 'area', label: 'Área de venta', sort: null },
+    { key: 'seller', label: 'Vendedor', sort: 'sellerEmail' },
+  ];
+  if (view === 'resolved') {
+    return [
+      ...comunes,
+      { key: 'resolution', label: 'Cómo se resolvió', sort: null },
+      { key: 'status', label: 'Estado hoy', sort: null },
+      { key: 'decidedBy', label: 'Resuelta por', sort: null },
+      { key: 'decidedAt', label: 'Fecha', sort: 'decidedAt' },
+    ];
+  }
+  return [
+    ...comunes,
+    { key: 'reason', label: 'Motivo del rechazo', sort: 'sapLastAttemptAt' },
+    { key: 'attempts', label: 'Intentos', sort: null, numeric: true },
+  ];
+}
 
 /**
  * El motivo en una celda: el tipo como etiqueta y el primer mensaje. SAP suele mandar
@@ -46,6 +88,7 @@ function ReasonCell({ error }: { error: string | null }) {
 interface Props {
   entries: ReviewQueueEntry[];
   pagination: Pagination | null;
+  view: ReviewView;
   sortBy: SortField;
   sortDir: SortDir;
   loading: boolean;
@@ -55,10 +98,11 @@ interface Props {
   onPage: (page: number) => void;
 }
 
-/** Bandeja: una fila por orden rechazada, con el motivo a la vista. */
+/** Bandeja: una fila por orden, con lo que importa según la pestaña. */
 export function ReviewQueueList({
   entries,
   pagination,
+  view,
   sortBy,
   sortDir,
   loading,
@@ -67,12 +111,16 @@ export function ReviewQueueList({
   onSelect,
   onPage,
 }: Props) {
+  const columns = columnsFor(view);
+
   if (!loading && entries.length === 0) {
     return (
       <p className="bo-rs__empty">
         {hasSearch
-          ? 'Ninguna orden en revisión coincide con la búsqueda.'
-          : 'No hay órdenes rechazadas por SAP esperando revisión.'}
+          ? 'Ninguna orden coincide con la búsqueda.'
+          : view === 'resolved'
+            ? 'Todavía no se resolvió ninguna orden. Acá van a quedar las que BackOffice reenvíe o cierre.'
+            : 'No hay órdenes rechazadas por SAP esperando revisión.'}
       </p>
     );
   }
@@ -86,7 +134,7 @@ export function ReviewQueueList({
         <table className="bo-rs__table">
           <thead>
             <tr>
-              {COLUMNS.map((col) => (
+              {columns.map((col) => (
                 <th key={col.key} className={col.numeric ? 'bo-rs__th--number' : undefined}>
                   {col.sort ? (
                     <button
@@ -109,44 +157,77 @@ export function ReviewQueueList({
             </tr>
           </thead>
           <tbody>
-            {entries.map((entry) => (
-              <tr
-                key={entry.guid}
-                className="bo-rs__row"
-                tabIndex={0}
-                onClick={() => onSelect(entry)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onSelect(entry);
-                  }
-                }}
-              >
-                <td>
-                  <span className="bo-rs__cell--strong">{entry.orderNumber}</span>
-                  <span className="bo-rs__cell-sub">
-                    Rechazada {formatDateTime(entry.sapLastAttemptAt)}
-                  </span>
-                </td>
-                <td>
-                  {entry.customerName ?? '—'}
-                  {entry.customerCode && (
-                    <span className="bo-rs__cell-sub">{entry.customerCode}</span>
+            {entries.map((entry) => {
+              const resolucion = resolutionOf(entry);
+              return (
+                <tr
+                  key={entry.guid}
+                  className="bo-rs__row"
+                  tabIndex={0}
+                  onClick={() => onSelect(entry)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelect(entry);
+                    }
+                  }}
+                >
+                  <td>
+                    <span className="bo-rs__cell--strong">{entry.orderNumber}</span>
+                    <span className="bo-rs__cell-sub">
+                      {view === 'resolved'
+                        ? `Rechazada ${formatDateTime(entry.sapLastAttemptAt)}`
+                        : `Rechazada ${formatDateTime(entry.sapLastAttemptAt)}`}
+                    </span>
+                  </td>
+                  <td>
+                    {entry.customerName ?? '—'}
+                    {entry.customerCode && (
+                      <span className="bo-rs__cell-sub">{entry.customerCode}</span>
+                    )}
+                  </td>
+                  <td>
+                    <span className="bo-rs__mono">{formatSalesArea(entry.salesArea)}</span>
+                    {salesAreaNames(entry.salesArea) && (
+                      <span className="bo-rs__cell-sub">{salesAreaNames(entry.salesArea)}</span>
+                    )}
+                  </td>
+                  <td className="bo-rs__cell--muted">{entry.sellerEmail ?? '—'}</td>
+
+                  {view === 'resolved' ? (
+                    <>
+                      <td>
+                        <span className={`bo-rs__pill bo-rs__pill--${resolucion.tone}`}>
+                          {resolucion.label}
+                        </span>
+                        {entry.sapOrderNumber && (
+                          <span className="bo-rs__cell-sub">Pedido {entry.sapOrderNumber}</span>
+                        )}
+                        {resolucion.hint && (
+                          <span className="bo-rs__cell-sub">{resolucion.hint}</span>
+                        )}
+                      </td>
+                      {/* El estado de HOY puede no coincidir con cómo se resolvió: la
+                          orden sigue viva y pudo moverse después. */}
+                      <td>
+                        <span className={`bo-rs__pill bo-rs__pill--${statusTone(entry.statusCode)}`}>
+                          {statusLabel(entry.statusCode)}
+                        </span>
+                      </td>
+                      <td className="bo-rs__cell--muted">{entry.decidedBy ?? '—'}</td>
+                      <td className="bo-rs__cell--muted">{formatDateTime(entry.decidedAt)}</td>
+                    </>
+                  ) : (
+                    <>
+                      <td>
+                        <ReasonCell error={entry.sapLastError} />
+                      </td>
+                      <td className="bo-rs__cell--number">{entry.attempts}</td>
+                    </>
                   )}
-                </td>
-                <td>
-                  <span className="bo-rs__mono">{formatSalesArea(entry.salesArea)}</span>
-                  {salesAreaNames(entry.salesArea) && (
-                    <span className="bo-rs__cell-sub">{salesAreaNames(entry.salesArea)}</span>
-                  )}
-                </td>
-                <td className="bo-rs__cell--muted">{entry.sellerEmail ?? '—'}</td>
-                <td>
-                  <ReasonCell error={entry.sapLastError} />
-                </td>
-                <td className="bo-rs__cell--number">{entry.attempts}</td>
-              </tr>
-            ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

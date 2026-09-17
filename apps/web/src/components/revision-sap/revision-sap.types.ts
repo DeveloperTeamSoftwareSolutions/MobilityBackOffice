@@ -26,14 +26,23 @@ export type SortField =
   | 'orderNumber'
   | 'customerName'
   | 'sellerEmail'
-  | 'orderDate';
+  | 'orderDate'
+  /** Sólo tiene sentido en la pestaña de resueltas. */
+  | 'decidedAt';
 
 export type SortDir = 'ASC' | 'DESC';
+
+/**
+ * Las dos pestañas de la bandeja: lo que hay que resolver y lo que ya se resolvió.
+ * Quedan afuera de las dos las órdenes que nunca pasaron por BackOffice.
+ */
+export type ReviewView = 'pending' | 'resolved';
 
 /** Una orden en la bandeja: SAP la rechazó y quedó esperando a BackOffice. */
 export interface ReviewQueueEntry {
   guid: string;
   orderNumber: string;
+  statusCode: string | null;
   customerCode: string | null;
   customerName: string | null;
   sellerEmail: string | null;
@@ -41,9 +50,15 @@ export interface ReviewQueueEntry {
   /** Motivo del último rechazo, tal como lo devolvió SAP. */
   sapLastError: string | null;
   sapLastAttemptAt: string | null;
+  /** Con número de pedido salió a SAP; sin número, se cerró sin enviar. */
+  sapOrderNumber: string | null;
+  sapDispatchNumber: string | null;
   orderDate: string | null;
   attempts: number;
   itemCount: number;
+  /** Quién cerró la revisión y cuándo. Es lo que cuenta cómo se resolvió. */
+  decidedBy: string | null;
+  decidedAt: string | null;
 }
 
 /** Línea de la orden, sin precios ni descuentos. */

@@ -1,6 +1,6 @@
 # Órdenes rechazadas por SAP — Spec
 
-> Última actualización: 2026-09-17 · Versión: 2.31.0
+> Última actualización: 2026-09-17 · Versión: 2.32.0
 > Estado: **todo conectado, reenvío a SAP incluido** (requiere Middleware ≥ 1.356.0,
 > PR #646, y `MIDDLEWARE_API_KEY` configurada en los dos lados).
 > Falta la división por centro (Gustavo): hoy el reenvío sale como una sola orden SAP.
@@ -46,8 +46,34 @@ MobilityIA la deja en solo lectura y el vendedor ya no puede reenviarla. BackOff
 
 ## Pantallas
 
-**Bandeja** (`/ordenes-rechazadas-sap`): orden y fecha del rechazo, cliente, área de venta,
-vendedor, motivo e intentos. Búsqueda, orden y paginación en el servidor.
+**Bandeja** (`/ordenes-rechazadas-sap`), en **dos pestañas**. Las separa el parámetro
+`view`, que sale de la misma columna del Middleware (`ProcessedBackoffice`: `0` pendiente,
+`1` resuelta). Búsqueda, orden y paginación son del servidor en las dos.
+
+| | **Pendientes** | **Resueltas** |
+|---|---|---|
+| Qué son | Las que BackOffice tiene que resolver | Las que ya resolvió: el registro de qué pasó |
+| Columnas propias | Motivo del rechazo, Intentos | Cómo se resolvió, Estado hoy, Resuelta por, Fecha |
+| Orden por defecto | Último rechazo | Última resolución (`decidedAt`) |
+
+Las dos comparten Orden, Cliente, Área de venta y Vendedor. En resueltas se dejan de
+mostrar el motivo y los intentos: ya no hay nada que accionar con eso.
+
+**Cómo se resolvió** sale de si el Middleware guardó número de pedido:
+
+| Se muestra | Cuándo |
+|---|---|
+| **Enviada a SAP** | Hay pedido y entrega |
+| **Sin entrega** | Hay pedido pero no entrega: se resuelve en SAP |
+| **Cerrada sin enviar** | No hay pedido: la revisión se cerró sin mandar nada |
+
+Se muestra **aparte del estado de hoy**, porque pueden no coincidir: la orden sigue viva
+y pudo moverse después de resolverse. Es el mismo criterio que usan las Autorizaciones de
+MobilityManager.
+
+> ⚠️ Si `view` dejara de viajar en algún tramo (front → API → Middleware), el servidor
+> devuelve pendientes y **las dos pestañas muestran lo mismo sin fallar**. Hay tests en
+> los dos lados que lo cubren.
 
 **Detalle:**
 - Cabecera sin precios: cliente, vendedor, área de venta con nombres, fecha, centro de

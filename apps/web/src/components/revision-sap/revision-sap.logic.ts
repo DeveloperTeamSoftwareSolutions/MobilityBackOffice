@@ -28,6 +28,78 @@ export function parseSapError(error: string | null): SapErrorLine[] {
     });
 }
 
+/**
+ * Etiquetas de los estados de una orden, con los textos de la tabla `Status`.
+ *
+ * BackOffice no tenía ninguna: Soporte muestra el código crudo (`SentToSAP`). Se define
+ * acá, que es donde hizo falta primero, para que el día que Soporte quiera traducirlos
+ * haya un solo lugar. Un código desconocido se muestra tal cual en vez de esconderse:
+ * es preferible ver `LoQueSea` a ver un guión.
+ */
+const ESTADOS: Record<string, string> = {
+  Draft: 'Borrador',
+  ReadyForApprove: 'Pendiente de aprobación',
+  Rejected: 'Rechazada',
+  PendingDocumentation: 'Pendiente de documentación',
+  Processed: 'Procesada',
+  PendingBackofficeReview: 'Pendiente revisión Backoffice',
+  SentToSAP: 'Enviado a SAP',
+  PendingDispatch: 'Pendiente despacho',
+  Dispatched: 'Despachada',
+  Invoiced: 'Facturada',
+  Annulled: 'Anulada',
+};
+
+export function statusLabel(statusCode: string | null): string {
+  if (!statusCode) return 'Sin estado';
+  return ESTADOS[statusCode] ?? statusCode;
+}
+
+/** Tono de la píldora del estado. `ok` sólo para los que ya salieron a SAP. */
+export function statusTone(statusCode: string | null): 'ok' | 'warn' | 'danger' | 'muted' {
+  switch (statusCode) {
+    case 'SentToSAP':
+    case 'Dispatched':
+    case 'Invoiced':
+      return 'ok';
+    case 'PendingBackofficeReview':
+      return 'danger';
+    case 'Rejected':
+    case 'Annulled':
+      return 'danger';
+    case 'Processed':
+    case 'PendingDispatch':
+    case 'ReadyForApprove':
+    case 'PendingDocumentation':
+      return 'warn';
+    default:
+      return 'muted';
+  }
+}
+
+/**
+ * Cómo se resolvió una orden que salió de la bandeja.
+ *
+ * Con número de pedido salió a SAP; sin número, la revisión se cerró sin enviar. Es lo
+ * mismo que distingue el middleware, y no siempre coincide con el estado de hoy: por
+ * eso se muestran las dos cosas por separado.
+ */
+export function resolutionOf(entry: {
+  sapOrderNumber: string | null;
+  sapDispatchNumber: string | null;
+}): { label: string; tone: 'ok' | 'warn' | 'muted'; hint: string | null } {
+  if (entry.sapOrderNumber) {
+    return entry.sapDispatchNumber
+      ? { label: 'Enviada a SAP', tone: 'ok', hint: null }
+      : {
+          label: 'Sin entrega',
+          tone: 'warn',
+          hint: 'SAP creó el pedido pero no la entrega: se resuelve en SAP.',
+        };
+  }
+  return { label: 'Cerrada sin enviar', tone: 'muted', hint: null };
+}
+
 /** Qué significa cada tipo de SAP, para no mostrar solo una letra suelta. */
 export function sapErrorTypeLabel(type: string | null): string | null {
   if (!type) return null;

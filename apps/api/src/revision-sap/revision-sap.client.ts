@@ -135,6 +135,9 @@ export class RevisionSapClient {
             search: query.search || undefined,
             sortBy: query.sortBy,
             sortDir: query.sortDir,
+            // Si `view` no viaja, el middleware cae en 'pending' y las DOS pestañas
+            // muestran lo mismo sin fallar. Por eso va explícito y hay test.
+            view: query.view,
           },
           headers: this.headers(),
           timeout: DEFAULT_TIMEOUT,

@@ -143,7 +143,7 @@ trae precios. Ver `docs/SPEC_REVISION_ORDENES_SAP.md`.
 
 | Metodo | Ruta | Descripcion |
 |---|---|---|
-| GET | `/api/revision-sap/orders` | Bandeja: ordenes con `ProcessedBackoffice = 0`. Query: `search`, `page`, `limit` (max 200), `sortBy` (`sapLastAttemptAt` \| `orderNumber` \| `customerName` \| `sellerEmail` \| `orderDate`), `sortDir` |
+| GET | `/api/revision-sap/orders` | Bandeja, en dos vistas. Query: `view` (`pending` = `ProcessedBackoffice 0`, default \| `resolved` = `1`), `search`, `page`, `limit` (max 200), `sortBy` (`sapLastAttemptAt` \| `orderNumber` \| `customerName` \| `sellerEmail` \| `orderDate` \| `decidedAt`), `sortDir`. Cada fila trae `decidedBy`/`decidedAt` (quien cerro la revision y cuando) y `sapOrderNumber`/`sapDispatchNumber`, que dicen COMO se resolvio. ⚠️ Si `view` no viaja, el middleware devuelve pendientes y las dos pestañas muestran lo mismo **sin fallar** |
 | GET | `/api/revision-sap/orders/:guid` | Detalle sin precios: cabecera, items con centro y destino, `sapAttempts`, `backoffice.inReview`. 400 si el guid es invalido; 404 si no existe |
 | GET | `/api/revision-sap/orders/:guid/options` | Centros permitidos del cliente, destinos del area de la orden y, con `includeStock=1`, el stock de SAP por producto y centro. Las fuentes que fallan vienen en `errors` |
 | PUT | `/api/revision-sap/orders/:guid/items/:itemGuid/destination` | Body `{ destinationCode, reasonNotes? }`. Quien hace el cambio sale del token. 400 destino invalido o fuera del area; 404 orden o linea inexistente; 409 la orden ya no esta en revision |

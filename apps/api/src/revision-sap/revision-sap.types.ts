@@ -35,12 +35,25 @@ export function isReviewSortField(value: string): value is ReviewSortField {
   return (REVIEW_SORT_FIELDS as readonly string[]).includes(value);
 }
 
+/**
+ * Las dos caras de la bandeja: las que BackOffice tiene que resolver y las que ya
+ * resolvió. Las separa `ProcessedBackoffice` (0 / 1) del lado del middleware.
+ */
+export const REVIEW_VIEWS = ['pending', 'resolved'] as const;
+
+export type ReviewView = (typeof REVIEW_VIEWS)[number];
+
+export function isReviewView(value: string): value is ReviewView {
+  return (REVIEW_VIEWS as readonly string[]).includes(value);
+}
+
 export interface ReviewQueueQuery {
   page: number;
   limit: number;
   search: string;
   sortBy: ReviewSortField;
   sortDir: 'ASC' | 'DESC';
+  view: ReviewView;
 }
 
 export interface ReviewQueueEntry {
@@ -55,9 +68,13 @@ export interface ReviewQueueEntry {
   sapLastError: string | null;
   sapLastAttemptAt: string | null;
   sapOrderNumber: string | null;
+  sapDispatchNumber: string | null;
   orderDate: string | null;
   attempts: number;
   itemCount: number;
+  /** Quién cerró la revisión y cuándo. En `pending` suelen venir en null. */
+  decidedBy: string | null;
+  decidedAt: string | null;
 }
 
 export interface ReviewQueuePage {

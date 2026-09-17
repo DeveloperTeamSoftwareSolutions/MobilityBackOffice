@@ -155,6 +155,35 @@ export interface GroupInvoiceChangeResult {
   groupInvoice: boolean;
 }
 
+/**
+ * Resultado del reenvío a SAP. Espejo de `data.sap` de `businessorders2sap`.
+ *
+ * `accepted` NO es "la llamada salió bien": el middleware exige que SAP haya devuelto
+ * número de pedido y que su log no traiga errores. Un 200 con `accepted: false` es un
+ * rechazo de SAP, con el motivo en `error`.
+ */
+export interface ResendResult {
+  /** SAP aceptó el pedido: hay número y el log no trae errores. */
+  accepted: boolean;
+  /** No se llegó a llamar a SAP (agrupa factura con faltantes, o ningún ítem vendible). */
+  skipped: boolean;
+  /** Por qué no se envió, cuando `skipped`. */
+  skippedReason: string | null;
+  /** Número de pedido de SAP, si lo creó. */
+  sapOrderNumber: string | null;
+  /** Número de entrega. Sin él, el pedido existe pero no se despacha: sigue en revisión. */
+  sapDispatchNumber: string | null;
+  /** Motivo del rechazo, con el mismo formato `[TIPO] mensaje` que el resto. */
+  error: string | null;
+  /** Mensajes que devolvió SAP, ya separados. */
+  sapMessages: string[];
+  /** Ítems que el middleware dejó afuera por no tener stock. */
+  filteredItemsCount: number;
+  itemsSent: number;
+  /** La orden salió de revisión: con SAP aceptando, el envío exitoso la cierra. */
+  stillInReview: boolean;
+}
+
 export type SapOrderStatus = 'accepted' | 'accepted_no_dispatch' | 'rejected' | 'no_response';
 
 /** Una orden SAP de la orden (fila de `SAPOrders`), con sus ítems sin precios. */

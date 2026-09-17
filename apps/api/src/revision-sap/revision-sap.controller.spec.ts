@@ -17,6 +17,7 @@ describe('RevisionSapController', () => {
       | 'listSapOrders'
       | 'getProductStock'
       | 'changeGroupInvoice'
+      | 'resendToSap'
     >
   >;
   let controller: RevisionSapController;
@@ -31,6 +32,7 @@ describe('RevisionSapController', () => {
       listSapOrders: jest.fn().mockResolvedValue([]),
       getProductStock: jest.fn().mockResolvedValue({ rows: [] }),
       changeGroupInvoice: jest.fn().mockResolvedValue({ ok: true, unchanged: false, groupInvoice: true }),
+      resendToSap: jest.fn().mockResolvedValue({ accepted: true, stillInReview: false }),
     };
     controller = new RevisionSapController(service as unknown as RevisionSapService);
   });
@@ -134,6 +136,26 @@ describe('RevisionSapController', () => {
       'el cliente acepta parcial',
       { email: 'bo@duwest.com', guid: 'g-1', guidApiLoginClients: null },
     );
+  });
+
+  /**
+   * El reenvío no lleva body: QUÉ se manda lo decide el servidor con lo que está
+   * guardado, y QUIÉN lo manda sale del token. Nada de eso se acepta del cliente.
+   */
+  it('reenvío: valida el guid y toma el actor del token, sin body', async () => {
+    await expect(controller.resend('no-es-guid', { user: { email: 'bo@duwest.com' } })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(service.resendToSap).not.toHaveBeenCalled();
+
+    await controller.resend(ORDER, {
+      user: { email: 'bo@duwest.com', guid: 'g-1', guidApiLoginClients: 'c-1' },
+    });
+    expect(service.resendToSap).toHaveBeenCalledWith(ORDER, {
+      email: 'bo@duwest.com',
+      guid: 'g-1',
+      guidApiLoginClients: 'c-1',
+    });
   });
 
   it('valida el destino y el motivo antes de llamar al servicio', async () => {

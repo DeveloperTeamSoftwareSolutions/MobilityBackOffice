@@ -6,6 +6,7 @@ import {
   ProductStock,
   ReviewCatalogs,
   ReviewItem,
+  ResendResult,
   ReviewOrderDetail,
   ReviewQueueEntry,
   SapOrder,
@@ -102,6 +103,21 @@ export async function changeGroupInvoice(
   const res = await httpClient.put<ApiData<GroupInvoiceChangeResult>>(
     `/api/revision-sap/orders/${encodeURIComponent(guid)}/group-invoice`,
     { groupInvoice, reasonNotes },
+  );
+  return res.data.data;
+}
+
+/**
+ * Reenvía la orden COMPLETA a SAP. Sin body: qué se manda lo decide el servidor con lo
+ * que está guardado, y quién lo manda sale de la sesión.
+ *
+ * Tarda: SAP puede demorar, así que va con su propio timeout largo.
+ */
+export async function resendToSap(guid: string): Promise<ResendResult> {
+  const res = await httpClient.post<ApiData<ResendResult>>(
+    `/api/revision-sap/orders/${encodeURIComponent(guid)}/resend`,
+    {},
+    { timeout: 180000 },
   );
   return res.data.data;
 }

@@ -168,6 +168,7 @@ const api = vi.hoisted(() => ({
   changeItemDestination: vi.fn(),
   changeItemCenter: vi.fn(),
   changeGroupInvoice: vi.fn(),
+  resendToSap: vi.fn(),
   getProductStock: vi.fn(),
 }));
 
@@ -178,9 +179,23 @@ vi.mock('./revision-sap.api', () => ({
   changeItemDestination: api.changeItemDestination,
   changeItemCenter: api.changeItemCenter,
   changeGroupInvoice: api.changeGroupInvoice,
+  resendToSap: api.resendToSap,
   getProductStock: api.getProductStock,
   apiErrorMessage: (_err: unknown, fallback: string) => fallback,
 }));
+
+const envioAceptado = {
+  accepted: true,
+  skipped: false,
+  skippedReason: null,
+  sapOrderNumber: '0004500123',
+  sapDispatchNumber: '0080001234',
+  error: null,
+  sapMessages: [],
+  filteredItemsCount: 0,
+  itemsSent: 2,
+  stillInReview: false,
+};
 
 beforeEach(() => {
   api.getReviewOrder.mockReset().mockResolvedValue(order());
@@ -189,6 +204,7 @@ beforeEach(() => {
   api.changeItemDestination.mockReset().mockResolvedValue({});
   api.changeItemCenter.mockReset().mockResolvedValue({});
   api.changeGroupInvoice.mockReset().mockResolvedValue({ ok: true, unchanged: false, groupInvoice: true });
+  api.resendToSap.mockReset().mockResolvedValue(envioAceptado);
   api.getProductStock.mockReset().mockResolvedValue(stock);
 });
 
@@ -267,16 +283,70 @@ describe('ReviewOrderDetail', () => {
    * el 2026-09-17): se manda la BusinessOrder y el Middleware decide en cuántas órdenes
    * SAP sale. Por eso el botón vive en la barra de acciones y no dentro de una pestaña.
    */
-  it('el reenvío es de la orden completa y todavía no está conectado', async () => {
+  it('el reenvío es de la orden completa, no por orden SAP', async () => {
     await renderDetail();
-    const reenviar = button('Reenviar a SAP');
-    expect(reenviar.disabled).toBe(true);
+    expect(button('Reenviar a SAP').disabled).toBe(false);
 
-    // No hay un reenvío por orden SAP: la pestaña es solo consulta.
     verOrdenesSap();
     expect(screen.queryByRole('button', { name: 'Reenviar esta orden SAP' })).toBeNull();
-    // Y el de la orden completa sigue estando, fuera de las pestañas.
     expect(button('Reenviar a SAP')).toBeTruthy();
+  });
+
+  /** Crea un pedido real en SAP: se confirma antes, y nada se manda por abrir el aviso. */
+  it('pregunta antes de reenviar y avisa que crea un pedido real', async () => {
+    await renderDetail();
+    fireEvent.click(button('Reenviar a SAP'));
+
+    expect(screen.getByText(/Crea un pedido real en SAP/)).toBeTruthy();
+    expect(api.resendToSap).not.toHaveBeenCalled();
+
+    fireEvent.click(button('Sí, reenviar a SAP'));
+    await waitFor(() => expect(api.resendToSap).toHaveBeenCalledWith(ORDER));
+    // El resultado queda a la vista: el número de pedido es lo que hay que copiar.
+    expect(await screen.findByText('SAP aceptó la orden')).toBeTruthy();
+    expect(screen.getByText('0004500123')).toBeTruthy();
+    expect(screen.getByText(/salió de la bandeja/)).toBeTruthy();
+  });
+
+  it('avisa si hay cambios sin guardar: se reenviaría sin ellos', async () => {
+    await renderDetail();
+    fireEvent.change(centerSelect(), { target: { value: '2801' } });
+    fireEvent.click(button('Reenviar a SAP'));
+    // "1 cambio sin guardar" también está en la barra de acciones: lo que se fija acá
+    // es la advertencia del modal, que es la que dice qué implica reenviar así.
+    expect(screen.getByText(/se reenviaría/)).toBeTruthy();
+    expect(screen.getByText(/Guardalos primero/)).toBeTruthy();
+  });
+
+  /** Un 200 con accepted:false es un rechazo de SAP, no un éxito. */
+  it('si SAP rechaza, muestra el motivo y la orden sigue en la bandeja', async () => {
+    api.resendToSap.mockResolvedValue({
+      ...envioAceptado,
+      accepted: false,
+      sapOrderNumber: null,
+      sapDispatchNumber: null,
+      error: '[E] El material 1200135 no está ampliado para el centro 2802.',
+      stillInReview: true,
+    });
+    await renderDetail();
+    fireEvent.click(button('Reenviar a SAP'));
+    fireEvent.click(button('Sí, reenviar a SAP'));
+
+    expect(await screen.findByText('SAP rechazó la orden')).toBeTruthy();
+    expect(screen.getByText(/sigue en la bandeja/)).toBeTruthy();
+  });
+
+  /** Pedido sin entrega: el caso silencioso que este circuito vino a evitar. */
+  it('pedido sin entrega: avisa que no se despacha y sigue en revisión', async () => {
+    api.resendToSap.mockResolvedValue({
+      ...envioAceptado, sapDispatchNumber: null, stillInReview: true,
+    });
+    await renderDetail();
+    fireEvent.click(button('Reenviar a SAP'));
+    fireEvent.click(button('Sí, reenviar a SAP'));
+
+    expect(await screen.findByText(/no devolvió el N° de entrega/)).toBeTruthy();
+    expect(screen.getByText(/sigue en la bandeja/)).toBeTruthy();
   });
 
   it('cambiar el centro queda sin guardar y se puede descartar', async () => {

@@ -14,6 +14,7 @@ import {
   DestinationChangeResult,
   GroupInvoiceChangeResult,
   ProductStock,
+  ResendResult,
   SapOrder,
   ReviewOptions,
   ReviewOrder,
@@ -27,6 +28,63 @@ import {
  */
 const ORDERS_PATH = '/mobility/backoffice-review/orders';
 const ORDER_PATH = (guid: string) => `${ORDERS_PATH}/${encodeURIComponent(guid)}`;
+
+/**
+ * El envío a SAP: el MISMO endpoint que usa el vendedor desde MobilityIA, con
+ * `asBackoffice: true`. No cuelga del router de revisión.
+ */
+const SEND_PATH = '/v2/mobility/businessorders2sap';
+
+/** SAP puede demorar; el middleware le da 120 s, así que acá un poco más. */
+const SEND_TIMEOUT = 150000;
+
+/** Lo que devuelve el envío del middleware: `data.sap` es el resultado real. */
+interface MwSendResponse {
+  success: boolean;
+  data?: {
+    sap?: {
+      sent?: boolean;
+      success?: boolean;
+      skipped?: boolean;
+      reason?: string | null;
+      orderId?: string | null;
+      deliveryId?: string | null;
+      error?: string | null;
+      sapMessages?: string[] | null;
+      filteredItemsCount?: number | null;
+      itemsSent?: number | null;
+    } | null;
+  } | null;
+}
+
+/**
+ * Traduce la respuesta del envío.
+ *
+ * `success: false` con `skipped` no es un rechazo de SAP: es que ni se intentó. Y sin
+ * número de entrega la orden sigue en revisión aunque el pedido exista, que es el caso
+ * silencioso que este circuito vino a evitar.
+ */
+function mapResend(body: MwSendResponse): ResendResult {
+  const sap = body?.data?.sap ?? {};
+  const skipped = sap.skipped === true;
+  const accepted = body?.success === true && sap.success !== false && !skipped;
+  const sapOrderNumber = sap.orderId != null ? String(sap.orderId).trim() || null : null;
+  const sapDispatchNumber = sap.deliveryId != null ? String(sap.deliveryId).trim() || null : null;
+  return {
+    accepted,
+    skipped,
+    skippedReason: sap.reason ?? null,
+    sapOrderNumber,
+    sapDispatchNumber,
+    error: sap.error ?? null,
+    sapMessages: Array.isArray(sap.sapMessages) ? sap.sapMessages : [],
+    filteredItemsCount: Number(sap.filteredItemsCount) || 0,
+    itemsSent: Number(sap.itemsSent) || 0,
+    // El envío exitoso ES el cierre de la revisión, pero sólo si SAP devolvió también
+    // la entrega: con pedido y sin entrega la orden se queda en BackOffice.
+    stillInReview: !accepted || !sapDispatchNumber,
+  };
+}
 
 /**
  * El stock sale de SAP, una llamada por producto y en paralelo, con 120 s de timeout
@@ -209,6 +267,49 @@ export class RevisionSapClient {
         throw new BadRequestException(mwMessage(err) ?? 'No se pudo guardar agrupa factura');
       }
       throw new ServiceUnavailableException('No se pudo guardar agrupa factura');
+    }
+  }
+
+  /**
+   * Reenvía la orden COMPLETA a SAP.
+   *
+   * No va contra el router de revisión sino contra el envío del middleware, que es el
+   * mismo que usa el vendedor: una sola llamada que manda el pedido, estampa el
+   * resultado, mueve la cabecera y —si SAP acepta— cierra la revisión. Por eso la base
+   * se arma aparte: `ORDERS_PATH` cuelga de `/mobility/backoffice-review` y esto no.
+   *
+   * `asBackoffice: true` + `x-api-key` es lo que el middleware exige para reconocer el
+   * envío como de BackOffice (saltea el vencimiento de crédito de 24 h). Sin la API key
+   * configurada lo trata como un envío común y el crédito vencido lo frena.
+   *
+   * Tarda: SAP puede demorar, así que el timeout es largo y propio.
+   */
+  async resendToSap(guid: string, actorEmail: string): Promise<ResendResult> {
+    try {
+      const res = await firstValueFrom(
+        this.http.post<MwSendResponse>(
+          `${this.base()}${SEND_PATH}`,
+          { guidBusinessOrders: guid, asBackoffice: true, actorEmail },
+          { headers: this.headers(), timeout: SEND_TIMEOUT },
+        ),
+      );
+      return mapResend(res.data);
+    } catch (err) {
+      const status = httpStatus(err);
+      const message = mwMessage(err);
+      // El pedido ya existe en SAP: reenviarlo lo duplicaría. El middleware lo frena
+      // sólo para BackOffice, y el mensaje explica qué hacer en su lugar.
+      if (status === 409) {
+        throw new ConflictException(message ?? 'La orden ya tiene un pedido creado en SAP');
+      }
+      if (status === 404) throw new NotFoundException(message ?? 'Orden no encontrada');
+      if (status === 400 || status === 422) {
+        throw new BadRequestException(message ?? 'La orden no está en condiciones de enviarse');
+      }
+      // Sin respuesta: el pedido PUDO haberse creado. No se reintenta a ciegas.
+      throw new ServiceUnavailableException(
+        'SAP no confirmó el envío. Verificá en SAP si el pedido se creó antes de reintentar.',
+      );
     }
   }
 

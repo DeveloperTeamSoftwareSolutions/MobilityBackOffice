@@ -8,6 +8,7 @@ import {
   DestinationChangeResult,
   GroupInvoiceChangeResult,
   ProductStock,
+  ResendResult,
   SapOrder,
   ReviewOptions,
   ReviewOrder,
@@ -127,6 +128,41 @@ export class RevisionSapService {
         ].join(' | '),
       });
     }
+
+    return result;
+  }
+
+  /**
+   * Reenvía la orden completa a SAP.
+   *
+   * Se audita SIEMPRE, acepte o rechace SAP: es la acción más fuerte de la sección
+   * —crea un pedido real— y saber que alguien la disparó importa igual que el
+   * resultado. Un rechazo auditado es justamente lo que explica por qué la orden
+   * sigue en la bandeja.
+   *
+   * El comentario en el hilo del vendedor NO se escribe acá: lo deja el propio envío
+   * del middleware, con el número de pedido o el motivo del rechazo.
+   */
+  async resendToSap(guid: string, actor: Actor): Promise<ResendResult> {
+    const actorEmail = this.requireEmail(actor);
+    const result = await this.client.resendToSap(guid, actorEmail);
+
+    await this.audit.safeRecord({
+      action: 'REVISION_SAP_RESEND',
+      entity: 'BusinessOrders',
+      entityId: guid,
+      category: AuditCategory.SapReview,
+      guidUsers: actor.guid ?? null,
+      guidApiLoginClients: actor.guidApiLoginClients ?? null,
+      actorEmail,
+      detail: [
+        `orden=${guid}`,
+        `resultado=${result.accepted ? 'aceptada' : result.skipped ? 'no enviada' : 'rechazada'}`,
+        `pedido=${result.sapOrderNumber ?? '-'}`,
+        `entrega=${result.sapDispatchNumber ?? '-'}`,
+        `motivo=${result.error ?? result.skippedReason ?? '-'}`,
+      ].join(' | '),
+    });
 
     return result;
   }

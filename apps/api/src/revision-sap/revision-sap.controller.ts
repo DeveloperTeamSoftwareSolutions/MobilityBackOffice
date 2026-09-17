@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   Param,
+  Post,
   Put,
   Query,
   Req,
@@ -167,6 +168,16 @@ export class RevisionSapController {
       this.parseReason(body?.reasonNotes),
       actorFrom(req),
     );
+    return { success: true, data };
+  }
+
+  // POST /api/revision-sap/orders/:guid/resend
+  //
+  // Reenvía la orden COMPLETA a SAP. Sin body: qué se manda lo decide el servidor con
+  // lo que está guardado, y quién lo manda sale del token.
+  @Post('orders/:guid/resend')
+  async resend(@Param('guid') guid: string, @Req() req: AuthedRequest) {
+    const data = await this.service.resendToSap(this.parseGuid(guid, 'guid'), actorFrom(req));
     return { success: true, data };
   }
 

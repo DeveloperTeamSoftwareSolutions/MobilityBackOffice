@@ -228,6 +228,26 @@ export interface GroupInvoiceChangeResult {
   groupInvoice: boolean;
 }
 
+/**
+ * Resultado del reenvío a SAP.
+ *
+ * `accepted` no es "la llamada salió bien": SAP puede contestar 200 y rechazar. Y
+ * `skipped` es un tercer caso —ni se intentó— que no hay que mostrar como rechazo.
+ */
+export interface ResendResult {
+  accepted: boolean;
+  skipped: boolean;
+  skippedReason: string | null;
+  sapOrderNumber: string | null;
+  sapDispatchNumber: string | null;
+  error: string | null;
+  sapMessages: string[];
+  filteredItemsCount: number;
+  itemsSent: number;
+  /** La orden sigue en la bandeja: SAP rechazó, o creó el pedido pero no la entrega. */
+  stillInReview: boolean;
+}
+
 /** Una línea del motivo del rechazo: el tipo que devolvió SAP y su mensaje. */
 export interface SapErrorLine {
   /** `E`, `W`, … tal como lo manda SAP. `null` si el mensaje no traía tipo. */

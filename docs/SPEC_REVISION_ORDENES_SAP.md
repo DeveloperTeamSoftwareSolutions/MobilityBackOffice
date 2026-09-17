@@ -1,8 +1,9 @@
 # Órdenes rechazadas por SAP — Spec
 
-> Última actualización: 2026-09-17 · Versión: 2.30.0
-> Estado: **bandeja, detalle, centro y destino por ítem y órdenes SAP conectados**
-> (requiere Middleware ≥ 1.348.0, PR #646). **El reenvío a SAP todavía no.**
+> Última actualización: 2026-09-17 · Versión: 2.31.0
+> Estado: **todo conectado, reenvío a SAP incluido** (requiere Middleware ≥ 1.356.0,
+> PR #646, y `MIDDLEWARE_API_KEY` configurada en los dos lados).
+> Falta la división por centro (Gustavo): hoy el reenvío sale como una sola orden SAP.
 
 ## Qué resuelve
 
@@ -14,7 +15,7 @@ MobilityIA la deja en solo lectura y el vendedor ya no puede reenviarla. BackOff
 2. ve el motivo del rechazo de SAP, con los intentos anteriores;
 3. corrige **por ítem** el centro de distribución y el destino de entrega *(conectado)*;
 4. ve en cuántas órdenes SAP salió la orden y el estado de cada una *(conectado)*;
-5. reenvía la orden a SAP *(pendiente)*.
+5. reenvía la orden completa a SAP *(conectado)*.
 
 ## Respuestas del jefe (2026-09-15)
 
@@ -79,8 +80,36 @@ vendedor, motivo e intentos. Búsqueda, orden y paginación en el servidor.
     entrega, motivo y sus productos. Es el historial de cómo salió cada intento.
   - **Reenviar es de la orden COMPLETA** (confirmado con el equipo el 2026-09-17): se
     manda la `BusinessOrder` y el Middleware decide en cuántas órdenes SAP sale. El botón
-    vive en la barra de acciones, junto a Guardar *(deshabilitado hasta que el reenvío
-    esté conectado)*.
+    vive en la barra de acciones, junto a Guardar, y **está conectado**.
+
+**Reenvío a SAP** (`POST /api/revision-sap/orders/:guid/resend`, sin body):
+
+- Una sola llamada al envío del Middleware —el **mismo** que usa el vendedor— con
+  `asBackoffice: true` + `x-api-key`. Ese endpoint manda el pedido, estampa el resultado,
+  deja el comentario en el hilo del vendedor, mueve la cabecera y **cierra la revisión si
+  SAP acepta**: el envío exitoso *es* el cierre, no un trámite aparte.
+- **Confirma antes**, porque crea un pedido real en SAP que no se deshace desde acá. El
+  aviso dice si hay cambios sin guardar (se reenviaría sin ellos), cuántos productos
+  siguen con un aviso que bloquea, y qué implica el valor de agrupa factura.
+- **No se bloquea** por cambios sin guardar ni por avisos: se informan y decide el
+  operador. Lo único que apaga el botón es que la orden ya no esté en revisión.
+- El resultado se muestra **en el mismo modal**, no en un toast: el N° de pedido es lo que
+  BackOffice copia, y el motivo del rechazo es lo que hay que leer para corregir.
+
+| Respuesta | Qué se muestra |
+|---|---|
+| SAP aceptó, con entrega | N° de pedido y de entrega. La orden **sale de la bandeja** |
+| SAP aceptó, **sin** entrega | Aviso: el pedido existe pero no se despacha; la entrega se resuelve en SAP y la orden **sigue en revisión** |
+| SAP rechazó | El motivo con su tipo (`[E] …`); sigue en revisión |
+| No se envió (`skipped`) | Agrupa factura con faltantes, o ningún ítem con stock |
+| 409 `SAP_ORDER_ALREADY_EXISTS` | El pedido ya existe: reenviarlo lo duplicaría |
+| Sin respuesta | *"Verificá en SAP si el pedido se creó antes de reintentar"* — **no** se reintenta a ciegas |
+
+- Auditoría `REVISION_SAP_RESEND`, **siempre**: acepte o rechace SAP. Un rechazo auditado
+  es lo que explica por qué la orden sigue en la bandeja.
+- ⚠️ El Middleware sólo reconoce el envío como de BackOffice si **`MIDDLEWARE_API_KEY`
+  está configurada en los dos lados** y coincide (`envioDeBackoffice`). Sin eso lo trata
+  como un envío común y le aplica el vencimiento de crédito de 24 h.
 - Stock: la pantalla pide primero centros y destinos (inmediato) y después el stock de
   SAP, que puede tardar o fallar sin trabar el resto.
 - Una orden que ya salió de revisión se muestra en solo lectura.
@@ -142,6 +171,7 @@ web  revision-sap.api.ts ──> api  /api/revision-sap/*  (rol RevisionSap)
 | `ReviewOrderDetail.tsx` | Cabecera, motivo, las dos pestañas, guardado y acciones |
 | `ReviewItemsTable.tsx` | Pestaña **Productos**: centro, destino y "Ver stock" por línea |
 | `GroupInvoiceModal.tsx` | Confirmación de agrupa factura, con lo que implica cada valor |
+| `ResendModal.tsx` | Confirmación del reenvío y, después, qué contestó SAP |
 | `SapOrdersPanel.tsx` | Pestaña **Órdenes SAP**: estado y productos de cada una, solo consulta |
 | `SapErrorMessage.tsx` | El motivo de SAP: tipo como etiqueta y mensaje |
 | `ProductStockModal.tsx` | Stock por centro y almacén de un producto |

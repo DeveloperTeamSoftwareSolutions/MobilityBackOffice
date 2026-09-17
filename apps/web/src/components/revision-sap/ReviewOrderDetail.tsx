@@ -8,6 +8,7 @@ import {
   getReviewCatalogs,
   getReviewOrder,
   listSapOrders,
+  resendToSap,
 } from './revision-sap.api';
 import {
   blockingItemCount,
@@ -18,6 +19,7 @@ import {
 import {
   LineDraft,
   LineDrafts,
+  ResendResult,
   ReviewCatalogs,
   ReviewOrderDetail as Detail,
   SapOrder,
@@ -26,6 +28,7 @@ import { SapOrdersPanel } from './SapOrdersPanel';
 import { ReviewItemsTable } from './ReviewItemsTable';
 import { SapErrorMessage } from './SapErrorMessage';
 import { GroupInvoiceModal } from './GroupInvoiceModal';
+import { ResendModal } from './ResendModal';
 import { PreviewNotice } from './PreviewNotice';
 
 interface Props {
@@ -58,6 +61,11 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
   const [askGroupInvoice, setAskGroupInvoice] = useState(false);
   const [savingGroupInvoice, setSavingGroupInvoice] = useState(false);
   const [groupInvoiceError, setGroupInvoiceError] = useState<string | null>(null);
+  // Reenvío a SAP: el modal pregunta primero y después muestra qué contestó SAP.
+  const [askResend, setAskResend] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [resendResult, setResendResult] = useState<ResendResult | null>(null);
+  const [resendError, setResendError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -183,6 +191,44 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
       );
     }
     setSaving(false);
+  }
+
+  /**
+   * Reenvía la orden entera a SAP.
+   *
+   * Una sola llamada: el servidor manda el pedido, estampa el resultado y —si SAP
+   * aceptó con entrega— cierra la revisión. Después se recarga todo, porque el estado,
+   * los números de SAP y las órdenes SAP cambiaron.
+   *
+   * El modal NO se cierra al terminar: ahí queda el número de pedido o el motivo del
+   * rechazo, que es lo que hay que leer.
+   */
+  async function onConfirmResend() {
+    if (!order) return;
+    setSending(true);
+    setResendError(null);
+    try {
+      const result = await resendToSap(order.guid);
+      setResendResult(result);
+      const [fresh, sap] = await Promise.all([
+        getReviewOrder(order.guid),
+        listSapOrders(order.guid),
+      ]);
+      setOrder(fresh);
+      setSapOrders(sap);
+      setDrafts(initialDrafts(fresh.items));
+      setSaveErrors({});
+      setSaveMessage(null);
+    } catch (err) {
+      setResendError(apiErrorMessage(err, 'No se pudo reenviar la orden a SAP.'));
+    }
+    setSending(false);
+  }
+
+  function onCloseResend() {
+    setAskResend(false);
+    setResendResult(null);
+    setResendError(null);
   }
 
   const backBar = (
@@ -377,6 +423,20 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
         </section>
       )}
 
+      {askResend && (
+        <ResendModal
+          orderNumber={order.orderNumber}
+          pendingChanges={changes.length}
+          blocking={blocking}
+          groupInvoice={order.groupInvoice}
+          sending={sending}
+          result={resendResult}
+          error={resendError}
+          onConfirm={() => void onConfirmResend()}
+          onClose={onCloseResend}
+        />
+      )}
+
       {askGroupInvoice && (
         <GroupInvoiceModal
           current={order.groupInvoice}
@@ -424,12 +484,19 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
           </button>
           {/* El reenvío es de la orden COMPLETA, no de cada orden SAP (confirmado con
               el equipo el 2026-09-17): se manda la BusinessOrder y el Middleware
-              decide en cuántas órdenes SAP sale. */}
+              decide en cuántas órdenes SAP sale.
+
+              No se bloquea por cambios sin guardar ni por avisos: el modal los dice y
+              deja decidir. Lo único que lo apaga es que la orden ya no esté en revisión. */}
           <button
             type="button"
             className="bo-rs__button"
-            disabled
-            title="El reenvío a SAP todavía no está conectado"
+            disabled={!editable}
+            onClick={() => {
+              setResendResult(null);
+              setResendError(null);
+              setAskResend(true);
+            }}
           >
             Reenviar a SAP
           </button>

@@ -416,11 +416,22 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
           </button>
           <button
             type="button"
-            className="bo-rs__button"
+            className="bo-rs__button bo-rs__button--ghost"
             disabled={changes.length === 0 || blocking > 0 || !editable}
             onClick={() => void onSave()}
           >
             {saving ? 'Guardando…' : 'Guardar cambios'}
+          </button>
+          {/* El reenvío es de la orden COMPLETA, no de cada orden SAP (confirmado con
+              el equipo el 2026-09-17): se manda la BusinessOrder y el Middleware
+              decide en cuántas órdenes SAP sale. */}
+          <button
+            type="button"
+            className="bo-rs__button"
+            disabled
+            title="El reenvío a SAP todavía no está conectado"
+          >
+            Reenviar a SAP
           </button>
         </div>
       </div>

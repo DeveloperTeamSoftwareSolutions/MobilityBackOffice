@@ -303,15 +303,6 @@
   border-color: rgba(197, 48, 48, 0.4);
   background: rgba(197, 48, 48, 0.02);
 }
-.bo-rs__sap-order-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding-top: 4px;
-  font-size: 13px;
-}
 .bo-rs__link-button {
   padding: 0;
   border: none;

@@ -8,8 +8,10 @@ import { ProductStock, ReviewCatalogs, ReviewOrderDetail as Detail, SapOrder } f
  *
  * "Productos" es la orden tal como se va a reenviar: ahí se corrige el centro y el
  * destino de CADA línea, sin importar en qué orden SAP cayó. "Órdenes SAP" es el
- * historial de cada intento y es solo consulta —ningún selector—, salvo el botón de
- * reenvío, que es por orden SAP y no por la orden entera.
+ * historial de cada intento y es solo consulta: ningún selector y ningún botón.
+ *
+ * El reenvío es de la orden COMPLETA (confirmado con el equipo el 2026-09-17), así que
+ * su botón vive en la barra de acciones, fuera de las dos pestañas.
  */
 
 const ORDER = '11111111-2222-3333-4444-555555555555';
@@ -260,13 +262,21 @@ describe('ReviewOrderDetail', () => {
     expect(screen.queryByRole('button', { name: 'Ver stock' })).toBeNull();
   });
 
-  it('el reenvío es por orden SAP y todavía no está conectado', async () => {
+  /**
+   * El reenvío es de la orden COMPLETA, no de cada orden SAP (confirmado con el equipo
+   * el 2026-09-17): se manda la BusinessOrder y el Middleware decide en cuántas órdenes
+   * SAP sale. Por eso el botón vive en la barra de acciones y no dentro de una pestaña.
+   */
+  it('el reenvío es de la orden completa y todavía no está conectado', async () => {
     await renderDetail();
-    verOrdenesSap();
-    const reenviar = button('Reenviar esta orden SAP');
+    const reenviar = button('Reenviar a SAP');
     expect(reenviar.disabled).toBe(true);
-    expect(screen.getByText(/Se reenvía solo esta orden SAP/)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Reenviar a SAP' })).toBeNull();
+
+    // No hay un reenvío por orden SAP: la pestaña es solo consulta.
+    verOrdenesSap();
+    expect(screen.queryByRole('button', { name: 'Reenviar esta orden SAP' })).toBeNull();
+    // Y el de la orden completa sigue estando, fuera de las pestañas.
+    expect(button('Reenviar a SAP')).toBeTruthy();
   });
 
   it('cambiar el centro queda sin guardar y se puede descartar', async () => {

@@ -1,6 +1,6 @@
 # Órdenes rechazadas por SAP — Spec
 
-> Última actualización: 2026-09-16 · Versión: 2.29.0
+> Última actualización: 2026-09-17 · Versión: 2.30.0
 > Estado: **bandeja, detalle, centro y destino por ítem y órdenes SAP conectados**
 > (requiere Middleware ≥ 1.348.0, PR #646). **El reenvío a SAP todavía no.**
 
@@ -77,14 +77,22 @@ vendedor, motivo e intentos. Búsqueda, orden y paginación en el servidor.
   - **Órdenes SAP** — **solo consulta**: cada fila de `SAPOrders` con su **centro**, su
     estado (aceptada, aceptada sin entrega, rechazada, sin respuesta), número de pedido y
     entrega, motivo y sus productos. Es el historial de cómo salió cada intento.
-  - **Reenviar es por orden SAP**, no por la orden entera: cada orden SAP es lo que SAP
-    acepta o rechaza. El botón vive en cada rechazada, en esa pestaña *(deshabilitado
-    hasta que el Middleware parta la orden por centro)*.
+  - **Reenviar es de la orden COMPLETA** (confirmado con el equipo el 2026-09-17): se
+    manda la `BusinessOrder` y el Middleware decide en cuántas órdenes SAP sale. El botón
+    vive en la barra de acciones, junto a Guardar *(deshabilitado hasta que el reenvío
+    esté conectado)*.
 - Stock: la pantalla pide primero centros y destinos (inmediato) y después el stock de
   SAP, que puede tardar o fallar sin trabar el resto.
-- **Reenviar a SAP:** abre la confirmación con el botón de confirmar deshabilitado. No se
-  habilita con cambios sin guardar.
 - Una orden que ya salió de revisión se muestra en solo lectura.
+
+**Todo cambio de BackOffice queda en el hilo que ve el vendedor.** Los tres —centro,
+destino y agrupa factura— crean un comentario con `orderComments.create`, autor
+"Backoffice" (rol `manager`: el hilo no tiene rol propio de BackOffice). Verificado
+2026-09-17 de punta a punta: el pull de MobilityIA
+(`GET /api/mobility/order-comments/by-user`, canal `ordercomments` del SyncEngine) los
+baja al vendedor junto con los suyos y los de Créditos. El scope necesita
+`guidUsers` / `sellerEmail` / `sellerSapUserId`: con uno solo de esos datos vacío la
+consulta devuelve lo mismo, pero sin ninguno devuelve `[]`.
 
 **Avisos por línea** (`revision-sap.logic.ts`):
 

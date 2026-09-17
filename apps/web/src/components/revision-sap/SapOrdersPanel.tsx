@@ -25,10 +25,9 @@ const STATUS: Record<SapOrderStatus, { label: string; tone: string; hint?: strin
 /**
  * Las órdenes SAP de la orden, con sus productos y su estado. Solo consulta.
  *
- * Una orden SAP por centro: es la unidad que SAP acepta o rechaza, y por eso el reenvío
- * vive acá y no en la orden entera. Lo que se corrige —centro y destino de cada línea—
- * se edita en la pestaña de productos, que es la orden tal como se va a volver a enviar;
- * esta vista muestra cómo salió cada intento.
+ * Es el historial de cómo salió cada intento. No se edita ni se reenvía desde acá: se
+ * reenvía la orden COMPLETA (confirmado con el equipo el 2026-09-17), así que el botón
+ * vive en la barra de acciones de la orden y la corrección, en la pestaña de productos.
  */
 export function SapOrdersPanel({ sapOrders }: Props) {
   if (sapOrders.length === 0) {
@@ -108,22 +107,6 @@ export function SapOrdersPanel({ sapOrders }: Props) {
               </table>
             </div>
 
-            {rechazada && (
-              <div className="bo-rs__sap-order-actions">
-                <span className="bo-rs__cell--muted">
-                  Se reenvía solo esta orden SAP, con los productos de este centro. Corregí antes el
-                  centro y el destino en la pestaña de productos.
-                </span>
-                <button
-                  type="button"
-                  className="bo-rs__button"
-                  disabled
-                  title="El reenvío a SAP todavía no está conectado"
-                >
-                  Reenviar esta orden SAP
-                </button>
-              </div>
-            )}
           </li>
         );
       })}

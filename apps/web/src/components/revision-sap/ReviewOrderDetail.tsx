@@ -275,17 +275,29 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
           <h2 id="bo-rs-order-title" className="bo-rs__doc-number">
             {order.orderNumber}
           </h2>
-          {/* El estado de la orden, con la etiqueta de la tabla Status. Se ve acá
-              porque es lo que cambia al reenviar: si SAP acepta pasa a "Enviado a SAP",
-              y si rechaza se queda en "Pendiente revisión Backoffice". */}
-          <span
-            className={`bo-rs__pill bo-rs__pill--${statusTone(order.statusCode)}`}
-            title={order.statusCode ?? undefined}
-          >
-            {statusLabel(order.statusCode)}
-          </span>
-          {order.backoffice.inReview && (
-            <span className="bo-rs__status">En revisión por BackOffice</span>
+          {/* UNA sola etiqueta destacada, no dos.
+              El estado formal y la bandera de revisión dicen cosas distintas y las dos
+              son ciertas, pero juntas y con el mismo peso se contradicen a la vista:
+              una orden en revisión aparecía como "Procesada" al lado de "En revisión",
+              y `Processed` justamente NO significa terminada (a MobilityIA se la muestra
+              al vendedor como "Pendiente envío a SAP").
+              Mientras esté en revisión manda ese cartel, que es el dato accionable; el
+              estado formal queda al lado, en chico. Cuando sale de revisión, el estado
+              pasa a ser lo único que importa y toma la píldora. */}
+          {order.backoffice.inReview ? (
+            <>
+              <span className="bo-rs__status">En revisión por BackOffice</span>
+              <span className="bo-rs__cell--muted" title={order.statusCode ?? undefined}>
+                Estado: {statusLabel(order.statusCode)}
+              </span>
+            </>
+          ) : (
+            <span
+              className={`bo-rs__pill bo-rs__pill--${statusTone(order.statusCode)}`}
+              title={order.statusCode ?? undefined}
+            >
+              {statusLabel(order.statusCode)}
+            </span>
           )}
         </header>
         <dl className="bo-rs__facts">

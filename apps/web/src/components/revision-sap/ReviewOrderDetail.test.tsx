@@ -272,15 +272,34 @@ describe('ReviewOrderDetail', () => {
     expect(screen.getByText('Draft')).toBeTruthy();
   });
 
-  /** Es lo que cambia al reenviar: se ve sin salir del detalle. */
-  it('el detalle muestra el estado de la orden con su etiqueta', async () => {
-    api.getReviewOrder.mockResolvedValue(order({ statusCode: 'PendingBackofficeReview' }));
+  /**
+   * Es lo que cambia al reenviar, así que se ve sin salir del detalle. Pero UNA sola
+   * etiqueta destacada: en revisión, el estado formal va en chico y no compite con el
+   * cartel —si no, una orden en revisión se anuncia como "Procesada", que se lee como
+   * lo contrario de lo que pasa.
+   */
+  it('en revisión: manda el cartel y el estado formal va al lado, en chico', async () => {
+    api.getReviewOrder.mockResolvedValue(order({ statusCode: 'Processed' }));
     await renderDetail();
-    expect(screen.getByText('Pendiente revisión Backoffice')).toBeTruthy();
 
-    api.getReviewOrder.mockResolvedValue(order({ statusCode: 'SentToSAP' }));
-    render(<ReviewOrderDetail guid={ORDER} onBack={() => undefined} />);
-    expect(await screen.findByText('Enviado a SAP')).toBeTruthy();
+    expect(screen.getByText('En revisión por BackOffice')).toBeTruthy();
+    expect(screen.getByText('Estado: Procesada')).toBeTruthy();
+    // "Procesada" no aparece suelta como si fuera el titular.
+    expect(screen.queryByText('Procesada')).toBeNull();
+  });
+
+  it('fuera de revisión: el estado es lo único que importa y toma la etiqueta', async () => {
+    api.getReviewOrder.mockResolvedValue(
+      order({
+        statusCode: 'SentToSAP',
+        backoffice: { inReview: false, decidedBy: 'bo@duwest.com', decidedAt: '2026-09-17T17:00:00Z' },
+      }),
+    );
+    await renderDetail();
+
+    expect(screen.getByText('Enviado a SAP')).toBeTruthy();
+    expect(screen.queryByText('En revisión por BackOffice')).toBeNull();
+    expect(screen.queryByText(/^Estado: /)).toBeNull();
   });
 
   it('todas las líneas se corrigen en Productos, esté aceptada o rechazada su orden SAP', async () => {

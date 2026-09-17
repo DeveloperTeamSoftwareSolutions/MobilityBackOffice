@@ -110,73 +110,91 @@ export function ProductStockModal({
             {opciones.length === 0 ? (
               <p className="bo-rs__empty">Este producto no tiene stock en ningún centro.</p>
             ) : (
-              <ul className="bo-rs__stock-centers">
-                {opciones.map((c) => {
-                  const alcanza = cubreLaCantidad(c.available, quantity);
-                  const actual = c.centerCode === currentCenter;
-                  const detalle = stock.rows.filter((r) => r.centerCode?.trim() === c.centerCode);
+              /* Una TABLA, no tarjetas: con 14 centros las tarjetas apiladas hacían el
+                 modal larguísimo y dejaban todo angosto. Una fila por centro entra de un
+                 vistazo, y el detalle de almacenes se resume en su celda. */
+              <div className="bo-rs__table-wrap">
+                <table className="bo-rs__table bo-rs__table--compact">
+                  <thead>
+                    <tr>
+                      <th>Centro</th>
+                      <th className="bo-rs__th--number">Disponible</th>
+                      <th>Almacenes</th>
+                      {puedeElegir && <th />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {opciones.map((c) => {
+                      const alcanza = cubreLaCantidad(c.available, quantity);
+                      const actual = c.centerCode === currentCenter;
+                      const detalle = stock.rows.filter((r) => r.centerCode?.trim() === c.centerCode);
 
-                  return (
-                    <li
-                      key={c.centerCode}
-                      className={`bo-rs__stock-center${actual ? ' bo-rs__stock-center--current' : ''}${
-                        c.elegible ? '' : ' bo-rs__stock-center--blocked'
-                      }`}
-                    >
-                      <div className="bo-rs__stock-center-head">
-                        <span className="bo-rs__cell--strong">
-                          <span className="bo-rs__mono">{c.centerCode}</span>
-                          {c.centerName ? ` · ${c.centerName}` : ''}
-                        </span>
-                        {actual && <span className="bo-rs__chip">Actual</span>}
-                        <span
-                          className={`bo-rs__pill bo-rs__pill--${
-                            alcanza === false ? 'warn' : c.available > 0 ? 'ok' : 'muted'
+                      return (
+                        <tr
+                          key={c.centerCode}
+                          className={`${actual ? 'bo-rs__stock-row--current' : ''}${
+                            c.elegible ? '' : ' bo-rs__stock-row--blocked'
                           }`}
                         >
-                          {formatQuantity(c.available)} {unit}
-                        </span>
-                        {alcanza === false && (
-                          <span className="bo-rs__cell--muted">
-                            No alcanza para {formatQuantity(quantity)} {unit}
-                          </span>
-                        )}
-                        {puedeElegir &&
-                          (c.elegible ? (
-                            <button
-                              type="button"
-                              className="bo-rs__button bo-rs__button--ghost bo-rs__stock-pick"
-                              disabled={actual}
-                              onClick={() => onSelectCenter?.(c.centerCode)}
-                            >
-                              {actual ? 'Es el actual' : 'Elegir este centro'}
-                            </button>
-                          ) : (
-                            <span className="bo-rs__cell--muted">
-                              El cliente no recibe desde este centro
+                          <td>
+                            <span className="bo-rs__cell--strong">
+                              <span className="bo-rs__mono">{c.centerCode}</span>
+                              {c.centerName ? ` · ${c.centerName}` : ''}
                             </span>
-                          ))}
-                      </div>
-
-                      {detalle.length > 0 && (
-                        <ul className="bo-rs__stock-warehouses">
-                          {detalle.map((r) => (
-                            <li key={`${r.centerCode}-${r.warehouseCode}`}>
-                              <span className="bo-rs__mono">{r.warehouseCode ?? '—'}</span>
-                              {r.warehouseName ? ` ${r.warehouseName}` : ''}
-                              {' · '}
-                              {formatQuantity(r.available)} {unit}
-                              {r.inInspection > 0 && ` · ${formatQuantity(r.inInspection)} en inspección`}
-                              {r.inTransit > 0 && ` · ${formatQuantity(r.inTransit)} en tránsito`}
-                              {r.allowedForCustomer && <span className="bo-rs__chip">Del cliente</span>}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+                            {actual && <span className="bo-rs__chip">Actual</span>}
+                            {!c.elegible && (
+                              <span className="bo-rs__cell-sub">
+                                El cliente no recibe desde este centro
+                              </span>
+                            )}
+                          </td>
+                          <td className="bo-rs__cell--number">
+                            <span
+                              className={
+                                alcanza === false ? 'bo-rs__cell--warn' : 'bo-rs__cell--strong'
+                              }
+                            >
+                              {formatQuantity(c.available)} {unit}
+                            </span>
+                            {alcanza === false && (
+                              <span className="bo-rs__cell-sub">
+                                Pide {formatQuantity(quantity)}
+                              </span>
+                            )}
+                          </td>
+                          <td className="bo-rs__cell--muted bo-rs__stock-warehouses">
+                            {detalle.length === 0
+                              ? '—'
+                              : detalle.map((r) => (
+                                  <span key={`${r.centerCode}-${r.warehouseCode}`} className="bo-rs__stock-wh">
+                                    <span className="bo-rs__mono">{r.warehouseCode ?? '—'}</span>{' '}
+                                    {r.warehouseName ?? ''} · {formatQuantity(r.available)}
+                                    {r.allowedForCustomer && (
+                                      <span className="bo-rs__chip">Del cliente</span>
+                                    )}
+                                  </span>
+                                ))}
+                          </td>
+                          {puedeElegir && (
+                            <td>
+                              {c.elegible && (
+                                <button
+                                  type="button"
+                                  className="bo-rs__button bo-rs__button--ghost"
+                                  disabled={actual}
+                                  onClick={() => onSelectCenter?.(c.centerCode)}
+                                >
+                                  {actual ? 'Es el actual' : 'Elegir'}
+                                </button>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </>
         )}

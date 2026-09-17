@@ -337,7 +337,7 @@ describe('ReviewOrderDetail', () => {
     verOrdenesSap();
     expect(screen.queryByLabelText('Centro de distribución de la línea 3')).toBeNull();
     expect(screen.queryByLabelText('Destino de entrega de la línea 3')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Ver stock' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Ver stock/ })).toBeNull();
   });
 
   /**
@@ -409,9 +409,9 @@ describe('ReviewOrderDetail', () => {
 
   it('el stock de un producto se ve en un modal, por centro y almacén', async () => {
     await renderDetail();
-    // "y elegir" porque la orden es editable: el modal también sirve para elegir centro.
+    // "y elegir centro" porque la orden es editable: el modal también sirve para elegir.
     // La línea 3 es el producto 1200135, el que SAP rechazó.
-    fireEvent.click(screen.getAllByRole('button', { name: 'Ver stock y elegir' })[1]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ver stock y elegir centro' })[1]);
     expect(await screen.findByText('Stock de 1200135')).toBeTruthy();
     expect(api.getProductStock).toHaveBeenCalledWith(ORDER, '1200135');
     // El almacén ya no es un nodo suelto: va en una línea con su código y cantidades.
@@ -460,14 +460,14 @@ describe('ReviewOrderDetail', () => {
    */
   it('desde el modal se elige el centro, y queda sin guardar', async () => {
     await renderDetail();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Ver stock y elegir' })[1]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ver stock y elegir centro' })[1]);
     await screen.findByText('Stock de 1200135');
 
     // El stock de prueba está en el 2802, que es el centro que ya tiene la línea 3.
     expect(screen.getByText('Es el actual')).toBeTruthy();
 
     // 2801 es permitido y no tiene stock: se puede elegir igual (decisión 4b).
-    fireEvent.click(screen.getAllByRole('button', { name: 'Elegir este centro' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Elegir' })[0]);
 
     await waitFor(() => expect(screen.queryByText('Stock de 1200135')).toBeNull());
     expect(screen.getByText('1 cambio sin guardar')).toBeTruthy();
@@ -479,10 +479,10 @@ describe('ReviewOrderDetail', () => {
       order({ backoffice: { inReview: false, decidedBy: 'bo@duwest.com', decidedAt: null } }),
     );
     await renderDetail();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Ver stock' })[1]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ver stock por centro' })[1]);
     await screen.findByText('Stock de 1200135');
 
-    expect(screen.queryByRole('button', { name: 'Elegir este centro' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Elegir' })).toBeNull();
   });
 
   it('una orden que ya no está en revisión se muestra en solo lectura', async () => {

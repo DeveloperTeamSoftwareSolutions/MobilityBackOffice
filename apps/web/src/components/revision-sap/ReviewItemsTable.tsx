@@ -52,7 +52,6 @@ export function ReviewItemsTable({
               <th className="bo-rs__th--number">#</th>
               <th>Producto</th>
               <th className="bo-rs__th--number">Cantidad</th>
-              <th>Stock</th>
               <th>Centro de distribución</th>
               <th>Destino de entrega</th>
             </tr>
@@ -91,15 +90,6 @@ export function ReviewItemsTable({
                       {formatQuantity(item.quantity)} {item.unitOfMeasure ?? ''}
                     </td>
                     <td>
-                      <button
-                        type="button"
-                        className="bo-rs__link-button"
-                        onClick={() => setStockFor(item)}
-                      >
-                        {editable ? 'Ver stock y elegir' : 'Ver stock'}
-                      </button>
-                    </td>
-                    <td>
                       <select
                         className="bo-rs__select"
                         aria-label={`Centro de distribución de la línea ${item.lineNumber}`}
@@ -128,6 +118,16 @@ export function ReviewItemsTable({
                       {center.inherited && (
                         <span className="bo-rs__cell-sub">Sale con el centro de la cabecera</span>
                       )}
+                      {/* El stock vive acá, debajo del selector, porque es lo que se
+                          mira para decidir ESTE campo. Como columna aparte quedaba
+                          lejos de la decisión y ensanchaba la tabla. */}
+                      <button
+                        type="button"
+                        className="bo-rs__link-button bo-rs__stock-link"
+                        onClick={() => setStockFor(item)}
+                      >
+                        {editable ? 'Ver stock y elegir centro' : 'Ver stock por centro'}
+                      </button>
                     </td>
                     <td>
                       <select
@@ -159,7 +159,7 @@ export function ReviewItemsTable({
                   {(warnings.length > 0 || saveError) && (
                     <tr className="bo-rs__warning-row">
                       <td />
-                      <td colSpan={5}>
+                      <td colSpan={4}>
                         <ul className="bo-rs__warnings">
                           {saveError && (
                             <li className="bo-rs__warning bo-rs__warning--blocking">{saveError}</li>

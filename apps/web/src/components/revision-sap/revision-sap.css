@@ -724,50 +724,31 @@
   flex-wrap: wrap;
 }
 
-/* Elegir el centro DESDE el stock.
-   Una tarjeta por centro —que es lo que se elige— con sus almacenes debajo, para no
-   perder de donde sale el numero. */
-.bo-rs__stock-centers {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0 0 16px;
-  padding: 0;
-  list-style: none;
-}
-.bo-rs__stock-center {
-  padding: 10px 12px;
-  border: 1px solid var(--bo-border);
-  border-radius: var(--bo-radius-sm);
-  background: var(--bo-surface);
-}
-/* El centro con el que sale hoy la linea. */
-.bo-rs__stock-center--current {
-  border-color: var(--bo-accent);
+
+/* Elegir el centro DESDE el stock: una fila por centro, compacta. */
+.bo-rs__stock-row--current td {
   background: var(--bo-bg);
 }
-/* Centro al que el cliente no accede: se muestra igual —saber que hay stock ahi sirve—
-   pero apagado, porque no es una opcion. */
-.bo-rs__stock-center--blocked {
-  opacity: 0.65;
+/* Centro al que el cliente no accede: se ve —saber que hay stock ahi sirve— pero
+   apagado, porque no es una opcion. */
+.bo-rs__stock-row--blocked td {
+  opacity: 0.6;
 }
-.bo-rs__stock-center-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  font-size: 13px;
+.bo-rs__cell--warn {
+  color: var(--bo-warning);
+  font-weight: 600;
 }
-.bo-rs__stock-pick {
-  margin-left: auto;
-}
+/* Los almacenes de un centro, uno por linea dentro de su celda. */
 .bo-rs__stock-warehouses {
-  margin: 8px 0 0;
-  padding: 0 0 0 4px;
-  list-style: none;
   font-size: 12px;
-  color: var(--bo-text-muted);
 }
-.bo-rs__stock-warehouses li {
-  padding: 2px 0;
+.bo-rs__stock-wh {
+  display: block;
+  white-space: nowrap;
+}
+/* El link al stock, debajo del selector de centro. */
+.bo-rs__stock-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
 }

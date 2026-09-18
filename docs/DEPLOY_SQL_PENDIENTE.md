@@ -72,7 +72,7 @@ orden volveria sola a `Processed`, con el vendedor recuperando el boton de envia
 
 | Objeto | Repo | QATEST | PROD |
 |---|---|---|---|
-| `BusinessOrders.BackofficeRejectedAt` + `BackofficeRejectedByEmail` | MobilityMiddleWare | [ ] **pendiente** | [ ] **pendiente** |
+| `BusinessOrders.BackofficeRejectedAt` + `BackofficeRejectedByEmail` | MobilityMiddleWare | [x] aplicada 2026-09-18 | [ ] **pendiente** |
 
 Orden de deploy: **migracion → MW 1.360.0 → BackOffice 2.38.0**. Sin las columnas, el endpoint de rechazo
 falla y la proyeccion no ve el hecho. El script es aditivo e idempotente (chequea `sys.columns`).

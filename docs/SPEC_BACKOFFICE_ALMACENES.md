@@ -212,14 +212,31 @@ reescrita con tokens `--bo-`, los cuatro íconos SVG nuevos, el alta en `section
 (`roles: ['Administrador']`), la ruta `/almacenes` con `RoleGuard` en `App.tsx`, 20 tests de Vitest
 y la costura `center-sorts.spec.ts`. Versión **2.37.0** (MINOR: sección y ruta nuevas).
 
-Falta:
+**Hecho en el paso 4 — verificado contra QATEST (2026-09-18)**: BackOffice 2.37.0 levantado contra
+un MiddleWare 1.357.0 apuntando a `Mobility_QATEST`. **37 verificaciones, todas OK.**
 
-- **Paso 4 — verificación en QATEST**, contra un Middleware ≥ 1.357.0: reservar por cliente y por
-  grupo desde la pantalla, ver que el almacén pase a restringido y vuelva a disponible al quitar la
-  última reserva, restringir y liberar un centro, desplegar un grupo grande (`T3`, 715 clientes) y
-  paginarlo, confirmar que el 37 llega con `assignable: false`, que el alcance por sociedad recorta
-  lo que ve un no-admin, que la auditoría aparece en ITManager con `guidApiLoginClients`, y que
-  `/allowed` del Middleware responde igual que antes del traspaso.
+| Qué se probó | Resultado |
+|---|---|
+| Sin token, la sección corta | 401 |
+| El rol `Usuario` entra · `Marketing` no | 200 / 403 |
+| Buscador de grupos | `T3` Ingenio El Angel, 715 clientes, `assignable: true` |
+| El grupo 37 | llega con `assignable: false`, y vincularlo devuelve 400 con el motivo |
+| **Alcance por sociedad** | un usuario con alcance `2700` ve **sólo** esa sociedad; la lectura de un almacén de `2500` viene vacía y la escritura da **403** |
+| Reservar un grupo | el almacén pasa a reservado con `groupCount` 1 |
+| La regla del MiddleWare | un cliente de `T3` ve el almacén en `/allowed`; uno del grupo 37, no |
+| Clientes del grupo | paginado server-side: 715 en 143 páginas |
+| Reservar y quitar un **cliente** | el almacén queda reservado y vuelve a libre |
+| Restringir y liberar un **centro** | con motivo, y vuelve a su estado |
+| Quitar la última reserva | el almacén vuelve a `disponible` y el cliente del grupo 37 lo ve otra vez |
+| **Auditoría** | 4 entradas nuevas, todas con `AppId = MobilityBackOffice`, categoría `Warehouses` y `guidApiLoginClients` completo. Acciones: `WAREHOUSE_CUSTOMER_ADD` / `_REMOVE`, `CENTER_RESTRICT`, `CENTER_ENABLE` |
+
+QATEST quedó como estaba: el almacén `2500/2501/0069` libre y el centro `2501` sin restringir.
+
+⚠️ **Lo que esta verificación NO cubre:** la pantalla no se operó desde el navegador. Se ejercitó la
+API completa con un token propio firmado para la prueba, porque el login pasa por ITManager. La
+pantalla está cubierta por sus 20 tests de Vitest, pero nadie la abrió todavía contra datos reales.
+
+Falta:
 - Confirmar quiénes administran almacenes y darles cuenta y rol en BackOffice **antes** de la baja en
   MobilityManager (paso 5).
 - Al terminar, corregir en `SPEC_BACKOFFICE_REGIONES.md` la línea que enumera a Warehouses entre los

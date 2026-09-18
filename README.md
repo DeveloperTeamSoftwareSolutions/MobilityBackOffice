@@ -64,5 +64,7 @@ para el estado por entorno (v2.0.0 requiere el script `005` en PROD).
 - `docs/ENV_VARIABLES.md` — variables de entorno
 - `docs/EXTERNAL_APIS.md` — integraciones externas
 - `docs/DEPLOY_SQL_PENDIENTE.md` — checklist de scripts SQL por entorno
+- `docs/DEPLOY_BACKOFFICE.md` — **cómo se despliega la app**, qué mirar antes, verificación, vuelta atrás y la recorrida en local
+- `docs/SPEC_BACKOFFICE_ALMACENES.md` — Centros y almacenes: la sección traspasada desde MobilityManager
 - `docs/AUDITORIA_BD_QATEST.md` — traza de las acciones sobre la base ejecutadas en desarrollo
 - `docs/DEUDA_AUTH_ECOSISTEMA.md` — deuda de autorizacion detectada en otras apps (pendiente)

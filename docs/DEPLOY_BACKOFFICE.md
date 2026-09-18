@@ -46,6 +46,34 @@ La sección abre con **`Administrador`** y **`Usuario`** (y `SuperAdmin`, que pa
 | `001_RegisterMobilityBackOfficeApp.sql` | La app y el rol `Administrador` | ✅ | ⬜ |
 | `007_AddUserRole.sql` | **El rol `Usuario`** | ⬜ **pendiente** | ⬜ |
 
+#### Dónde se corre el `007_AddUserRole.sql`
+
+Está en este repo: `apps/api/prisma/sql/007_AddUserRole.sql`.
+
+| | |
+|---|---|
+| Instancia | `100.66.245.49:1433` |
+| Base | **`Mobility_QATEST`** para local y SandBox · **`Mobility-PROD`** para producción |
+| Qué toca | Las tablas de **ITManager**, que viven en esa misma base: `Applications`, `Roles`, `Permissions`, `RolePermissions` |
+| Requisito previo | El `001`, que registra la app. El script corta con `RAISERROR` si no la encuentra |
+| Idempotente | Sí: sólo `INSERT` si falta. No modifica ni borra filas ajenas |
+| Rollback | Borrar el rol `MOBILITYBO_USER` y su mapeo. Nadie más los usa |
+
+⚠️ **El script no lleva `USE`**: corre contra la base de la conexión. Abrir siempre con
+`SELECT @@SERVERNAME, DB_NAME();` antes de ejecutarlo — es la única forma de no confundir
+`Mobility_QATEST` con `Mobility-PROD`.
+
+Para saber si ya está aplicado, sin ejecutarlo:
+
+```sql
+SELECT r.RoleKey, r.Name
+FROM   Roles r
+JOIN   Applications a ON a.Guid = r.GuidApplications
+WHERE  a.AppId = 'MobilityBackOffice'
+ORDER BY r.RoleKey;
+-- Tiene que aparecer MOBILITYBO_USER. Si no está, falta correr el 007.
+```
+
 ⚠️ **Sin el 007 no existe el rol `Usuario`**, así que a la sección sólo entran `Administrador` y
 `SuperAdmin`. No es un error de la sección: es que el rol todavía no está creado en ITManager.
 El estado por entorno vive en [`DEPLOY_SQL_PENDIENTE.md`](DEPLOY_SQL_PENDIENTE.md) — **verificarlo
@@ -134,3 +162,51 @@ MobilityManager, que todavía tiene su pantalla.
 | Falta `WarehouseCustomerGroups` en esa base | Los endpoints de grupos responden 503 con un código claro | Ídem: el resto de la sección anda. Es el ítem 32 de la cola de MobilityManager |
 | El rol `Usuario` no existe todavía (script 007) | Sólo entran `Administrador` y `SuperAdmin` | Correr el 007, o asignar `Administrador` |
 | Dos pantallas para lo mismo (acá y en MobilityManager) | Ninguno de datos: el dueño es el MiddleWare y las dos escriben por el mismo endpoint | En la auditoría se distinguen por `AppId`. ⚠️ **Todo arreglo hay que hacerlo en los dos lados** hasta que se dé de baja la de MobilityManager |
+
+
+---
+
+## 7. Verlo todo en local, antes de desplegar
+
+Sirve para recorrer lo nuevo contra datos reales de QATEST sin tocar ningún entorno desplegado.
+
+```bash
+git fetch origin && git checkout main && git pull
+npm ci
+npm run dev:api     # una terminal — API en :3010
+npm run dev:web     # otra terminal — front en :5183
+```
+
+El front de desarrollo (`:5183`) es el que conviene abrir: recarga solo al cambiar código. El
+`:3010` sirve el build, que recién existe después de `npm run build`.
+
+### Lo que hay para mirar
+
+| Sección | Rol que la abre | Novedad |
+|---|---|---|
+| **Centros y almacenes** | `Administrador` | **Nueva** (2.37.0): lo que se traspasó desde MobilityManager, con la reserva por grupo de clientes |
+| **Órdenes rechazadas por SAP** | `RevisionSap` | **Nueva** (2.35.0): bandeja de pendientes y resueltas, y corrección por ítem |
+| Regiones comerciales | `Administrador` | Ya estaba |
+| Consola de soporte | `Soporte` | Ya estaba |
+| Matriz de autorizadores | `SuperAdmin` | Ya estaba |
+| Templates de WhatsApp · Documentación del RAG | `Marketing` | Ya estaban |
+
+⚠️ **Con una cuenta sola no se ve todo.** La app resuelve **un único rol por usuario**:
+`SuperAdmin` ve todas las secciones; `Usuario` ve todas **menos** las de `Soporte`, `SuperAdmin` y
+`RevisionSap`. Para recorrer lo nuevo de punta a punta conviene entrar con **`SuperAdmin`**.
+
+### Recorrida de Almacenes
+
+1. **Centros**: buscar un centro y entrar. Se ve la lista de sus almacenes con "N clientes · M grupos".
+2. **Reservar → Cliente**: buscar por código o nombre. El almacén queda reservado.
+3. **Reservar → Grupo de clientes**: buscar `37` (aparece **deshabilitado, con el motivo**) y después
+   un grupo real, por ejemplo `T3` (Ingenio El Angel, 715 clientes en la sociedad 2500).
+4. **Desplegar la fila del grupo**: la lista de sus clientes, paginada.
+5. **Quitar la última reserva**: pide confirmación y avisa que el almacén queda disponible para todos.
+6. **Restringir un centro** con motivo, y liberarlo.
+
+Todo eso escribe en la base de QATEST y queda auditado. Para dejarlo como estaba, quitar lo que se
+haya reservado y liberar el centro desde la misma pantalla.
+
+> Si el MiddleWare que consume tu local es anterior a 1.357.0, el paso 3 muestra el aviso de "no
+> disponible en este entorno" y el resto de la sección funciona igual. Se cambia con `MIDDLEWARE_URL`.

@@ -1,6 +1,6 @@
 # Roles y Permisos — Mobility BackOffice
 
-> Última actualización: 2026-09-18 · Versión: 2.36.0
+> Última actualización: 2026-09-18 · Versión: 2.37.0
 >
 > Qué puede hacer cada rol, cómo se decide, y cómo se registra en ITManager.
 
@@ -29,7 +29,7 @@ Y la regla que más sorprende:
 | `MOBILITYBO_SUPPORT` | **Soporte** | 2 | **Solo** la consola de soporte |
 | `MOBILITYBO_REVISION_SAP` | **RevisionSap** | 3 | **Solo** Órdenes rechazadas por SAP |
 | `MOBILITYBO_USER` | **Usuario** | 4 | Todo **menos** la consola de soporte, Órdenes rechazadas por SAP y lo exclusivo de SuperAdmin |
-| `MOBILITYBO_ADMIN` | **Administrador** | 5 | Regiones comerciales |
+| `MOBILITYBO_ADMIN` | **Administrador** | 5 | Regiones comerciales, Centros y Almacenes |
 | `MOBILITYBO_MARKETING` | **Marketing** | 6 | Documentación del RAG, Templates de WhatsApp |
 
 ### Qué implica cada uno
@@ -61,8 +61,11 @@ Templates de WhatsApp, y
 No es "SuperAdmin sin la consola": SuperAdmin además entra a la consola y a la matriz
 de autorizadores.
 
-**Administrador** — solo Regiones comerciales: vincular CEBEs y sociedades a las regiones.
-Queda como rol acotado para quien solo tenga que mantener ese dato maestro.
+**Administrador** — los datos maestros administrativos: Regiones comerciales (vincular CEBEs y
+sociedades a las regiones) y Centros y Almacenes (restringir un centro, reservar un almacén a
+clientes o a grupos de clientes). Queda como rol acotado para quien solo tenga que mantener esos
+datos. En Almacenes, además del rol, lo que ve y lo que puede escribir queda recortado por su
+alcance de sociedades (ver 3.1).
 
 **Marketing** — solo las herramientas de marketing: el cargador de documentación del RAG
 y (cuando exista) los templates de WhatsApp.

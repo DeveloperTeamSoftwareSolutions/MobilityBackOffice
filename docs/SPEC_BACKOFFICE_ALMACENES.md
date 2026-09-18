@@ -1,9 +1,10 @@
 # Almacenes y Centros de Distribución — Spec
 
-> Última actualización: 2026-09-18 · Versión: 2.36.0
-> Estado: **API construida (paso 2); la pantalla es el paso 3**. Los 13 endpoints de
-> `/api/warehouses`, el módulo `scope/` y la auditoría ya existen; todavía no los usa nadie porque no
-> hay pantalla. La sección sigue viva en **MobilityManager** hasta el paso 5.
+> Última actualización: 2026-09-18 · Versión: 2.37.0
+> Estado: **API (paso 2) y pantalla (paso 3) construidas; falta la verificación en QATEST (paso 4)**.
+> Los 13 endpoints de `/api/warehouses`, el módulo `scope/`, la auditoría y la sección
+> `/almacenes` del front ya existen. Nada se probó todavía contra un Middleware real ≥ 1.357.0.
+> La sección sigue viva en **MobilityManager** hasta el paso 5.
 > Se traspasa acá por decisión del proyecto: BackOffice centraliza la configuración administrativa.
 > Requiere Middleware **≥ 1.357.0** (es donde aparece la reserva por grupo de clientes).
 > Plan del traspaso, con el detalle de lo que se mueve: `MobilityManager/docs/PLAN_TRASPASO_ALMACENES_A_BACKOFFICE.md`.
@@ -45,7 +46,9 @@ con `Administrador` o `Usuario`, o se queda sin herramienta.
 
 ## Pantallas
 
-Ruta `/almacenes`. Tres vistas encadenadas: **Centros → Almacenes del centro → Reservas del almacén**.
+Ruta `/almacenes` (construida en el paso 3). Tres vistas encadenadas: **Centros → Almacenes del
+centro → Reservas del almacén**, con `WarehousesPanel` como único dueño del estado de navegación:
+la página `AlmacenesPage.tsx` sólo compone.
 
 ### Centros
 
@@ -73,6 +76,27 @@ disponible para todos los clientes.
 
 Los buscadores llevan debounce de 300 ms y se cierran al hacer click afuera, como `CebePicker` de
 Regiones. **No hay typeahead compartido en BackOffice**: cada sección arma el suyo.
+
+### Cómo quedó construida (paso 3)
+
+- **Centros**: tabla con las 6 columnas ordenables del `CenterSortField`, `aria-sort` en la columna
+  activa y la flecha dibujada **sólo** ahí. El toggle de restricción vive dentro de una fila
+  clickeable, así que su celda corta la propagación: restringir no entra al drill. Confirmar la
+  restricción abre un motivo opcional (512 caracteres, el largo de la columna del MW) y el resultado
+  se refleja en la fila sin recargar la lista, para no perder página ni scroll.
+- **Almacenes del centro**: búsqueda, filtro *"ver sólo restringidos"* y columna **"Reservado a"**
+  con `"N clientes · M grupos"` (omite lo que vale 0). Una recarga disparada por un cambio de
+  reservas es **silenciosa**: no vacía la tabla ni cierra el drill abierto.
+- **Reservas**: clientes y grupos en la misma caja, cargados por separado. La fila de grupo es un
+  botón con `aria-expanded` que despliega `GroupCustomersList` (paginado en el servidor, 20 por
+  página). Quitar la última reserva —de cualquiera de los dos tipos— abre un `role="alert"` con el
+  aviso de que el almacén queda disponible para todos; si una de las dos listas no cargó se usa el
+  contador que trajo la lista de almacenes, porque ante la duda conviene confirmar de más.
+- **Degradación con MW viejo**: el error de `/groups` y `/group-search` se muestra dentro del bloque
+  de grupos y del buscador; los clientes reservados se siguen viendo, quitando y agregando.
+- **Estilos**: `warehouses.css` propio, escrito sobre los tokens `--bo-` con prefijo `bo-wh`
+  (la hoja de 646 líneas de MobilityManager no se copió). Íconos nuevos en `icons.tsx`:
+  `IconWarehouse`, `IconChevronRight`, `IconSortArrow`, `IconCaret`. Sin emojis.
 
 ## Arquitectura
 
@@ -137,7 +161,8 @@ centro. `guidApiLoginClients` es obligatorio: sin él, ITManager no muestra la f
 | Capa | Archivos |
 |---|---|
 | API ✅ | `apps/api/src/warehouses/` — `module`, `controller`, `service`, `client`, `types`, `customer-groups.ts` + `*.spec.ts` · `apps/api/src/scope/` — `client`, `service`, `module` + spec · `common/middleware-error.ts` (lee `status` y `code` del error del middleware) · `app.module.ts` · `audit/audit.categories.ts` |
-| Web | `apps/web/src/pages/AlmacenesPage.tsx` (sólo compone) · `apps/web/src/components/warehouses/` — panel, lista de centros, almacenes del centro, reservas, los dos buscadores, lista de clientes del grupo, `warehouses.api.ts`, `warehouses.types.ts`, `warehouses.css` + `*.test.tsx` · `config/sections.tsx` · `App.tsx` · `components/layout/icons.tsx` |
+| Web ✅ | `apps/web/src/pages/AlmacenesPage.tsx` (sólo compone) · `apps/web/src/components/warehouses/` — `WarehousesPanel`, `CentersList`, `CenterWarehouses`, `WarehouseReservations`, `CustomerPicker`, `CustomerGroupPicker`, `GroupCustomersList`, `warehouses.api.ts`, `warehouses.types.ts`, `warehouses.format.ts`, `warehouses.css` + `*.test.tsx` · `config/sections.tsx` · `App.tsx` · `components/layout/icons.tsx` |
+| Costura ✅ | `apps/api/src/warehouses/center-sorts.spec.ts` — compara el `CenterSortField` del front contra el `CENTER_SORT_FIELDS` de la API |
 | Docs | este SPEC · `API_ENDPOINTS.md` · `ROLES_Y_PERMISOS.md` · `EXTERNAL_APIS.md` · `JERARQUIA_Y_VISIBILIDAD.md` · `SPEC_BACKOFFICE_REGIONES.md` (la línea que dice que acá no hay Warehouses) |
 
 **Estilos:** tokens `--bo-`, clases con prefijo `bo-`, íconos SVG inline en `icons.tsx` y **sin
@@ -152,8 +177,20 @@ emojis**. La hoja de MobilityManager (646 líneas) no se copia: se reescribe.
   lo que evita la pantalla visible y rota · la **caché del alcance no dispara llamadas duplicadas** en
   una ráfaga concurrente, que es el incidente del 2026-08-12 · el piso de versión coincide con lo que
   promete este SPEC.
-- **Web** (Vitest + Testing Library, consultas por rol): el buscador deshabilita el 37 y muestra su
-  motivo · la fila de grupo trae su conteo y se despliega · quitar la última reserva pide confirmación.
+- **Costura API ↔ front** ✅ (`center-sorts.spec.ts`, **3 tests**): el `CenterSortField` del front y
+  el `CENTER_SORT_FIELDS` de la API tienen que ser el mismo conjunto, y son 6. Es lo que evita que un
+  click en una columna ordene por sociedad **en silencio**: si las listas se desalinean no hay error,
+  el `sortBy` cae al default. Vive del lado de la API porque es ella la que valida el `sortBy` que
+  recibe; lee el archivo del front como dato, no lo importa.
+- **Web** ✅ (Vitest + Testing Library, consultas por rol y regex, **20 tests en 4 archivos**): el
+  buscador deshabilita el 37, muestra su motivo y no reserva nada al clickearlo · la fila de grupo
+  trae su conteo y se despliega a sus clientes paginados · quitar la última reserva pide
+  confirmación y no borra nada hasta confirmar, mientras que con otra reserva viva no molesta · la
+  lista de centros muestra los conteos del API y distingue el CDI restringido entero del que sólo
+  tiene almacenes reservados · **con las respuestas de grupo caídas ("todavía no está disponible en
+  este entorno") las reservas por cliente siguen funcionando** · y las reglas puras de
+  `warehouses.format.ts` —incluida la que decide cuándo hay que confirmar— se prueban sin montar la
+  pantalla.
 
 ## Deploy
 
@@ -169,16 +206,20 @@ endpoints, la regla del grupo 37, el piso de versión, la categoría de auditor�
 en `app.module.ts` y 74 tests. Actualizados `API_ENDPOINTS.md`, `ROLES_Y_PERMISOS.md`,
 `EXTERNAL_APIS.md` y `JERARQUIA_Y_VISIBILIDAD.md`.
 
+**Hecho en el paso 3 (la pantalla)**: `AlmacenesPage.tsx` y los siete componentes de
+`components/warehouses/`, `warehouses.api.ts` / `.types.ts` / `.format.ts`, la hoja `warehouses.css`
+reescrita con tokens `--bo-`, los cuatro íconos SVG nuevos, el alta en `sections.tsx`
+(`roles: ['Administrador']`), la ruta `/almacenes` con `RoleGuard` en `App.tsx`, 20 tests de Vitest
+y la costura `center-sorts.spec.ts`. Versión **2.37.0** (MINOR: sección y ruta nuevas).
+
 Falta:
 
-- **Paso 3 — la pantalla**: componentes, estilos `bo-`, los dos buscadores, alta en `sections.tsx`,
-  ruta en `App.tsx` e ícono, con sus tests de Vitest.
-  - Con la pantalla llega también la **costura de las columnas ordenables**: hoy
-    `warehouses.service.spec.ts` fija que son 6 y que un `sortBy` inventado cae al default, pero no
-    puede compararlas contra el `CenterSortField` del front porque todavía no existe. Ese test cruza
-    las dos capas y es el que evita que un click en una columna ordene por sociedad en silencio.
-- **Paso 4 — verificación en QATEST**: reservar por cliente y por grupo, confirmar la auditoría en
-  ITManager y que `/allowed` responde igual.
+- **Paso 4 — verificación en QATEST**, contra un Middleware ≥ 1.357.0: reservar por cliente y por
+  grupo desde la pantalla, ver que el almacén pase a restringido y vuelva a disponible al quitar la
+  última reserva, restringir y liberar un centro, desplegar un grupo grande (`T3`, 715 clientes) y
+  paginarlo, confirmar que el 37 llega con `assignable: false`, que el alcance por sociedad recorta
+  lo que ve un no-admin, que la auditoría aparece en ITManager con `guidApiLoginClients`, y que
+  `/allowed` del Middleware responde igual que antes del traspaso.
 - Confirmar quiénes administran almacenes y darles cuenta y rol en BackOffice **antes** de la baja en
   MobilityManager (paso 5).
 - Al terminar, corregir en `SPEC_BACKOFFICE_REGIONES.md` la línea que enumera a Warehouses entre los

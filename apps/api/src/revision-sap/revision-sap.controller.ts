@@ -174,6 +174,31 @@ export class RevisionSapController {
     return { success: true, data };
   }
 
+  // POST /api/revision-sap/orders/:guid/reject
+  //
+  // Rechaza la orden. Es TERMINAL: vuelve al vendedor como "Rechazada", sale de la
+  // bandeja y no se deshace.
+  //
+  // El motivo es OBLIGATORIO y se valida acá además del middleware: el estado sólo
+  // dice "Rechazada", así que el comentario del hilo es lo único que el vendedor va a
+  // poder leer. Sin motivo, la orden se cerraría en silencio.
+  @Post('orders/:guid/reject')
+  async reject(
+    @Param('guid') guid: string,
+    @Body() body: { reasonNotes?: unknown } | undefined,
+    @Req() req: AuthedRequest,
+  ) {
+    const orderGuid = this.parseGuid(guid, 'guid');
+    const reasonNotes = this.parseReason(body?.reasonNotes);
+    if (!reasonNotes) {
+      throw new BadRequestException(
+        'El motivo es obligatorio: es lo único que el vendedor va a leer sobre el rechazo',
+      );
+    }
+    const data = await this.service.rejectOrder(orderGuid, reasonNotes, actorFrom(req));
+    return { success: true, data };
+  }
+
   // POST /api/revision-sap/orders/:guid/resend
   //
   // Reenvía la orden COMPLETA a SAP. Sin body: qué se manda lo decide el servidor con

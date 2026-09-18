@@ -277,6 +277,19 @@ export interface ResendResult {
   stillInReview: boolean;
 }
 
+/**
+ * Resultado de rechazar la orden desde BackOffice.
+ *
+ * Es TERMINAL: la orden pasa a `Rejected`, sale de la bandeja y no se deshace. El
+ * vendedor la ve como "Rechazada" y sólo puede copiarla. El motivo NO viaja acá: quedó
+ * en el hilo de comentarios, que es donde él lo lee.
+ */
+export interface RejectResult {
+  ok: boolean;
+  /** El estado que quedó tras el recálculo del middleware. */
+  statusCode: string;
+}
+
 /** Una línea del motivo del rechazo: el tipo que devolvió SAP y su mensaje. */
 export interface SapErrorLine {
   /** `E`, `W`, … tal como lo manda SAP. `null` si el mensaje no traía tipo. */

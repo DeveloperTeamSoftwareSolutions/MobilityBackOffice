@@ -168,6 +168,7 @@ const api = vi.hoisted(() => ({
   changeItemDestination: vi.fn(),
   changeItemCenter: vi.fn(),
   changeGroupInvoice: vi.fn(),
+  rejectOrder: vi.fn(),
   resendToSap: vi.fn(),
   getProductStock: vi.fn(),
 }));
@@ -179,6 +180,7 @@ vi.mock('./revision-sap.api', () => ({
   changeItemDestination: api.changeItemDestination,
   changeItemCenter: api.changeItemCenter,
   changeGroupInvoice: api.changeGroupInvoice,
+  rejectOrder: api.rejectOrder,
   resendToSap: api.resendToSap,
   getProductStock: api.getProductStock,
   apiErrorMessage: (_err: unknown, fallback: string) => fallback,
@@ -204,6 +206,7 @@ beforeEach(() => {
   api.changeItemDestination.mockReset().mockResolvedValue({});
   api.changeItemCenter.mockReset().mockResolvedValue({});
   api.changeGroupInvoice.mockReset().mockResolvedValue({ ok: true, unchanged: false, groupInvoice: true });
+  api.rejectOrder.mockReset().mockResolvedValue({ ok: true, statusCode: 'Rejected' });
   api.resendToSap.mockReset().mockResolvedValue(envioAceptado);
   api.getProductStock.mockReset().mockResolvedValue(stock);
 });
@@ -483,6 +486,95 @@ describe('ReviewOrderDetail', () => {
     await screen.findByText('Stock de 1200135');
 
     expect(screen.queryByRole('button', { name: 'Elegir' })).toBeNull();
+  });
+
+  /**
+   * Rechazar cierra la orden y NO se deshace (directiva 2026-09-18). Lo que se fija acá
+   * es que no se pueda disparar de un solo clic ni sin motivo: el motivo es lo ÚNICO que
+   * el vendedor va a leer, porque el estado sólo dice "Rechazada".
+   */
+  describe('rechazar la orden', () => {
+    /**
+     * El campo del motivo. Se busca por su label propio y no por /Motivo del rechazo/:
+     * el detalle ya muestra un bloque "Motivo del rechazo de SAP" —lo que contestó SAP—
+     * y ese matcher engancharía los dos. Son dos motivos distintos y de autores
+     * distintos, así que tampoco se llaman igual en pantalla.
+     */
+    const motivoInput = () => screen.getByLabelText(/Por qué se rechaza/) as HTMLInputElement;
+
+    it('avisa qué implica antes de rechazar, y no rechaza por abrir el aviso', async () => {
+      await renderDetail();
+      fireEvent.click(button('Rechazar orden'));
+
+      expect(screen.getByText(/No se puede deshacer/)).toBeTruthy();
+      expect(screen.getByText(/sólo puede copiarla|Lo único que va a poder hacer es copiarla/)).toBeTruthy();
+      // El vendedor al que le vuelve, por nombre.
+      expect(screen.getByText(/vendedor@duwest\.com/)).toBeTruthy();
+      expect(api.rejectOrder).not.toHaveBeenCalled();
+    });
+
+    it('sin motivo no deja confirmar: es lo único que el vendedor va a leer', async () => {
+      await renderDetail();
+      fireEvent.click(button('Rechazar orden'));
+
+      const confirmar = button('Sí, rechazar la orden');
+      expect(confirmar.disabled).toBe(true);
+      // Espacios tampoco alcanzan.
+      fireEvent.change(motivoInput(), { target: { value: '   ' } });
+      expect(button('Sí, rechazar la orden').disabled).toBe(true);
+      expect(api.rejectOrder).not.toHaveBeenCalled();
+    });
+
+    it('con motivo rechaza, recarga la orden y avisa dónde quedó el motivo', async () => {
+      await renderDetail();
+      fireEvent.click(button('Rechazar orden'));
+      fireEvent.change(motivoInput(), { target: { value: 'el cliente desistió de la compra' } });
+
+      api.getReviewOrder.mockResolvedValue(
+        order({
+          statusCode: 'Rejected',
+          backoffice: { inReview: false, decidedBy: 'bo@duwest.com', decidedAt: '2026-09-18T12:00:00Z' },
+        }),
+      );
+      fireEvent.click(button('Sí, rechazar la orden'));
+
+      await waitFor(() =>
+        expect(api.rejectOrder).toHaveBeenCalledWith(ORDER, 'el cliente desistió de la compra'),
+      );
+      // El vendedor lee el motivo en el hilo: decirlo cierra el circuito para quien rechazó.
+      await screen.findByText(/quedó en el hilo de comentarios/);
+      // Y la orden recargada ya es de solo lectura: el estado manda.
+      await waitFor(() => expect(screen.getByText('Rechazada')).toBeTruthy());
+    });
+
+    it('se puede cancelar sin rechazar', async () => {
+      await renderDetail();
+      fireEvent.click(button('Rechazar orden'));
+      fireEvent.click(button('Cancelar'));
+
+      await waitFor(() => expect(screen.queryByText(/No se puede deshacer/)).toBeNull());
+      expect(api.rejectOrder).not.toHaveBeenCalled();
+    });
+
+    it('una orden fuera de revisión ya no se puede rechazar', async () => {
+      api.getReviewOrder.mockResolvedValue(
+        order({ backoffice: { inReview: false, decidedBy: 'bo@duwest.com', decidedAt: null } }),
+      );
+      await renderDetail();
+      expect(button('Rechazar orden').disabled).toBe(true);
+    });
+
+    it('si el servidor rechaza la operación, el error queda en el modal', async () => {
+      await renderDetail();
+      fireEvent.click(button('Rechazar orden'));
+      fireEvent.change(motivoInput(), { target: { value: 'sin stock' } });
+      api.rejectOrder.mockRejectedValue(new Error('409'));
+
+      fireEvent.click(button('Sí, rechazar la orden'));
+      await screen.findByText('No se pudo rechazar la orden.');
+      // El modal sigue abierto: el motivo escrito no se pierde.
+      expect(button('Sí, rechazar la orden')).toBeTruthy();
+    });
   });
 
   it('una orden que ya no está en revisión se muestra en solo lectura', async () => {

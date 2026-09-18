@@ -43,7 +43,37 @@ MobilityIA la deja en solo lectura y el vendedor ya no puede reenviarla. BackOff
 | 4d | Destinos filtrados por **sociedad + canal + sector** de la orden, desde `CustomerDeliveryDestinations`. |
 | 4e | El Middleware valida centro y destino, no solo la pantalla. |
 | 5 | Rol propio: `MOBILITYBO_REVISION_SAP` (`RevisionSap`). `Usuario` no lo recibe. |
-| 6 | Por ahora BackOffice solo **reasigna**: no rechaza ni anula. |
+| 6 | ~~Por ahora BackOffice solo **reasigna**: no rechaza ni anula.~~ **Revocada el 2026-09-18** (ver abajo). |
+
+### Rechazar una orden — decisión 2026-09-18
+
+El equipo confirmó lo contrario de la decisión 6: BackOffice **sí** puede cerrar una orden que
+no se puede resolver. Pedido textual: *"que vuelva al vendedor con su estado y este no pueda
+hacer nada más que copiarla, y que quede en los comentarios que fue rechazada desde backoffice
+por tal motivo"*.
+
+**Se eligió rechazar (`Rejected`) y no anular (`Annulled`).** Las dos son terminales e
+irreversibles, y en las dos el vendedor sólo puede copiar. La diferencia es qué cuenta la orden
+después: `Rejected` dice que alguien la evaluó y dijo que no —y se ve en rojo—, mientras que
+`Annulled` se lee como una baja del vendedor, igual que si él mismo la hubiera dado de baja.
+
+**No hubo que tocar MobilityIA.** El Middleware traduce `Rejected` al estado legacy
+`AuthorizationRejected` (`TO_LEGACY_ORDER`), y MobilityIA ya lo trata como documento cerrado: no
+admite pagos ni anulación, y Copiar sigue disponible siempre (directiva 2026-08-19). El
+comportamiento pedido ya existía; lo único que faltaba era poder llegar a ese estado desde
+BackOffice.
+
+| | Decisión |
+|---|---|
+| Estado | `Rejected` — el mismo que un rechazo de Créditos. **No se distinguen**: quién y por qué se leen en el comentario |
+| Motivo | **Obligatorio.** El estado sólo dice "Rechazada", así que el hilo es lo único que el vendedor puede leer |
+| Reversible | No. `Rejected` no tiene transiciones de salida y está en `ORDER_TERMINAL` |
+| Dónde | Botón propio en la barra de acciones del detalle, separado y en rojo. Se apaga cuando la orden ya no está en revisión |
+
+El hecho se registra en `BusinessOrders.BackofficeRejectedAt` y la proyección lo traduce a
+`Rejected` — mismo patrón que `CancelledAt` y `CreditDeniedAt`. Escribir el estado a mano lo
+pisaría el siguiente recompute. Ver `docs/DEPLOY_SQL_PENDIENTE.md`: la migración vive en el repo
+del Middleware y **falta aplicarla**.
 
 ## Pantallas
 
@@ -273,6 +303,7 @@ web  revision-sap.api.ts ──> api  /api/revision-sap/*  (rol RevisionSap)
 | `ReviewOrderDetail.tsx` | Cabecera, motivo, las dos pestañas, guardado y acciones |
 | `ReviewItemsTable.tsx` | Pestaña **Productos**: centro, destino y "Ver stock" por línea |
 | `GroupInvoiceModal.tsx` | Confirmación de agrupa factura, con lo que implica cada valor |
+| `RejectOrderModal.tsx` | Confirmación del rechazo: qué implica, y el motivo obligatorio |
 | `ResendModal.tsx` | Confirmación del reenvío y, después, qué contestó SAP |
 | `SapOrdersPanel.tsx` | Pestaña **Órdenes SAP**: estado y productos de cada una, solo consulta |
 | `SapErrorMessage.tsx` | El motivo de SAP: tipo como etiqueta y mensaje |
@@ -305,8 +336,9 @@ Con un Middleware anterior, la bandeja responde 503 ("no está disponible").
   `SapOrderNumber`. No cubre el envío del vendedor, un timeout con pedido creado, dos envíos
   a la vez ni una orden partida en varias órdenes SAP.
 - **Estado `PendingBackofficeReview`** (Silvina).
-- **Orden que BackOffice no puede corregir** (ej. cliente bloqueado): ¿se cierra la revisión
-  sin enviar (`backoffice/close`)?
+- ~~**Orden que BackOffice no puede corregir** (ej. cliente bloqueado): ¿se cierra la revisión
+  sin enviar (`backoffice/close`)?~~ **Resuelto el 2026-09-18**: se rechaza, con motivo
+  obligatorio. La orden pasa a `Rejected` y vuelve al vendedor, que sólo puede copiarla.
 - **Casilla del correo** a BackOffice.
 - **Guardado de MobilityIA:** su upsert reescribe los destinos de las líneas. Hoy no pisa
   el cambio de BackOffice porque la orden en revisión está en solo lectura.

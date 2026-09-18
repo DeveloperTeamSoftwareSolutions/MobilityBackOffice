@@ -201,6 +201,19 @@ export interface ResendResult {
   stillInReview: boolean;
 }
 
+/**
+ * Resultado de rechazar la orden.
+ *
+ * Es TERMINAL: la orden pasa a `Rejected`, sale de la bandeja y no se deshace. El
+ * `statusCode` es el que quedó tras el recálculo del middleware — se devuelve en vez de
+ * asumirlo porque, si el recompute falla, el hecho quedó estampado igual y el estado se
+ * acomoda en el siguiente.
+ */
+export interface RejectResult {
+  ok: boolean;
+  statusCode: string;
+}
+
 export type SapOrderStatus = 'accepted' | 'accepted_no_dispatch' | 'rejected' | 'no_response';
 
 /** Una orden SAP de la orden (fila de `SAPOrders`), con sus ítems sin precios. */

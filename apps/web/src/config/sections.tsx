@@ -6,6 +6,7 @@ import {
   IconSupport,
   IconShieldCheck,
   IconArrowRepeat,
+  IconWarehouse,
 } from '../components/layout/icons';
 import type { BackOfficeRole } from '../types';
 import { roleAllows } from '../auth/roleAccess';
@@ -47,6 +48,19 @@ export const NAV_SECTIONS: NavSection[] = [
     roles: ['Administrador'],
     status: 'ready',
     icon: <IconRegions />,
+  },
+  {
+    key: 'almacenes',
+    label: 'Centros y almacenes',
+    description:
+      'Restringí un centro entero o reservá un almacén a clientes o a grupos de clientes de SAP.',
+    path: '/almacenes',
+    group: 'Administración',
+    // `Usuario` entra por la regla de exclusión del front (roleAccess.ts) y la API lo
+    // habilita en su `@Roles`: no se lista acá para no duplicar el criterio.
+    roles: ['Administrador'],
+    status: 'ready',
+    icon: <IconWarehouse />,
   },
   {
     key: 'templates',

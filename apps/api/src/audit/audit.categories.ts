@@ -24,4 +24,14 @@ export enum AuditCategory {
   Templates = 'Templates',
   /** Órdenes rechazadas por SAP: cambios de BackOffice sobre la orden antes de reenviarla. */
   SapReview = 'SapReview',
+  /**
+   * Centros y Almacenes: reservas de almacén a clientes y a grupos, restricción de centros.
+   *
+   * La sección se traspasó desde MobilityManager, donde esta categoría se escribe en
+   * minúscula (`warehouses`). Acá va capitalizada como el resto, por la razón de arriba.
+   * Mientras las dos pantallas convivan (paso 5 del traspaso), ITManager va a mostrar las dos
+   * entradas; se distinguen por `AppId`, y la de minúscula desaparece con la baja en
+   * MobilityManager.
+   */
+  Warehouses = 'Warehouses',
 }

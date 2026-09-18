@@ -11,11 +11,19 @@ import type { BackOfficeRole } from '../types';
  * ella sin volver a mirar el código. Si el código cambia y la tabla no, esto falla.
  */
 const MATRIZ: Record<string, string[]> = {
-  SuperAdmin: ['regiones', 'templates', 'rag', 'soporte', 'autorizadores', 'revision-sap'],
+  SuperAdmin: [
+    'regiones',
+    'almacenes',
+    'templates',
+    'rag',
+    'soporte',
+    'autorizadores',
+    'revision-sap',
+  ],
   Soporte: ['soporte'],
   RevisionSap: ['revision-sap'],
-  Usuario: ['regiones', 'templates', 'rag'],
-  Administrador: ['regiones'],
+  Usuario: ['regiones', 'almacenes', 'templates', 'rag'],
+  Administrador: ['regiones', 'almacenes'],
   Marketing: ['templates', 'rag'],
 };
 

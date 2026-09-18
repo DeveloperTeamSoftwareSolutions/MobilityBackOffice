@@ -1,0 +1,471 @@
+/* Centros y Almacenes — hoja propia de la sección.
+   Escrita sobre los tokens `--bo-` y con prefijo `bo-wh`. No es la hoja de
+   MobilityManager: allá los estilos venían del tema del portal gerencial. */
+
+.bo-wh-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.bo-wh {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  flex: 1;
+}
+
+/* Header */
+.bo-wh__head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bo-wh__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--bo-text);
+}
+.bo-wh__subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--bo-text-muted);
+  max-width: 720px;
+}
+.bo-wh__back {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: var(--bo-accent);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0 0 4px;
+}
+.bo-wh__error {
+  margin: 0;
+  padding: 10px 14px;
+  background: rgba(197, 48, 48, 0.08);
+  border-radius: var(--bo-radius-sm);
+  color: var(--bo-danger);
+  font-size: 13px;
+}
+
+/* Toolbar */
+.bo-wh__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.bo-wh__search {
+  flex: 1 1 280px;
+  max-width: 420px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-surface);
+  color: var(--bo-text);
+}
+.bo-wh__search:focus {
+  outline: none;
+  border-color: var(--bo-accent);
+  box-shadow: 0 0 0 3px var(--bo-focus-ring);
+}
+.bo-wh__toolbarhint {
+  font-size: 12px;
+  color: var(--bo-text-muted);
+}
+.bo-wh__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--bo-text);
+  cursor: pointer;
+}
+
+/* Tabla */
+.bo-wh__tablewrap {
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius);
+  overflow: hidden;
+  background: var(--bo-surface);
+}
+.bo-wh__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.bo-wh__table thead th {
+  background: var(--bo-bg);
+  color: var(--bo-text-muted);
+  font-weight: 600;
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--bo-border);
+  white-space: nowrap;
+}
+.bo-wh__table tbody td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--bo-border);
+  color: var(--bo-text);
+  vertical-align: middle;
+}
+.bo-wh__table tbody tr:last-child td {
+  border-bottom: none;
+}
+.bo-wh__num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.bo-wh__rowlink:hover {
+  background: rgba(13, 148, 136, 0.06);
+  box-shadow: inset 3px 0 0 var(--bo-accent);
+  cursor: pointer;
+}
+.bo-wh__row--restricted td:first-child {
+  box-shadow: inset 3px 0 0 var(--bo-warning);
+}
+.bo-wh__chev {
+  text-align: right;
+  color: var(--bo-text-muted);
+  width: 32px;
+}
+.bo-wh__code {
+  display: block;
+  font-weight: 600;
+  color: var(--bo-text);
+}
+.bo-wh__sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--bo-text-muted);
+}
+.bo-wh__hint {
+  padding: 16px;
+  margin: 0;
+  text-align: center;
+  color: var(--bo-text-muted);
+  font-size: 13px;
+}
+
+/* Encabezados ordenables */
+.bo-wh__th--sortable {
+  padding: 0;
+}
+.bo-wh__sortbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: inherit;
+  cursor: pointer;
+}
+.bo-wh__num .bo-wh__sortbtn {
+  justify-content: flex-end;
+}
+.bo-wh__sortbtn:hover {
+  color: var(--bo-text);
+}
+.bo-wh__th--sorted {
+  color: var(--bo-accent);
+}
+
+/* Badges de estado */
+.bo-wh__badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.bo-wh__badge--restricted {
+  background: rgba(180, 83, 9, 0.12);
+  color: var(--bo-warning);
+}
+.bo-wh__badge--available {
+  background: rgba(47, 133, 90, 0.12);
+  color: var(--bo-success);
+}
+
+/* Celda de estado: badge + acción */
+.bo-wh__statecell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+/* Botones */
+.bo-wh__ghostbtn,
+.bo-wh__dangerbtn,
+.bo-wh__modebtn,
+.bo-wh__pagerbtns button {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-surface);
+  color: var(--bo-text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.bo-wh__ghostbtn:hover:not(:disabled),
+.bo-wh__modebtn:hover:not(:disabled),
+.bo-wh__pagerbtns button:hover:not(:disabled) {
+  border-color: var(--bo-accent);
+  color: var(--bo-accent);
+}
+.bo-wh__dangerbtn {
+  color: var(--bo-danger);
+}
+.bo-wh__dangerbtn:hover:not(:disabled) {
+  border-color: var(--bo-danger);
+}
+.bo-wh__ghostbtn:disabled,
+.bo-wh__dangerbtn:disabled,
+.bo-wh__modebtn:disabled,
+.bo-wh__pagerbtns button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.bo-wh__modebtn[aria-pressed='true'] {
+  border-color: var(--bo-accent);
+  background: rgba(13, 148, 136, 0.1);
+  color: var(--bo-accent);
+}
+
+/* Confirmación (restringir un centro / quitar la última reserva) */
+.bo-wh__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--bo-warning);
+  border-radius: var(--bo-radius-sm);
+  background: rgba(180, 83, 9, 0.06);
+}
+.bo-wh__confirmnote {
+  font-size: 12px;
+  color: var(--bo-text);
+}
+.bo-wh__confirmbtns {
+  display: flex;
+  gap: 8px;
+}
+.bo-wh__reasoninput {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-surface);
+  color: var(--bo-text);
+  font-size: 13px;
+}
+.bo-wh__reasoninput:focus {
+  outline: none;
+  border-color: var(--bo-accent);
+  box-shadow: 0 0 0 3px var(--bo-focus-ring);
+}
+
+/* Drill: reservas del almacén */
+.bo-wh__drillrow > td {
+  background: var(--bo-bg);
+  padding: 0 !important;
+}
+.bo-wh__reservations {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+.bo-wh__drillhint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--bo-text-muted);
+}
+
+/* Listas de reservas */
+.bo-wh__customers,
+.bo-wh__groups {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bo-wh__customers > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--bo-surface);
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+}
+.bo-wh__custinfo {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Fila de grupo (desplegable a sus clientes) */
+.bo-wh__grouprow {
+  background: var(--bo-surface);
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  overflow: hidden;
+}
+.bo-wh__groupline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+}
+.bo-wh__groupbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--bo-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+.bo-wh__groupname {
+  font-weight: 600;
+}
+.bo-wh__groupcount {
+  font-size: 12px;
+  color: var(--bo-text-muted);
+}
+.bo-wh__groupcustomers {
+  padding: 8px 12px 12px 32px;
+  border-top: 1px solid var(--bo-border);
+  background: var(--bo-bg);
+}
+.bo-wh__grouppager {
+  margin-top: 8px;
+}
+
+/* Selector de tipo de reserva */
+.bo-wh__reservemode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bo-wh__reservelabel {
+  font-size: 13px;
+  color: var(--bo-text-muted);
+}
+
+/* Typeahead (clientes y grupos) */
+.bo-wh__picker {
+  position: relative;
+  max-width: 520px;
+}
+.bo-wh__pickerinput {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-surface);
+  color: var(--bo-text);
+}
+.bo-wh__pickerinput:focus {
+  outline: none;
+  border-color: var(--bo-accent);
+  box-shadow: 0 0 0 3px var(--bo-focus-ring);
+}
+.bo-wh__pickerlist {
+  position: absolute;
+  z-index: 20;
+  top: 42px;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--bo-surface);
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  box-shadow: var(--bo-shadow);
+}
+.bo-wh__pickeritem {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--bo-radius-sm);
+  background: transparent;
+  color: var(--bo-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.bo-wh__pickeritem:hover:not(:disabled) {
+  background: rgba(13, 148, 136, 0.08);
+}
+.bo-wh__pickeritem:disabled {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+.bo-wh__pickerhint {
+  padding: 8px 10px;
+  color: var(--bo-text-muted);
+  font-size: 13px;
+}
+.bo-wh__pickerhint--error {
+  color: var(--bo-danger);
+}
+
+/* Opción de grupo en el buscador. El 37 llega deshabilitado y con su motivo. */
+.bo-wh__groupoption .bo-wh__groupcount {
+  display: block;
+  margin-top: 2px;
+}
+.bo-wh__groupreason {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--bo-warning);
+}
+
+/* Paginador */
+.bo-wh__pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bo-wh__count,
+.bo-wh__pageinfo {
+  font-size: 12px;
+  color: var(--bo-text-muted);
+}
+.bo-wh__pagerbtns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

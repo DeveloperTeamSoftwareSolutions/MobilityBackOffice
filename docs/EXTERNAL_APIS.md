@@ -1,7 +1,7 @@
 # APIs y Endpoints Externos — Mobility BackOffice
 
-> Ultima actualizacion: 2026-09-15
-> Version: 2.27.0
+> Ultima actualizacion: 2026-09-18
+> Version: 2.36.0
 
 ## Integraciones activas
 
@@ -18,8 +18,9 @@
 
 ### MobilityMiddleWare — acceso a datos (unico componente que toca SQL)
 
-BackOffice **NO se conecta a SQL Server**. Toda la data (regiones, CEBEs, sociedades y la
-auditoria central) se consume por HTTP contra el MobilityMiddleWare, que es el unico
+BackOffice **NO se conecta a SQL Server**. Toda la data (regiones, CEBEs, sociedades, almacenes, el
+alcance por sociedad del usuario y la auditoria central) se consume por HTTP contra el
+MobilityMiddleWare, que es el unico
 componente del ecosistema que conecta a la base. Regla del ecosistema, igual que
 MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
 
@@ -60,6 +61,18 @@ MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
   | PUT | `/mobility/backoffice-review/orders/:guid/items/:itemGuid/destination` | Cambia el destino de una linea; el MW valida area y revision, audita y comenta en el hilo | `dbo.BusinessOrderItems`, `dbo.BusinessOrders` | idem |
   | PUT | `/mobility/backoffice-review/orders/:guid/items/:itemGuid/center` | Cambia el centro de una linea; el MW exige un centro permitido para el cliente, audita y comenta en el hilo | `dbo.BusinessOrderItems`, `dbo.BusinessOrders`, `[SAPServices].[dbo].[Warehouses]` | idem |
   | GET | `/mobility/backoffice-review/orders/:guid/sap-orders` | Ordenes SAP de la orden con su estado y sus items, sin precios | `dbo.SAPOrders`, `dbo.SAPOrdersItems` | idem |
+  | GET | `/mobility/user-scope` | **El alcance por sociedad** del usuario logueado: `{ isAdmin, userGuids, companyCodes }`. Query: `guidUsers` (el `Users.Guid` del token de BackOffice), `includeSelf`. Lo consume Centros y Almacenes, la unica seccion que recorta filas por usuario | `dbo.fn_SubordinatesByUser` + `dbo.Users` | `src/scope/scope.client.ts` |
+  | GET | `/mobility/warehouse-customers/centers` | Centros de distribucion del alcance, con su conteo de almacenes y de restringidos | `[SAPServices].[dbo].[Warehouses]` + `RestrictedCenters` | `src/warehouses/warehouses.client.ts` |
+  | GET | `/mobility/warehouse-customers/warehouses` | Almacenes de un centro con `customerCount` y `groupCount` | `[SAPServices].[dbo].[Warehouses]` + `WarehouseCustomers` + `WarehouseCustomerGroups` | idem |
+  | GET | `/mobility/warehouse-customers/reserved` | Clientes reservados a un almacen | `dbo.WarehouseCustomers` | idem |
+  | GET | `/mobility/warehouse-customers/customer-search` | Buscador de clientes por codigo o nombre | `dbo.CustomerDetails` | idem |
+  | POST · DELETE | `/mobility/warehouse-customers` | Reserva y quita un cliente. El MW marca el almacen restringido con la primera reserva y lo libera **solo cuando no le queda ninguna** | `dbo.WarehouseCustomers` + `[SAPServices].[dbo].[Warehouses]` | idem |
+  | GET | `/mobility/warehouse-customers/groups` | Grupos de clientes de SAP reservados al almacen. **Requiere MW ≥ 1.357.0** | `dbo.WarehouseCustomerGroups` | idem |
+  | GET | `/mobility/warehouse-customers/group-search` | Buscador de grupos con clientes en la sociedad. El 37 vuelve con `assignable: false`. **MW ≥ 1.357.0** | `dbo.CustomerDetails` | idem |
+  | GET | `/mobility/warehouse-customers/groups/customers` | Clientes de un grupo en una sociedad, paginado. **MW ≥ 1.357.0** | `dbo.CustomerDetails` | idem |
+  | POST · DELETE | `/mobility/warehouse-customers/groups` | Reserva y quita un grupo. Se guarda el **codigo** del grupo, nunca la lista de clientes. **MW ≥ 1.357.0** | `dbo.WarehouseCustomerGroups` | idem |
+  | PUT | `/mobility/warehouse-customers/availability` | Libera un almacen (borra sus reservas) | `[SAPServices].[dbo].[Warehouses]` | idem |
+  | PUT | `/mobility/warehouse-customers/center-restriction` | Restringe o libera un CENTRO entero, con motivo | `dbo.RestrictedCenters` | idem |
 - **Cross-database y collations**: el join a `[SAPServices].[dbo].[Companies]` y el manejo de
   collations ocurren **dentro del Middleware** (via `VIEW_V2_CompaniesMobility`). BackOffice ya
   no depende de eso: es una preocupacion del Middleware, no de esta app.
@@ -78,6 +91,17 @@ MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
   anterior la bandeja responde **503 "no está disponible"**. El stock sale de SAP: el timeout
   del cliente es 150 s con `includeStock=1` y 20 s en el resto.
   **Orden de deploy**: MW 1.348.0 → SQL 008 + rol en ITManager → BackOffice 2.27.0.
+- **Piso de version — reserva de almacen por grupo de clientes (desde BackOffice 2.36.0)**: la
+  seccion Centros y Almacenes pide `/mobility/warehouse-customers/groups`, `/group-search` y
+  `/groups/customers`, que existen desde **MW 1.357.0**. El resto de la seccion (centros, almacenes,
+  reservas **por cliente**, restriccion de centro) funciona con un Middleware anterior: **solo avisa
+  la reserva por grupo**.
+  Los errores se traducen por `code`, nunca por el texto, porque hay dos fallas que se parecen y
+  piden deploys distintos: `503 customer_groups_not_deployed` es el MW nuevo **sin la tabla**
+  `WarehouseCustomerGroups` (falta SQL), y un `404` **sin cuerpo** es un MW anterior al piso (falta
+  desplegar el MW). El unico 404 real de esos endpoints trae `code: warehouse_not_found`.
+  **Orden de deploy**: tabla `WarehouseCustomerGroups` → MW 1.357.0 → BackOffice 2.36.0.
+  **No hay SQL propio de BackOffice**: las tablas son del Middleware y ya existen.
 
 ### WhatsApp WABA Admin — plantillas de WhatsApp
 

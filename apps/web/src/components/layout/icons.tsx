@@ -88,6 +88,57 @@ export function IconArrowRepeat() {
   );
 }
 
+/**
+ * Centros y almacenes. Un techo sobre cajas apiladas: la sección administra depósitos, no
+ * ubicaciones geográficas (ese glifo ya lo usa Regiones).
+ */
+export function IconWarehouse() {
+  return (
+    <svg {...base}>
+      <path d="M8.186 1.113a.5.5 0 0 0-.372 0L1.216 3.752A.5.5 0 0 0 1 4.5V15h1V5.133l6-2.4 6 2.4V15h1V4.5a.5.5 0 0 0-.216-.748L8.186 1.113z" />
+      <path d="M4 9.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 .5.5V15h-1v-2H5v2H4V9.5zm1 .5v2h6v-2H5z" />
+    </svg>
+  );
+}
+
+/** Entrar al detalle de una fila. */
+export function IconChevronRight() {
+  return (
+    <svg {...base} width={14} height={14}>
+      <path d="M5.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L11.293 8 5.646 2.354a.5.5 0 0 1 0-.708z" />
+    </svg>
+  );
+}
+
+/**
+ * Flecha del encabezado ordenable. Sólo se dibuja en la columna activa: mostrarla en todas
+ * convierte la fila de encabezados en ruido y deja de señalar por dónde está ordenado.
+ */
+export function IconSortArrow({ dir }: { dir: 'ASC' | 'DESC' }) {
+  return (
+    <svg {...base} width={12} height={12}>
+      {dir === 'ASC' ? (
+        <path d="M7.646 2.146a.5.5 0 0 1 .708 0l4 4a.5.5 0 0 1-.708.708L8.5 3.707V13.5a.5.5 0 0 1-1 0V3.707L4.354 6.854a.5.5 0 1 1-.708-.708l4-4z" />
+      ) : (
+        <path d="M7.646 13.854a.5.5 0 0 0 .708 0l4-4a.5.5 0 0 0-.708-.708L8.5 12.293V2.5a.5.5 0 0 0-1 0v9.793L4.354 9.146a.5.5 0 1 0-.708.708l4 4z" />
+      )}
+    </svg>
+  );
+}
+
+/** Desplegable: apunta a la derecha cerrado, abajo abierto. */
+export function IconCaret({ open }: { open: boolean }) {
+  return (
+    <svg {...base} width={12} height={12}>
+      {open ? (
+        <path d="M3.204 5h9.592L8 10.481 3.204 5z" />
+      ) : (
+        <path d="M5 3.204v9.592L10.481 8 5 3.204z" />
+      )}
+    </svg>
+  );
+}
+
 /** Matriz de autorizadores: aprobación validada. */
 export function IconShieldCheck() {
   return (

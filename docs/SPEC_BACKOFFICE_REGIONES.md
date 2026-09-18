@@ -41,7 +41,11 @@ Falta la aplicación que las contenga: **Mobility BackOffice**.
 ### 3.1 Fundación de la aplicación
 
 Clon estructural de MobilityManager, **sin** sus módulos de negocio (Geo, Waba, Warehouses, Authorizations, Duwy,
-DuwyChat). Se conserva:
+DuwyChat).
+
+> ⚠️ **Warehouses dejó de estar en esa lista** (2026-09-18): la administración de Almacenes y Centros
+> de Distribución se traspasa desde MobilityManager. Ver [`SPEC_BACKOFFICE_ALMACENES.md`](SPEC_BACKOFFICE_ALMACENES.md).
+ Se conserva:
 
 - Monorepo con `apps/api` y `apps/web`, versión sincronizada en `package.json` raíz, `apps/api/src/version.ts`
   y `apps/web/src/version.ts` (las tres, siempre iguales — en MM derivaron y es un defecto a no heredar).

@@ -1,7 +1,7 @@
 # API — Mobility BackOffice
 
-> Ultima actualizacion: 2026-09-15
-> Version: 2.27.0
+> Ultima actualizacion: 2026-09-18
+> Version: 2.36.0
 
 Toda respuesta incluye `success`. Los errores siguen el formato de Nest:
 `{ message, error, statusCode }`.
@@ -221,6 +221,54 @@ crudos quedan para poder auditar contra SAP. Ver `SPEC_MATRIZ_AUTORIZADORES.md` 
 (el Middleware lo resuelve como `ProfitCenter = @Pc OR ProfitCenter IS NULL`), no una
 ausencia.
 
+## Centros y Almacenes
+
+**Todo el modulo exige rol `Administrador` o `Usuario`** (`SuperAdmin` pasa siempre por el
+`RolesGuard`). **Los dos roles estan en el decorador a proposito.** La visibilidad del front se
+resuelve por exclusion: una seccion nueva le queda visible a `Usuario` sola. Si aca se declarara
+solo `Administrador`, la seccion le apareceria en el menu y la API le responderia 403 — la
+pantalla visible y rota. Un test del controller lo fija (`warehouses.controller.spec.ts`).
+
+Passthrough a `/api/mobility/warehouse-customers` del Middleware, que es el dueño de las tablas y
+de la regla: **no hay SQL ni tablas propias de esta seccion**. La reserva por grupo requiere
+**MW ≥ 1.357.0**. Ver `docs/SPEC_BACKOFFICE_ALMACENES.md`.
+
+> **Alcance por sociedad** — es la unica seccion de BackOffice que lo lleva. Las **lecturas** fuera
+> del alcance devuelven **vacio** (mirar no es una accion prohibida); las **escrituras** fuera del
+> alcance devuelven **403**, antes de llamar al Middleware y antes de auditar. Ver
+> `docs/JERARQUIA_Y_VISIBILIDAD.md`.
+
+| Metodo | Ruta | Descripcion |
+|---|---|---|
+| GET | `/api/warehouses/centers` | Centros del alcance, paginado. Query: `page`, `limit` (max 200), `search`, `sortBy` (`companyCode`\|`centerCode`\|`centerName`\|`warehouseCount`\|`restrictedCount`\|`restricted`), `sortDir`. Un `sortBy` fuera de la whitelist cae al default y **no viaja** al Middleware |
+| GET | `/api/warehouses` | Almacenes de un centro, con `customerCount` y `groupCount`. Query: `companyCode` y `centerCode` (obligatorios), `onlyRestricted` (`1`/`true`), `search`, `page`, `limit` (max 200). 400 si falta la sociedad o el centro |
+| GET | `/api/warehouses/customers` | Clientes reservados a un almacen. Query: `companyCode`, `centerCode`, `warehouseCode` (los tres obligatorios) |
+| GET | `/api/warehouses/customer-search` | Buscador de clientes por codigo o nombre. Query: `q`. Sin termino devuelve vacio. **No se recorta por sociedad**: el maestro de clientes es global y el alcance corta al reservar |
+| POST | `/api/warehouses/customers` | Reserva el almacen a un cliente (lo restringe). Body `{ companyCode, centerCode, warehouseCode, customerCode }`. 403 fuera del alcance |
+| DELETE | `/api/warehouses/customers` | Quita un cliente. Misma clave, por query o por body. 403 fuera del alcance |
+| GET | `/api/warehouses/groups` | Grupos de clientes de SAP reservados al almacen, con su conteo de clientes en la sociedad |
+| GET | `/api/warehouses/group-search` | Buscador de grupos. Query: `companyCode` (obligatorio), `q`, `limit` (default 20, max 50). **El 37 viene con `assignable: false`**: se muestra deshabilitado, no se oculta |
+| GET | `/api/warehouses/groups/customers` | Clientes de un grupo en una sociedad, paginado. Query: `companyCode`, `customerGroupCode`, `search`, `page`, `limit` (max 200). Para **leer** no se rechaza el 37 |
+| POST | `/api/warehouses/groups` | Reserva el almacen a un grupo. Body `{ companyCode, centerCode, warehouseCode, customerGroupCode }`. **400 si es el 37** (se corta aca, sin viajar al Middleware), si el codigo tiene mas de 2 caracteres o si el grupo no tiene clientes en esa sociedad. 403 fuera del alcance |
+| DELETE | `/api/warehouses/groups` | Quita un grupo. **El 37 SI se puede quitar**: si alguna vez quedo reservado por fuera, hay que poder sacarlo. Devuelve `stillRestricted` |
+| PUT | `/api/warehouses/availability` | Restringe o libera un almacen. Body `{ companyCode, centerCode, warehouseCode, restricted }`. `restricted` debe ser booleano |
+| PUT | `/api/warehouses/center-restriction` | Restringe o libera un CENTRO entero, para todos. Body `{ companyCode, centerCode, centerName?, restricted, reason? }`. La clave es (sociedad, centro) — **sin almacen**. El motivo se recorta a 512 caracteres antes de salir |
+
+### Los errores del Middleware se traducen por `code`, no por texto
+
+El `error` del Middleware viene en ingles y cambia con cualquier reescritura; el `code` es el
+contrato estable. Dos casos que parecen iguales y no lo son, y que para quien mira la pantalla
+terminan en el mismo lugar ("no esta disponible en este entorno"):
+
+| Respuesta del Middleware | Que significa | Que responde BackOffice |
+|---|---|---|
+| `503 customer_groups_not_deployed` | El MW es nuevo pero falta la tabla `WarehouseCustomerGroups` | 503, nombrando la tabla (falta deploy de **SQL**) |
+| `404` **sin** `code` | El MW es anterior a 1.357.0 y la ruta no existe | 503 "requiere MW ≥ 1.357.0" (falta deploy del **MW**) |
+| `404 warehouse_not_found` | El unico 404 real de estos endpoints | 404 "Almacen no encontrado" |
+
+Con un Middleware anterior al piso, **las reservas por cliente siguen funcionando**: solo avisa la
+reserva por grupo.
+
 ## Auditoria
 
 Las escrituras dejan traza en `AuditLogs` con `AppId='MobilityBackOffice'`:
@@ -235,3 +283,15 @@ Las escrituras dejan traza en `AuditLogs` con `AppId='MobilityBackOffice'`:
 | `SUPPORT_STATUS_OVERRIDE` | `support` | `BusinessOrders` / `BusinessQuotes` | numero del documento (camino avanzado) |
 | `SUPPORT_ITEM_OVERRIDE` | `support` | `BusinessOrderItems` / `BusinessQuoteItems` | numero del documento |
 | `SUPPORT_RECOMPUTE` | `support` | `BusinessOrders` / `BusinessQuotes` | numero del documento (solo si el estado cambio) |
+| `WAREHOUSE_CUSTOMER_ADD` / `WAREHOUSE_CUSTOMER_REMOVE` | `Warehouses` | `Warehouse` | codigo del almacen (la sociedad, el centro y el cliente van en `Detail`) |
+| `WAREHOUSE_CUSTOMER_GROUP_ADD` / `WAREHOUSE_CUSTOMER_GROUP_REMOVE` | `Warehouses` | `Warehouse` | codigo del almacen (el grupo y el estado resultante van en `Detail`) |
+| `WAREHOUSE_RESTRICT` / `WAREHOUSE_ENABLE` | `Warehouses` | `Warehouse` | codigo del almacen |
+| `CENTER_RESTRICT` / `CENTER_ENABLE` | `Warehouses` | `DistributionCenter` | `sociedad/centro` (el motivo va en `Detail`) |
+
+Las de Almacenes son **best-effort** (`safeRecord`): el CRUD ya ocurrio del lado del Middleware y un
+fallo del audit central no revierte nada ni rompe la respuesta. Lo que **no** es best-effort es
+`guidApiLoginClients`: sin el, la fila se guarda pero ITManager no la muestra.
+
+Mientras la seccion conviva con la de MobilityManager (paso 5 del traspaso), en ITManager van a
+verse **dos categorias que se leen igual**: `Warehouses` (esta app) y `warehouses` (MobilityManager,
+en minuscula). Se distinguen por `AppId`, y la segunda desaparece con la baja alla.

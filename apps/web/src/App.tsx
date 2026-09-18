@@ -6,6 +6,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
 import { RegionesPage } from './pages/RegionesPage';
+import { AlmacenesPage } from './pages/AlmacenesPage';
 import { RagPage } from './pages/RagPage';
 import { PlantillasPage } from './pages/PlantillasPage';
 import { SoportePage } from './pages/SoportePage';
@@ -43,6 +44,18 @@ export function App(): JSX.Element {
                   fallback={<Navigate to="/" replace />}
                 >
                   <RegionesPage />
+                </RoleGuard>
+              }
+            />
+
+            <Route
+              path="almacenes"
+              element={
+                <RoleGuard
+                  allow={['Administrador']}
+                  fallback={<Navigate to="/" replace />}
+                >
+                  <AlmacenesPage />
                 </RoleGuard>
               }
             />

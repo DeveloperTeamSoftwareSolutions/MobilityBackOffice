@@ -1,6 +1,6 @@
 # Roles y Permisos — Mobility BackOffice
 
-> Última actualización: 2026-09-15 · Versión: 2.27.0
+> Última actualización: 2026-09-18 · Versión: 2.36.0
 >
 > Qué puede hacer cada rol, cómo se decide, y cómo se registra en ITManager.
 
@@ -53,7 +53,8 @@ por eso `Usuario` no lo recibe. Ver `docs/SPEC_REVISION_ORDENES_SAP.md`.
 
 **Usuario** — el rol del día a día. **Todo el back-office menos la consola de soporte,
 menos Órdenes rechazadas por SAP y menos lo que sea exclusivo de SuperAdmin.**
-Hoy eso significa Regiones comerciales + Documentación del RAG + Templates de WhatsApp, y
+Hoy eso significa Regiones comerciales + Centros y Almacenes + Documentación del RAG +
+Templates de WhatsApp, y
 **cualquier sección que se agregue en el futuro** salvo que pida un rol deliberado
 (`Soporte`, `RevisionSap`) o que se declare como exclusiva de SuperAdmin
 (`roles: ['SuperAdmin']`).
@@ -74,6 +75,7 @@ y (cuando exista) los templates de WhatsApp.
 |---|:--:|:--:|:--:|:--:|:--:|:--:|
 | Inicio | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Regiones comerciales | ✓ | — | — | ✓ | ✓ | — |
+| Centros y Almacenes | ✓ | — | — | ✓ | ✓ | — |
 | Documentación del RAG | ✓ | — | — | ✓ | — | ✓ |
 | Templates de WhatsApp | ✓ | — | — | ✓ | — | ✓ |
 | **Consola de soporte** | ✓ | ✓ | — | **—** | — | — |
@@ -91,6 +93,7 @@ puede abrir.
 | `/api/auth/*` | Cualquiera autenticado (el login es lo que asigna el rol) |
 | `/api/health` | Público |
 | `/api/regions/*` | Administrador, Usuario, SuperAdmin |
+| `/api/warehouses/*` | Administrador, Usuario, SuperAdmin — **y además recorta por sociedad** (ver §3.1) |
 | `/rag/*` (proxy) | Marketing, Usuario, SuperAdmin |
 | `/api/templates/*` | Marketing, Usuario, SuperAdmin |
 | `/api/support/*` | **Soporte, SuperAdmin** |
@@ -102,6 +105,29 @@ puede abrir.
 > quien llame la API directamente choca contra `RolesGuard`. Las dos capas tienen que
 > decir lo mismo, y por eso las reglas viven en un solo lugar de cada lado
 > (`roleAccess.ts` en el front, `@Roles` + `RolesGuard` en el back).
+
+### 3.1 El rol abre la sección; en Almacenes además hay alcance
+
+En todas las secciones, tener el rol es tener la sección entera. **Centros y Almacenes es la
+excepción**: el rol abre la pantalla, y después se recorta por las **sociedades** del usuario, que
+BackOffice le pregunta al Middleware (`GET /mobility/user-scope`).
+
+| | Qué pasa fuera del alcance |
+|---|---|
+| **Lecturas** (centros, almacenes, reservas, buscador de grupos) | Devuelven **vacío**. No es un error: el usuario no pidió nada prohibido, simplemente no hay nada suyo ahí. Un 403 al mirar sería ruido |
+| **Escrituras** (reservar, quitar, restringir) | **403**, antes de llamar al Middleware y antes de auditar. Reservar un almacén de otra sociedad sí es una acción prohibida |
+
+Quien es **admin en la jerarquía** (`Users.IsAdmin`) no se recorta: ve todas las sociedades. Eso es
+independiente del rol de BackOffice — son dos ejes distintos y hay que tener los dos.
+
+Detalle y motivo en `docs/JERARQUIA_Y_VISIBILIDAD.md`.
+
+> ⚠️ **`Usuario` tiene que estar en el `@Roles` de toda sección que no pida un rol deliberado.**
+> Como el front decide por exclusión, si el controller declara sólo `Administrador` la sección le
+> aparece a `Usuario` en el menú y la API le responde 403: **pantalla visible y rota**. No hay error
+> de compilación ni test que falle por esa combinación, porque las dos capas son correctas por
+> separado. Regiones y Almacenes lo declaran así, y Almacenes lo fija con un test
+> (`warehouses.controller.spec.ts`).
 
 ---
 

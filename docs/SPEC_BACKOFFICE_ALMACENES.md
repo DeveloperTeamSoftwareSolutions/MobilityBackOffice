@@ -1,8 +1,10 @@
 # Almacenes y Centros de Distribución — Spec
 
-> Última actualización: 2026-09-18 · Versión: 2.35.0
-> Estado: **planificado, sin código**. La sección existe hoy en **MobilityManager** y se traspasa acá
-> por decisión del proyecto: BackOffice centraliza la configuración administrativa.
+> Última actualización: 2026-09-18 · Versión: 2.36.0
+> Estado: **API construida (paso 2); la pantalla es el paso 3**. Los 13 endpoints de
+> `/api/warehouses`, el módulo `scope/` y la auditoría ya existen; todavía no los usa nadie porque no
+> hay pantalla. La sección sigue viva en **MobilityManager** hasta el paso 5.
+> Se traspasa acá por decisión del proyecto: BackOffice centraliza la configuración administrativa.
 > Requiere Middleware **≥ 1.357.0** (es donde aparece la reserva por grupo de clientes).
 > Plan del traspaso, con el detalle de lo que se mueve: `MobilityManager/docs/PLAN_TRASPASO_ALMACENES_A_BACKOFFICE.md`.
 
@@ -134,7 +136,7 @@ centro. `guidApiLoginClients` es obligatorio: sin él, ITManager no muestra la f
 
 | Capa | Archivos |
 |---|---|
-| API | `apps/api/src/warehouses/` — `module`, `controller`, `service`, `client`, `types`, `customer-groups.ts` + `*.spec.ts` · `apps/api/src/scope/` — `client`, `service` + spec · `app.module.ts` · `audit/audit.categories.ts` |
+| API ✅ | `apps/api/src/warehouses/` — `module`, `controller`, `service`, `client`, `types`, `customer-groups.ts` + `*.spec.ts` · `apps/api/src/scope/` — `client`, `service`, `module` + spec · `common/middleware-error.ts` (lee `status` y `code` del error del middleware) · `app.module.ts` · `audit/audit.categories.ts` |
 | Web | `apps/web/src/pages/AlmacenesPage.tsx` (sólo compone) · `apps/web/src/components/warehouses/` — panel, lista de centros, almacenes del centro, reservas, los dos buscadores, lista de clientes del grupo, `warehouses.api.ts`, `warehouses.types.ts`, `warehouses.css` + `*.test.tsx` · `config/sections.tsx` · `App.tsx` · `components/layout/icons.tsx` |
 | Docs | este SPEC · `API_ENDPOINTS.md` · `ROLES_Y_PERMISOS.md` · `EXTERNAL_APIS.md` · `JERARQUIA_Y_VISIBILIDAD.md` · `SPEC_BACKOFFICE_REGIONES.md` (la línea que dice que acá no hay Warehouses) |
 
@@ -143,10 +145,13 @@ emojis**. La hoja de MobilityManager (646 líneas) no se copia: se reescribe.
 
 ## Tests
 
-- **API** (Jest, `*.spec.ts` al lado del código): el 37 rechazado antes de llamar al Middleware · el
-  mapeo de errores por `code`, incluido el 503 de "todavía no está disponible en este entorno" ·
-  **alcance**: lectura fuera de alcance vacía y escritura fuera de alcance 403 · **el controller
-  declara `Administrador` y `Usuario`**, que es lo que evita la pantalla visible y rota.
+- **API** ✅ (Jest, `*.spec.ts` al lado del código, **74 tests**): el 37 rechazado antes de llamar al
+  Middleware · el mapeo de errores por `code`, incluido el 503 de "todavía no está disponible en este
+  entorno" · **alcance**: lectura fuera de alcance vacía y escritura fuera de alcance 403 · **el
+  controller deja pasar a `Administrador` y a `Usuario`**, probado contra el `RolesGuard` real, que es
+  lo que evita la pantalla visible y rota · la **caché del alcance no dispara llamadas duplicadas** en
+  una ráfaga concurrente, que es el incidente del 2026-08-12 · el piso de versión coincide con lo que
+  promete este SPEC.
 - **Web** (Vitest + Testing Library, consultas por rol): el buscador deshabilita el 37 y muestra su
   motivo · la fila de grupo trae su conteo y se despliega · quitar la última reserva pide confirmación.
 
@@ -159,8 +164,22 @@ La baja de la sección en MobilityManager es un deploy aparte y posterior.
 
 ## Pendiente
 
-- Escribir el código: este SPEC es el paso 1 del plan.
+**Hecho en el paso 2 (API)**: módulo `scope/` con su caché, `warehouses/` completo con los 13
+endpoints, la regla del grupo 37, el piso de versión, la categoría de auditoría `Warehouses`, el alta
+en `app.module.ts` y 74 tests. Actualizados `API_ENDPOINTS.md`, `ROLES_Y_PERMISOS.md`,
+`EXTERNAL_APIS.md` y `JERARQUIA_Y_VISIBILIDAD.md`.
+
+Falta:
+
+- **Paso 3 — la pantalla**: componentes, estilos `bo-`, los dos buscadores, alta en `sections.tsx`,
+  ruta en `App.tsx` e ícono, con sus tests de Vitest.
+  - Con la pantalla llega también la **costura de las columnas ordenables**: hoy
+    `warehouses.service.spec.ts` fija que son 6 y que un `sortBy` inventado cae al default, pero no
+    puede compararlas contra el `CenterSortField` del front porque todavía no existe. Ese test cruza
+    las dos capas y es el que evita que un click en una columna ordene por sociedad en silencio.
+- **Paso 4 — verificación en QATEST**: reservar por cliente y por grupo, confirmar la auditoría en
+  ITManager y que `/allowed` responde igual.
 - Confirmar quiénes administran almacenes y darles cuenta y rol en BackOffice **antes** de la baja en
-  MobilityManager.
+  MobilityManager (paso 5).
 - Al terminar, corregir en `SPEC_BACKOFFICE_REGIONES.md` la línea que enumera a Warehouses entre los
   módulos que BackOffice no tiene.

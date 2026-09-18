@@ -16,6 +16,7 @@ import {
   initialDrafts,
   lineChanges,
   salesAreaParts,
+  sapOrdersByCenter,
   statusLabel,
   statusTone,
 } from './revision-sap.logic';
@@ -99,6 +100,15 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
   }, [guid]);
 
   const changes = useMemo(() => (order ? lineChanges(order.items, drafts) : []), [order, drafts]);
+  /**
+   * En cuántas órdenes SAP va a salir la orden: una por centro distinto, contando el que
+   * cada línea hereda de la cabecera. Se calcula con lo que hay EN PANTALLA —incluidos
+   * los cambios sin guardar— porque es lo que el operador está por mandar.
+   */
+  const centersToSend = useMemo(
+    () => (order ? sapOrdersByCenter(order.items, drafts, order.centerCode).length : 0),
+    [order, drafts],
+  );
   const blocking = useMemo(
     () =>
       order && catalogs ? blockingItemCount(order.items, drafts, order.centerCode, catalogs) : 0,
@@ -482,6 +492,7 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
           orderNumber={order.orderNumber}
           pendingChanges={changes.length}
           blocking={blocking}
+          centersToSend={centersToSend}
           groupInvoice={order.groupInvoice}
           sending={sending}
           result={resendResult}

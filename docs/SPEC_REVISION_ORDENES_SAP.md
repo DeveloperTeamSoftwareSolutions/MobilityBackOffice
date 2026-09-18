@@ -1,10 +1,11 @@
 # Órdenes rechazadas por SAP — Spec
 
-> Última actualización: 2026-09-17 · Versión: 2.35.0
-> Estado: **bandeja, detalle y correcciones conectados** (requiere Middleware ≥ 1.356.0,
-> PR #646, y `MIDDLEWARE_API_KEY` configurada en los dos lados).
-> **El reenvío a SAP NO**: espera el envío propio de BackOffice, que parte la orden en
-> una orden SAP por centro de distribución (lo arma Gustavo).
+> Última actualización: 2026-09-18 · Versión: 2.38.0
+> Estado: **bandeja, detalle, correcciones y rechazo conectados** (requiere Middleware ≥
+> 1.356.0, PR #646, y `MIDDLEWARE_API_KEY` configurada en los dos lados).
+> **El reenvío a SAP NO**: el envío por centro ya existe (PR #681 del Middleware) y este
+> lado ya lo consume, pero ese endpoint **rebota todo con 422** por un error suyo de
+> validación de centros. Avisado a Gustavo el 2026-09-18.
 
 ## Qué resuelve
 
@@ -16,7 +17,9 @@ MobilityIA la deja en solo lectura y el vendedor ya no puede reenviarla. BackOff
 2. ve el motivo del rechazo de SAP, con los intentos anteriores;
 3. corrige **por ítem** el centro de distribución y el destino de entrega *(conectado)*;
 4. ve en cuántas órdenes SAP salió la orden y el estado de cada una *(conectado)*;
-5. reenvía la orden completa a SAP *(pendiente: espera el envío por centro de Gustavo)*.
+5. **rechaza** la orden si no se puede resolver, con motivo obligatorio *(conectado)*;
+6. reenvía la orden a SAP, **partida en una orden SAP por centro** *(preparado, pero
+   desconectado: el endpoint del Middleware tiene un bug — ver abajo)*.
 
 ## Respuestas del jefe (2026-09-15)
 
@@ -188,54 +191,75 @@ MobilityManager.
     una orden SAP rechazada se queda en **`Draft`**, porque SAP no lo actualiza al
     rechazar, y se leería como "borrador".
   - **Reenviar es de la orden COMPLETA** (confirmado con el equipo el 2026-09-17): se
-    manda la `BusinessOrder` y el Middleware decide en cuántas órdenes SAP sale. El botón
-    vive en la barra de acciones, junto a Guardar, **deshabilitado** (ver abajo).
+    manda la `BusinessOrder` y el Middleware la parte en una orden SAP por centro. El
+    botón vive en la barra de acciones, junto a Guardar, **deshabilitado** (ver abajo).
 
 **Reenvío a SAP** (`POST /api/revision-sap/orders/:guid/resend`, sin body) —
-⚠️ **DESCONECTADO**, esperando el envío propio de BackOffice.
+⚠️ **DESCONECTADO**, pero ya no por falta del endpoint.
 
-**Por qué.** El envío del Middleware (`businessorders2sap`) manda la orden como **una
-sola orden SAP**: es el camino de MobilityIA. BackOffice necesita que se parta en **una
-orden SAP por centro de distribución**, y esa función la arma **Gustavo**. Hasta
-entonces, usar el envío de MobilityIA crearía en SAP un pedido sin dividir — que es justo
-lo que este circuito viene a evitar, y en SAP no se deshace.
+**Qué cambió el 2026-09-18.** El envío propio de BackOffice existe: es
+`POST /api/v2/mobility/businessorders2sap-from-backoffice` (PR #681 del Middleware).
+Agrupa los ítems por `CenterCode` y hace **una llamada a SAP por cada centro distinto**,
+con un N° de pedido sintético por centro (`ORD…S<id>`). Este lado ya le pega y ya traduce
+su respuesta.
 
-**Cómo está cortado**, y por qué así:
+**Por qué sigue cortado.** Ese endpoint tiene un **bug que lo rebota siempre**: arma sus
+ítems con un `.map` que no copia `centerCode` desde el repositorio, y después valida
+`it.centerCode` sobre ese mismo objeto. Lee `undefined` en todas las líneas y corta con
+**422 "faltan centros"** tengan o no centro en la base. Avisado a Gustavo el 2026-09-18.
+
+No se reconecta con el botón apagado porque el error que vería el operador además
+**miente**: le pide asignar centros que ya están asignados.
 
 | Capa | Estado |
 |---|---|
-| Botón | Visible pero **deshabilitado**, con el motivo en el `title`. Se deja a la vista para que se sepa que la acción va ahí |
-| `RevisionSapService.resendToSap` | Corta **antes** del cliente con `501 Not Implemented` y un mensaje que explica qué falta |
-| `RevisionSapClient.resendToSap` | Se conserva, pero **no se llama** |
+| Botón | Visible pero **deshabilitado**, con el motivo en el `title` |
+| `RevisionSapService.resendToSap` | Corta **antes** del cliente con `501 Not Implemented` |
+| `RevisionSapClient.resendToSap` | **Listo**: apunta al endpoint por centro y traduce sus *buckets*. No se llama |
 
 El corte está en el **servicio**, no sólo en el botón: mientras el endpoint respondiera,
-cualquier llamada crearía el pedido. Un botón apagado no es una garantía.
+cualquier llamada crearía pedidos. Un botón apagado no es una garantía.
 
-**Qué se conserva y por qué.** El cliente, el `ResendModal` y la lectura de la respuesta
-quedan: los tres desenlaces —aceptada, aceptada **sin entrega**, rechazada— van a ser los
-mismos con la función nueva. Lo único que cambia es a qué endpoint se le pega. Cuando
-exista, el trabajo es reapuntar el cliente y sacar el `501`.
+**Para reconectarlo**, cuando el fix esté: borrar el `throw` del servicio y devolver
+`this.client.resendToSap(guid, actorEmail)`. La auditoría ya está escrita. Probar contra
+**ORD00005729**, que tiene 3 líneas en 2 centros distintos.
 
-Lo que ya estaba resuelto y sigue valiendo para ese momento:
+### El resultado es POR CENTRO
 
-- **Confirma antes** de enviar, porque crea un pedido real. El aviso dice si hay cambios
-  sin guardar (se reenviaría sin ellos) y cuántos productos siguen con un aviso que
-  bloquea.
-- El resultado se muestra **en el mismo modal**, no en un toast: el N° de pedido es lo que
-  BackOffice copia, y el motivo del rechazo es lo que hay que leer para corregir.
+La orden ya no sale como un pedido: sale como **uno por centro**, y cada uno se acepta o
+se rechaza por su cuenta. Un resumen único escondería *cuál* falló, que es justo lo
+accionable. Por eso `ResendResult` trae `buckets[]`, y el modal muestra una tarjeta por
+centro con su estado, sus números y su motivo.
+
+Tres trampas del contrato del Middleware, resueltas en el cliente para que no se filtren:
+
+| Trampa | Cómo se resuelve |
+|---|---|
+| El `success` de arriba **miente**: viene `false` en ramas que sólo avisan de ítems sin stock, aunque SAP haya aceptado todo | `accepted` se calcula de los *buckets*, no del `success` |
+| Un **fallo parcial** llega como **HTTP 200**, no como error | Se detecta comparando centros con pedido contra centros fallados |
+| Los centros que salieron bien **quedan creados en SAP igual** | `partial: true`, y el modal avisa que reenviar la orden entera los duplicaría |
+
+| Respuesta | Qué se muestra |
+|---|---|
+| Todos los centros aceptados | Una tarjeta por centro con su N° de pedido y de entrega. La orden **sale de la bandeja** |
+| **Fallo parcial** | Aviso destacado: *lo que salió ya existe en SAP, corregí sólo los centros que fallaron*. Sigue en revisión |
+| Un centro aceptado **sin** entrega | Se marca aparte: el pedido existe pero no se despacha; se resuelve en SAP. El Middleware lo da por bueno, BackOffice **no** |
+| Centro rechazado | Su motivo con el tipo (`[E] …`), en su propia tarjeta |
+| No se envió (`skipped`) | Agrupa factura con faltantes, o ningún ítem con stock. **No** se muestra como rechazo |
+| 409 `SAP_ORDER_ALREADY_EXISTS` | El pedido ya existe: reenviarlo lo duplicaría |
+| Sin respuesta | *"Verificá en SAP si el pedido se creó antes de reintentar"* — **no** se reintenta a ciegas |
+
+Lo que ya estaba resuelto y sigue valiendo:
+
+- **Confirma antes** de enviar, porque crea pedidos reales — y ahora dice **cuántos**:
+  el modal calcula los centros distintos con lo que hay en pantalla, incluidos los cambios
+  sin guardar. El aviso también dice si hay cambios sin guardar (se reenviaría sin ellos)
+  y cuántos productos siguen con un aviso que bloquea.
+- El resultado se muestra **en el mismo modal**, no en un toast.
 - El envío exitoso **es** el cierre de la revisión: el Middleware baja
   `ProcessedBackoffice` a `1` solo, sin llamar a `backoffice/close`.
 - El comentario en el hilo del vendedor lo deja el propio envío del Middleware: **no hay
   que duplicarlo** desde BackOffice.
-
-| Respuesta | Qué se muestra |
-|---|---|
-| SAP aceptó, con entrega | N° de pedido y de entrega. La orden **sale de la bandeja** |
-| SAP aceptó, **sin** entrega | Aviso: el pedido existe pero no se despacha; la entrega se resuelve en SAP y la orden **sigue en revisión** |
-| SAP rechazó | El motivo con su tipo (`[E] …`); sigue en revisión |
-| No se envió (`skipped`) | Agrupa factura con faltantes, o ningún ítem con stock |
-| 409 `SAP_ORDER_ALREADY_EXISTS` | El pedido ya existe: reenviarlo lo duplicaría |
-| Sin respuesta | *"Verificá en SAP si el pedido se creó antes de reintentar"* — **no** se reintenta a ciegas |
 
 - Auditoría `REVISION_SAP_RESEND`, **siempre**: acepte o rechace SAP. Un rechazo auditado
   es lo que explica por qué la orden sigue en la bandeja.

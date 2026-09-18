@@ -173,31 +173,77 @@ export interface GroupInvoiceChangeResult {
 }
 
 /**
- * Resultado del reenvío a SAP. Espejo de `data.sap` de `businessorders2sap`.
+ * Una orden SAP del reenvío: un centro de distribución.
  *
- * `accepted` NO es "la llamada salió bien": el middleware exige que SAP haya devuelto
- * número de pedido y que su log no traiga errores. Un 200 con `accepted: false` es un
- * rechazo de SAP, con el motivo en `error`.
+ * El envío de BackOffice parte la orden en una orden SAP POR CENTRO (el middleware las
+ * llama "buckets"), así que el resultado ya no es uno solo: cada centro se envía, se
+ * acepta o se rechaza por su cuenta.
+ *
+ * `status` usa el MISMO vocabulario que la pestaña "Órdenes SAP" a propósito: lo que
+ * pasó al reenviar y lo que quedó registrado son la misma cosa, y llamarlas distinto
+ * obligaría al operador a traducir.
+ */
+export interface ResendBucket {
+  /** Centro de distribución: es lo que agrupa esta orden SAP. */
+  centerCode: string;
+  /** Cuántas líneas de la orden salieron en este centro. */
+  itemsCount: number;
+  /**
+   * `accepted` = pedido creado. `accepted_no_dispatch` = hay pedido pero no entrega: la
+   * mercadería no se despacha y eso se resuelve en SAP. `rejected` = SAP lo rechazó.
+   * `not_sent` = ni se intentó (falló al registrarlo antes de llamar a SAP).
+   */
+  status: 'accepted' | 'accepted_no_dispatch' | 'rejected' | 'not_sent';
+  /** N° de pedido de SAP, si lo creó. */
+  sapOrderNumber: string | null;
+  /** N° de entrega. Sin él el pedido existe pero no se despacha. */
+  sapDispatchNumber: string | null;
+  /** Motivo del rechazo de este centro. */
+  error: string | null;
+  /** Mensajes de SAP de este centro, con el formato `[TIPO] mensaje`. */
+  sapMessages: string[];
+}
+
+/**
+ * Resultado del reenvío a SAP, que ahora son VARIAS órdenes SAP: una por centro.
+ *
+ * ⚠️ Tres trampas del contrato del middleware, y las tres están resueltas acá para que
+ * quien lea este objeto no tenga que conocerlas:
+ *
+ * 1. **El `success` de arriba miente.** En algunas ramas viene `false` aunque SAP haya
+ *    aceptado todo (avisa de ítems sin stock, no de un rechazo). Lo que vale es el
+ *    resultado de los buckets, y eso es lo que informa `accepted`.
+ * 2. **Un fallo parcial llega como HTTP 200.** No es un error de transporte: es que un
+ *    centro salió y otro no.
+ * 3. **Los centros que salieron bien quedan creados en SAP igual.** Por eso existe
+ *    `partial`: reintentar a ciegas duplicaría esos pedidos.
  */
 export interface ResendResult {
-  /** SAP aceptó el pedido: hay número y el log no trae errores. */
+  /** TODOS los centros salieron bien. Es lo único que cierra la revisión. */
   accepted: boolean;
+  /**
+   * Algunos centros salieron y otros no. **Lo que salió ya existe en SAP**: no se
+   * reintenta la orden entera sin mirar qué quedó creado.
+   */
+  partial: boolean;
   /** No se llegó a llamar a SAP (agrupa factura con faltantes, o ningún ítem vendible). */
   skipped: boolean;
   /** Por qué no se envió, cuando `skipped`. */
   skippedReason: string | null;
-  /** Número de pedido de SAP, si lo creó. */
-  sapOrderNumber: string | null;
-  /** Número de entrega. Sin él, el pedido existe pero no se despacha: sigue en revisión. */
-  sapDispatchNumber: string | null;
-  /** Motivo del rechazo, con el mismo formato `[TIPO] mensaje` que el resto. */
+  /** Una por centro, en el orden que las devolvió el middleware. */
+  buckets: ResendBucket[];
+  totalBuckets: number;
+  acceptedBuckets: number;
+  failedBuckets: number;
+  /** Resumen de los errores, ya con el centro de cada uno. */
   error: string | null;
-  /** Mensajes que devolvió SAP, ya separados. */
-  sapMessages: string[];
   /** Ítems que el middleware dejó afuera por no tener stock. */
   filteredItemsCount: number;
   itemsSent: number;
-  /** La orden salió de revisión: con SAP aceptando, el envío exitoso la cierra. */
+  /**
+   * La orden sigue en la bandeja. El middleware la deja en revisión si algún centro
+   * falló, y la cierra sólo cuando salieron todos.
+   */
   stillInReview: boolean;
 }
 

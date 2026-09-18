@@ -1,7 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReviewOrderDetail } from './ReviewOrderDetail';
-import { ProductStock, ReviewCatalogs, ReviewOrderDetail as Detail, SapOrder } from './revision-sap.types';
+import { ResendModal } from './ResendModal';
+import {
+  ProductStock,
+  ResendBucket,
+  ResendResult,
+  ReviewCatalogs,
+  ReviewOrderDetail as Detail,
+  SapOrder,
+} from './revision-sap.types';
 
 /**
  * Lo que se fija acá: el detalle son DOS pestañas con papeles distintos.
@@ -186,14 +194,39 @@ vi.mock('./revision-sap.api', () => ({
   apiErrorMessage: (_err: unknown, fallback: string) => fallback,
 }));
 
+/**
+ * El envío devuelve UNA ENTRADA POR CENTRO: parte la orden en una orden SAP por centro
+ * de distribución. La orden de prueba tiene líneas en 2801 y 2802, así que salen dos.
+ */
 const envioAceptado = {
   accepted: true,
+  partial: false,
   skipped: false,
   skippedReason: null,
-  sapOrderNumber: '0004500123',
-  sapDispatchNumber: '0080001234',
+  buckets: [
+    {
+      centerCode: '2801',
+      itemsCount: 1,
+      status: 'accepted' as const,
+      sapOrderNumber: '0004500123',
+      sapDispatchNumber: '0080001234',
+      error: null,
+      sapMessages: [],
+    },
+    {
+      centerCode: '2802',
+      itemsCount: 1,
+      status: 'accepted' as const,
+      sapOrderNumber: '0004500124',
+      sapDispatchNumber: '0080001235',
+      error: null,
+      sapMessages: [],
+    },
+  ],
+  totalBuckets: 2,
+  acceptedBuckets: 2,
+  failedBuckets: 0,
   error: null,
-  sapMessages: [],
   filteredItemsCount: 0,
   itemsSent: 2,
   stillInReview: false,
@@ -374,6 +407,139 @@ describe('ReviewOrderDetail', () => {
     // Ni siquiera abre la confirmación: no hay forma de llegar a SAP desde acá.
     expect(screen.queryByText(/Crea un pedido real en SAP/)).toBeNull();
     expect(api.resendToSap).not.toHaveBeenCalled();
+  });
+
+  /**
+   * El reenvío crea UNA orden SAP POR CENTRO, así que el resultado no es uno solo.
+   *
+   * Estos tests montan el modal directamente: el botón está apagado a propósito (ver
+   * arriba), así que por la pantalla no hay forma de llegar al resultado todavía. Lo que
+   * se fija acá es lo que el operador tiene que poder leer cuando se reconecte — sobre
+   * todo el fallo parcial, donde parte de la orden YA existe en SAP y reintentar la
+   * duplicaría.
+   */
+  describe('resultado del reenvío, por centro', () => {
+    const bucket = (over: Partial<ResendBucket> = {}): ResendBucket => ({
+      centerCode: '2801',
+      itemsCount: 1,
+      status: 'accepted',
+      sapOrderNumber: '0004500123',
+      sapDispatchNumber: '0080001234',
+      error: null,
+      sapMessages: [],
+      ...over,
+    });
+
+    function verResultado(over: Partial<ResendResult>) {
+      const result: ResendResult = { ...envioAceptado, ...over };
+      render(
+        <ResendModal
+          orderNumber="ORD00005729"
+          pendingChanges={0}
+          blocking={0}
+          groupInvoice={false}
+          centersToSend={result.totalBuckets}
+          sending={false}
+          result={result}
+          error={null}
+          onConfirm={() => undefined}
+          onClose={() => undefined}
+        />,
+      );
+    }
+
+    it('muestra cada centro con su estado y sus números', () => {
+      verResultado({});
+      expect(screen.getByText('Centro 2801')).toBeTruthy();
+      expect(screen.getByText('Centro 2802')).toBeTruthy();
+      expect(screen.getAllByText('Aceptada')).toHaveLength(2);
+      expect(screen.getByText('0004500123')).toBeTruthy();
+      expect(screen.getByText('0004500124')).toBeTruthy();
+      expect(screen.getByText(/salió de la bandeja/)).toBeTruthy();
+    });
+
+    /**
+     * El caso peligroso: los pedidos que salieron NO se deshacen. Reenviar la orden
+     * entera crearía un segundo pedido de los centros que ya están.
+     */
+    it('en un fallo parcial avisa que lo que salió ya existe en SAP', () => {
+      verResultado({
+        accepted: false,
+        partial: true,
+        buckets: [
+          bucket(),
+          bucket({
+            centerCode: '2802',
+            status: 'rejected',
+            sapOrderNumber: null,
+            sapDispatchNumber: null,
+            error: '[E] El material 1200135 no está ampliado para el centro 2802.',
+          }),
+        ],
+        acceptedBuckets: 1,
+        failedBuckets: 1,
+        stillInReview: true,
+      });
+
+      expect(screen.getByText(/SAP aceptó una parte/)).toBeTruthy();
+      expect(screen.getByText(/ya existen en SAP/)).toBeTruthy();
+      expect(screen.getByText(/no reenvíes/i)).toBeTruthy();
+      // Y se ve CUÁL falló, que es lo único accionable.
+      expect(screen.getByText('Rechazada por SAP')).toBeTruthy();
+      expect(screen.getByText('El material 1200135 no está ampliado para el centro 2802.')).toBeTruthy();
+      expect(screen.getByText(/sigue en la bandeja/)).toBeTruthy();
+    });
+
+    /** Pedido sin entrega: el middleware lo da por bueno, BackOffice no. */
+    it('un centro con pedido pero sin entrega se marca y se explica', () => {
+      verResultado({
+        buckets: [bucket({ status: 'accepted_no_dispatch', sapDispatchNumber: null })],
+        totalBuckets: 1,
+        acceptedBuckets: 1,
+      });
+
+      expect(screen.getByText('Aceptada sin entrega')).toBeTruthy();
+      expect(screen.getByText(/no devolvió el N° de entrega/)).toBeTruthy();
+      expect(screen.getByText(/se resuelve en SAP/i)).toBeTruthy();
+    });
+
+    it('si no se llegó a enviar, dice por qué y no lo muestra como rechazo', () => {
+      verResultado({
+        accepted: false,
+        skipped: true,
+        skippedReason: 'GroupInvoice=1 con items sin stock: la orden no puede salir parcial.',
+        buckets: [],
+        totalBuckets: 0,
+        acceptedBuckets: 0,
+        stillInReview: true,
+      });
+
+      expect(screen.getByText('No se envió a SAP')).toBeTruthy();
+      expect(screen.getByText(/no puede salir parcial/)).toBeTruthy();
+      expect(screen.queryByText('Rechazada por SAP')).toBeNull();
+    });
+
+    /** Antes de enviar hay que decir en cuántos pedidos reales se va a convertir. */
+    it('antes de enviar avisa cuántos pedidos va a crear', () => {
+      render(
+        <ResendModal
+          orderNumber="ORD00005729"
+          pendingChanges={0}
+          blocking={0}
+          groupInvoice={false}
+          centersToSend={2}
+          sending={false}
+          result={null}
+          error={null}
+          onConfirm={() => undefined}
+          onClose={() => undefined}
+        />,
+      );
+      expect(screen.getByText(/se crean 2 órdenes SAP, una por centro/)).toBeTruthy();
+      expect(screen.getByText(/Crea 2 pedidos reales en SAP/)).toBeTruthy();
+      // Y que cada uno va por su cuenta: unos pueden salir y otros no.
+      expect(screen.getByText(/puede que unos salgan y otros no/)).toBeTruthy();
+    });
   });
 
   it('cambiar el centro queda sin guardar y se puede descartar', async () => {

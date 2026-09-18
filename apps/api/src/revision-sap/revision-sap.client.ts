@@ -14,6 +14,7 @@ import {
   DestinationChangeResult,
   GroupInvoiceChangeResult,
   ProductStock,
+  RejectResult,
   ResendResult,
   SapOrder,
   ReviewOptions,
@@ -270,6 +271,41 @@ export class RevisionSapClient {
         throw new BadRequestException(mwMessage(err) ?? 'No se pudo guardar agrupa factura');
       }
       throw new ServiceUnavailableException('No se pudo guardar agrupa factura');
+    }
+  }
+
+  /**
+   * RECHAZA la orden. Es terminal y no se deshace.
+   *
+   * Es POST y no PUT porque no edita un campo: cierra el documento. El motivo es
+   * obligatorio del lado del middleware —el estado sólo dice "Rechazada", así que el
+   * comentario del hilo es lo único que el vendedor va a poder leer— y por eso un
+   * motivo vacío vuelve como `400`.
+   */
+  async rejectOrder(
+    guid: string,
+    body: { actorEmail: string; reasonNotes: string },
+  ): Promise<RejectResult> {
+    try {
+      const res = await firstValueFrom(
+        this.http.post<MwData<RejectResult>>(
+          `${this.base()}${ORDER_PATH(guid)}/reject`,
+          body,
+          { headers: this.headers(), timeout: DEFAULT_TIMEOUT },
+        ),
+      );
+      return res.data.data;
+    } catch (err) {
+      const status = httpStatus(err);
+      if (status === 404) throw new NotFoundException(mwMessage(err) ?? 'Orden no encontrada');
+      // 409: salió de revisión —o ya la rechazaron— mientras se confirmaba.
+      if (status === 409) {
+        throw new ConflictException(mwMessage(err) ?? 'La orden ya no está en revisión');
+      }
+      if (status === 400) {
+        throw new BadRequestException(mwMessage(err) ?? 'No se pudo rechazar la orden');
+      }
+      throw new ServiceUnavailableException('No se pudo rechazar la orden');
     }
   }
 

@@ -8,6 +8,7 @@ import {
   DestinationChangeResult,
   GroupInvoiceChangeResult,
   ProductStock,
+  RejectResult,
   ResendResult,
   SapOrder,
   ReviewOptions,
@@ -128,6 +129,39 @@ export class RevisionSapService {
         ].join(' | '),
       });
     }
+
+    return result;
+  }
+
+  /**
+   * RECHAZA la orden: vuelve al vendedor como "Rechazada" y no se deshace.
+   *
+   * Se audita SIEMPRE y sin condición de `unchanged`: no hay rechazo que no cambie
+   * nada, y es la acción que cierra el documento. Si alguna vez hay que preguntar por
+   * qué una orden murió, esta fila es la respuesta.
+   *
+   * El comentario en el hilo del vendedor NO se escribe acá: lo deja el middleware,
+   * con el motivo. Es lo único que el vendedor va a poder leer —el estado sólo dice
+   * "Rechazada", igual que un rechazo de Créditos— y por eso el motivo es obligatorio.
+   */
+  async rejectOrder(
+    guid: string,
+    reasonNotes: string,
+    actor: Actor,
+  ): Promise<RejectResult> {
+    const actorEmail = this.requireEmail(actor);
+    const result = await this.client.rejectOrder(guid, { actorEmail, reasonNotes });
+
+    await this.audit.safeRecord({
+      action: 'REVISION_SAP_REJECT',
+      entity: 'BusinessOrders',
+      entityId: guid,
+      category: AuditCategory.SapReview,
+      guidUsers: actor.guid ?? null,
+      guidApiLoginClients: actor.guidApiLoginClients ?? null,
+      actorEmail,
+      detail: [`orden=${guid}`, `estado=${result.statusCode}`, `motivo=${reasonNotes}`].join(' | '),
+    });
 
     return result;
   }

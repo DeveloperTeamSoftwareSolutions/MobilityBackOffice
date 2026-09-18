@@ -4,6 +4,7 @@ import {
   GroupInvoiceChangeResult,
   Pagination,
   ProductStock,
+  RejectResult,
   ReviewCatalogs,
   ReviewItem,
   ResendResult,
@@ -106,6 +107,21 @@ export async function changeGroupInvoice(
   const res = await httpClient.put<ApiData<GroupInvoiceChangeResult>>(
     `/api/revision-sap/orders/${encodeURIComponent(guid)}/group-invoice`,
     { groupInvoice, reasonNotes },
+  );
+  return res.data.data;
+}
+
+/**
+ * RECHAZA la orden. Es terminal y no se deshace: vuelve al vendedor como "Rechazada",
+ * sale de la bandeja y él sólo puede copiarla.
+ *
+ * El motivo es obligatorio — el estado sólo dice "Rechazada", así que el comentario del
+ * hilo es lo único que el vendedor va a poder leer sobre por qué pasó.
+ */
+export async function rejectOrder(guid: string, reasonNotes: string): Promise<RejectResult> {
+  const res = await httpClient.post<ApiData<RejectResult>>(
+    `/api/revision-sap/orders/${encodeURIComponent(guid)}/reject`,
+    { reasonNotes },
   );
   return res.data.data;
 }

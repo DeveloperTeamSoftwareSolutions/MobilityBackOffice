@@ -723,6 +723,28 @@
 .bo-rs__gi-effect--warn {
   border-left-color: var(--bo-warning);
 }
+
+/* El rechazo no se deshace: su aviso se distingue del que solo advierte. */
+.bo-rs__gi-effect--danger {
+  border-left-color: var(--bo-danger);
+}
+
+/* Accion destructiva. Dos clases para ganarle al .bo-rs__button base sin depender
+   del orden del archivo. */
+.bo-rs__button.bo-rs__button--danger {
+  background: var(--bo-danger);
+  border-color: var(--bo-danger);
+  color: #fff;
+}
+.bo-rs__button.bo-rs__button--danger:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+/* Rechazar queda a la izquierda, separado de guardar y reenviar: es la accion que
+   cierra la orden y no conviene que se apriete por inercia al lado de las otras. */
+.bo-rs__actions-reject {
+  margin-right: auto;
+}
 .bo-rs__gi-current {
   display: flex;
   align-items: center;

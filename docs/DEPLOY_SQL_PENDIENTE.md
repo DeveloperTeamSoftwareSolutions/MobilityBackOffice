@@ -55,6 +55,28 @@ a traves del middleware ≥ 1.331.0. Se aplica y se registra **en ese repo**, no
 Orden de deploy: **vista → MW 1.331.0 → BackOffice 2.16.0**. Con un MW anterior, `GET /api/regions/groups`
 responde 503 "requiere MW ≥ 1.331.0" y la lista de la seccion Regiones no carga.
 
+### Dependencia de otro repo — rechazar una orden desde BackOffice (BackOffice 2.38.0)
+
+Tampoco es un script de BackOffice, pero **el boton "Rechazar orden" no funciona sin el**. Agrega dos
+columnas a `BusinessOrders` (repo MobilityMiddleWare, `sql/MIGRATION_BusinessOrders_BackofficeRejected.sql`):
+
+| Columna | Para que |
+|---|---|
+| `BackofficeRejectedAt` | El **hecho** que la proyeccion lee para devolver `Rejected` |
+| `BackofficeRejectedByEmail` | Quien lo rechazo |
+
+Por que una columna y no un `UPDATE` del estado: el estado de la orden es una **proyeccion** que se
+recalcula despues de cada mutacion. Escribir `'Rejected'` a mano lo pisaria el siguiente recompute y la
+orden volveria sola a `Processed`, con el vendedor recuperando el boton de enviar a SAP. Mismo patron que
+`CancelledAt` (→ `Annulled`) y `CreditDeniedAt` (→ `Rejected`).
+
+| Objeto | Repo | QATEST | PROD |
+|---|---|---|---|
+| `BusinessOrders.BackofficeRejectedAt` + `BackofficeRejectedByEmail` | MobilityMiddleWare | [ ] **pendiente** | [ ] **pendiente** |
+
+Orden de deploy: **migracion → MW 1.359.0 → BackOffice 2.38.0**. Sin las columnas, el endpoint de rechazo
+falla y la proyeccion no ve el hecho. El script es aditivo e idempotente (chequea `sys.columns`).
+
 ### Revision de estructura PROD para el deploy v2.0.0 (arquitectura via Middleware)
 
 Contexto: en v2.0.0 BackOffice dejo de tocar SQL — consume el MobilityMiddleWare. Como el

@@ -577,16 +577,17 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
             {saving ? 'Guardando…' : 'Guardar cambios'}
           </button>
           {/* El reenvío es de la orden COMPLETA, no de cada orden SAP (confirmado con
-              el equipo el 2026-09-17): se manda la BusinessOrder y el Middleware
-              decide en cuántas órdenes SAP sale.
+              el equipo el 2026-09-17): se manda la BusinessOrder y el Middleware la
+              parte en una orden SAP por centro de distribución.
 
               No se bloquea por cambios sin guardar ni por avisos: el modal los dice y
-              deja decidir. Lo único que lo apaga es que la orden ya no esté en revisión. */}
+              deja decidir. Lo único que lo apaga es que la orden ya no esté en revisión
+              — sobre una orden ya resuelta no hay nada que reenviar, y el middleware la
+              rechazaría igual. */}
           <button
             type="button"
             className="bo-rs__button"
-            disabled
-            title="Todavía no está disponible: espera el envío propio de BackOffice, que divide la orden en una orden SAP por centro de distribución."
+            disabled={!editable}
             onClick={() => {
               setResendResult(null);
               setResendError(null);

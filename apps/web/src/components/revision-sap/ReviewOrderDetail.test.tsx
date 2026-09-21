@@ -1,7 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReviewOrderDetail } from './ReviewOrderDetail';
-import { ProductStock, ReviewCatalogs, ReviewOrderDetail as Detail, SapOrder } from './revision-sap.types';
+import { ResendModal } from './ResendModal';
+import {
+  ProductStock,
+  ResendBucket,
+  ResendResult,
+  ReviewCatalogs,
+  ReviewOrderDetail as Detail,
+  SapOrder,
+} from './revision-sap.types';
 
 /**
  * Lo que se fija acá: el detalle son DOS pestañas con papeles distintos.
@@ -168,6 +176,7 @@ const api = vi.hoisted(() => ({
   changeItemDestination: vi.fn(),
   changeItemCenter: vi.fn(),
   changeGroupInvoice: vi.fn(),
+  rejectOrder: vi.fn(),
   resendToSap: vi.fn(),
   getProductStock: vi.fn(),
 }));
@@ -179,19 +188,45 @@ vi.mock('./revision-sap.api', () => ({
   changeItemDestination: api.changeItemDestination,
   changeItemCenter: api.changeItemCenter,
   changeGroupInvoice: api.changeGroupInvoice,
+  rejectOrder: api.rejectOrder,
   resendToSap: api.resendToSap,
   getProductStock: api.getProductStock,
   apiErrorMessage: (_err: unknown, fallback: string) => fallback,
 }));
 
+/**
+ * El envío devuelve UNA ENTRADA POR CENTRO: parte la orden en una orden SAP por centro
+ * de distribución. La orden de prueba tiene líneas en 2801 y 2802, así que salen dos.
+ */
 const envioAceptado = {
   accepted: true,
+  partial: false,
   skipped: false,
   skippedReason: null,
-  sapOrderNumber: '0004500123',
-  sapDispatchNumber: '0080001234',
+  buckets: [
+    {
+      centerCode: '2801',
+      itemsCount: 1,
+      status: 'accepted' as const,
+      sapOrderNumber: '0004500123',
+      sapDispatchNumber: '0080001234',
+      error: null,
+      sapMessages: [],
+    },
+    {
+      centerCode: '2802',
+      itemsCount: 1,
+      status: 'accepted' as const,
+      sapOrderNumber: '0004500124',
+      sapDispatchNumber: '0080001235',
+      error: null,
+      sapMessages: [],
+    },
+  ],
+  totalBuckets: 2,
+  acceptedBuckets: 2,
+  failedBuckets: 0,
   error: null,
-  sapMessages: [],
   filteredItemsCount: 0,
   itemsSent: 2,
   stillInReview: false,
@@ -204,6 +239,7 @@ beforeEach(() => {
   api.changeItemDestination.mockReset().mockResolvedValue({});
   api.changeItemCenter.mockReset().mockResolvedValue({});
   api.changeGroupInvoice.mockReset().mockResolvedValue({ ok: true, unchanged: false, groupInvoice: true });
+  api.rejectOrder.mockReset().mockResolvedValue({ ok: true, statusCode: 'Rejected' });
   api.resendToSap.mockReset().mockResolvedValue(envioAceptado);
   api.getProductStock.mockReset().mockResolvedValue(stock);
 });
@@ -373,6 +409,139 @@ describe('ReviewOrderDetail', () => {
     expect(api.resendToSap).not.toHaveBeenCalled();
   });
 
+  /**
+   * El reenvío crea UNA orden SAP POR CENTRO, así que el resultado no es uno solo.
+   *
+   * Estos tests montan el modal directamente: el botón está apagado a propósito (ver
+   * arriba), así que por la pantalla no hay forma de llegar al resultado todavía. Lo que
+   * se fija acá es lo que el operador tiene que poder leer cuando se reconecte — sobre
+   * todo el fallo parcial, donde parte de la orden YA existe en SAP y reintentar la
+   * duplicaría.
+   */
+  describe('resultado del reenvío, por centro', () => {
+    const bucket = (over: Partial<ResendBucket> = {}): ResendBucket => ({
+      centerCode: '2801',
+      itemsCount: 1,
+      status: 'accepted',
+      sapOrderNumber: '0004500123',
+      sapDispatchNumber: '0080001234',
+      error: null,
+      sapMessages: [],
+      ...over,
+    });
+
+    function verResultado(over: Partial<ResendResult>) {
+      const result: ResendResult = { ...envioAceptado, ...over };
+      render(
+        <ResendModal
+          orderNumber="ORD00005729"
+          pendingChanges={0}
+          blocking={0}
+          groupInvoice={false}
+          centersToSend={result.totalBuckets}
+          sending={false}
+          result={result}
+          error={null}
+          onConfirm={() => undefined}
+          onClose={() => undefined}
+        />,
+      );
+    }
+
+    it('muestra cada centro con su estado y sus números', () => {
+      verResultado({});
+      expect(screen.getByText('Centro 2801')).toBeTruthy();
+      expect(screen.getByText('Centro 2802')).toBeTruthy();
+      expect(screen.getAllByText('Aceptada')).toHaveLength(2);
+      expect(screen.getByText('0004500123')).toBeTruthy();
+      expect(screen.getByText('0004500124')).toBeTruthy();
+      expect(screen.getByText(/salió de la bandeja/)).toBeTruthy();
+    });
+
+    /**
+     * El caso peligroso: los pedidos que salieron NO se deshacen. Reenviar la orden
+     * entera crearía un segundo pedido de los centros que ya están.
+     */
+    it('en un fallo parcial avisa que lo que salió ya existe en SAP', () => {
+      verResultado({
+        accepted: false,
+        partial: true,
+        buckets: [
+          bucket(),
+          bucket({
+            centerCode: '2802',
+            status: 'rejected',
+            sapOrderNumber: null,
+            sapDispatchNumber: null,
+            error: '[E] El material 1200135 no está ampliado para el centro 2802.',
+          }),
+        ],
+        acceptedBuckets: 1,
+        failedBuckets: 1,
+        stillInReview: true,
+      });
+
+      expect(screen.getByText(/SAP aceptó una parte/)).toBeTruthy();
+      expect(screen.getByText(/ya existen en SAP/)).toBeTruthy();
+      expect(screen.getByText(/no reenvíes/i)).toBeTruthy();
+      // Y se ve CUÁL falló, que es lo único accionable.
+      expect(screen.getByText('Rechazada por SAP')).toBeTruthy();
+      expect(screen.getByText('El material 1200135 no está ampliado para el centro 2802.')).toBeTruthy();
+      expect(screen.getByText(/sigue en la bandeja/)).toBeTruthy();
+    });
+
+    /** Pedido sin entrega: el middleware lo da por bueno, BackOffice no. */
+    it('un centro con pedido pero sin entrega se marca y se explica', () => {
+      verResultado({
+        buckets: [bucket({ status: 'accepted_no_dispatch', sapDispatchNumber: null })],
+        totalBuckets: 1,
+        acceptedBuckets: 1,
+      });
+
+      expect(screen.getByText('Aceptada sin entrega')).toBeTruthy();
+      expect(screen.getByText(/no devolvió el N° de entrega/)).toBeTruthy();
+      expect(screen.getByText(/se resuelve en SAP/i)).toBeTruthy();
+    });
+
+    it('si no se llegó a enviar, dice por qué y no lo muestra como rechazo', () => {
+      verResultado({
+        accepted: false,
+        skipped: true,
+        skippedReason: 'GroupInvoice=1 con items sin stock: la orden no puede salir parcial.',
+        buckets: [],
+        totalBuckets: 0,
+        acceptedBuckets: 0,
+        stillInReview: true,
+      });
+
+      expect(screen.getByText('No se envió a SAP')).toBeTruthy();
+      expect(screen.getByText(/no puede salir parcial/)).toBeTruthy();
+      expect(screen.queryByText('Rechazada por SAP')).toBeNull();
+    });
+
+    /** Antes de enviar hay que decir en cuántos pedidos reales se va a convertir. */
+    it('antes de enviar avisa cuántos pedidos va a crear', () => {
+      render(
+        <ResendModal
+          orderNumber="ORD00005729"
+          pendingChanges={0}
+          blocking={0}
+          groupInvoice={false}
+          centersToSend={2}
+          sending={false}
+          result={null}
+          error={null}
+          onConfirm={() => undefined}
+          onClose={() => undefined}
+        />,
+      );
+      expect(screen.getByText(/se crean 2 órdenes SAP, una por centro/)).toBeTruthy();
+      expect(screen.getByText(/Crea 2 pedidos reales en SAP/)).toBeTruthy();
+      // Y que cada uno va por su cuenta: unos pueden salir y otros no.
+      expect(screen.getByText(/puede que unos salgan y otros no/)).toBeTruthy();
+    });
+  });
+
   it('cambiar el centro queda sin guardar y se puede descartar', async () => {
     await renderDetail();
     fireEvent.change(centerSelect(), { target: { value: '2801' } });
@@ -483,6 +652,95 @@ describe('ReviewOrderDetail', () => {
     await screen.findByText('Stock de 1200135');
 
     expect(screen.queryByRole('button', { name: 'Elegir' })).toBeNull();
+  });
+
+  /**
+   * Rechazar cierra la orden y NO se deshace (directiva 2026-09-18). Lo que se fija acá
+   * es que no se pueda disparar de un solo clic ni sin motivo: el motivo es lo ÚNICO que
+   * el vendedor va a leer, porque el estado sólo dice "Rechazada".
+   */
+  describe('rechazar la orden', () => {
+    /**
+     * El campo del motivo. Se busca por su label propio y no por /Motivo del rechazo/:
+     * el detalle ya muestra un bloque "Motivo del rechazo de SAP" —lo que contestó SAP—
+     * y ese matcher engancharía los dos. Son dos motivos distintos y de autores
+     * distintos, así que tampoco se llaman igual en pantalla.
+     */
+    const motivoInput = () => screen.getByLabelText(/Por qué se rechaza/) as HTMLInputElement;
+
+    it('avisa qué implica antes de rechazar, y no rechaza por abrir el aviso', async () => {
+      await renderDetail();
+      fireEvent.click(button('Rechazar orden'));
+
+      expect(screen.getByText(/No se puede deshacer/)).toBeTruthy();
+      expect(screen.getByText(/sólo puede copiarla|Lo único que va a poder hacer es copiarla/)).toBeTruthy();
+      // El vendedor al que le vuelve, por nombre.
+      expect(screen.getByText(/vendedor@duwest\.com/)).toBeTruthy();
+      expect(api.rejectOrder).not.toHaveBeenCalled();
+    });
+
+    it('sin motivo no deja confirmar: es lo único que el vendedor va a leer', async () => {
+      await renderDetail();
+      fireEvent.click(button('Rechazar orden'));
+
+      const confirmar = button('Sí, rechazar la orden');
+      expect(confirmar.disabled).toBe(true);
+      // Espacios tampoco alcanzan.
+      fireEvent.change(motivoInput(), { target: { value: '   ' } });
+      expect(button('Sí, rechazar la orden').disabled).toBe(true);
+      expect(api.rejectOrder).not.toHaveBeenCalled();
+    });
+
+    it('con motivo rechaza, recarga la orden y avisa dónde quedó el motivo', async () => {
+      await renderDetail();
+      fireEvent.click(button('Rechazar orden'));
+      fireEvent.change(motivoInput(), { target: { value: 'el cliente desistió de la compra' } });
+
+      api.getReviewOrder.mockResolvedValue(
+        order({
+          statusCode: 'Rejected',
+          backoffice: { inReview: false, decidedBy: 'bo@duwest.com', decidedAt: '2026-09-18T12:00:00Z' },
+        }),
+      );
+      fireEvent.click(button('Sí, rechazar la orden'));
+
+      await waitFor(() =>
+        expect(api.rejectOrder).toHaveBeenCalledWith(ORDER, 'el cliente desistió de la compra'),
+      );
+      // El vendedor lee el motivo en el hilo: decirlo cierra el circuito para quien rechazó.
+      await screen.findByText(/quedó en el hilo de comentarios/);
+      // Y la orden recargada ya es de solo lectura: el estado manda.
+      await waitFor(() => expect(screen.getByText('Rechazada')).toBeTruthy());
+    });
+
+    it('se puede cancelar sin rechazar', async () => {
+      await renderDetail();
+      fireEvent.click(button('Rechazar orden'));
+      fireEvent.click(button('Cancelar'));
+
+      await waitFor(() => expect(screen.queryByText(/No se puede deshacer/)).toBeNull());
+      expect(api.rejectOrder).not.toHaveBeenCalled();
+    });
+
+    it('una orden fuera de revisión ya no se puede rechazar', async () => {
+      api.getReviewOrder.mockResolvedValue(
+        order({ backoffice: { inReview: false, decidedBy: 'bo@duwest.com', decidedAt: null } }),
+      );
+      await renderDetail();
+      expect(button('Rechazar orden').disabled).toBe(true);
+    });
+
+    it('si el servidor rechaza la operación, el error queda en el modal', async () => {
+      await renderDetail();
+      fireEvent.click(button('Rechazar orden'));
+      fireEvent.change(motivoInput(), { target: { value: 'sin stock' } });
+      api.rejectOrder.mockRejectedValue(new Error('409'));
+
+      fireEvent.click(button('Sí, rechazar la orden'));
+      await screen.findByText('No se pudo rechazar la orden.');
+      // El modal sigue abierto: el motivo escrito no se pierde.
+      expect(button('Sí, rechazar la orden')).toBeTruthy();
+    });
   });
 
   it('una orden que ya no está en revisión se muestra en solo lectura', async () => {

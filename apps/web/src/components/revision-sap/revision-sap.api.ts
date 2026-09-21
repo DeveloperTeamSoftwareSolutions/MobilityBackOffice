@@ -4,6 +4,7 @@ import {
   GroupInvoiceChangeResult,
   Pagination,
   ProductStock,
+  RejectResult,
   ReviewCatalogs,
   ReviewItem,
   ResendResult,
@@ -111,16 +112,34 @@ export async function changeGroupInvoice(
 }
 
 /**
- * Reenvía la orden COMPLETA a SAP. Sin body: qué se manda lo decide el servidor con lo
- * que está guardado, y quién lo manda sale de la sesión.
+ * RECHAZA la orden. Es terminal y no se deshace: vuelve al vendedor como "Rechazada",
+ * sale de la bandeja y él sólo puede copiarla.
  *
- * Tarda: SAP puede demorar, así que va con su propio timeout largo.
+ * El motivo es obligatorio — el estado sólo dice "Rechazada", así que el comentario del
+ * hilo es lo único que el vendedor va a poder leer sobre por qué pasó.
+ */
+export async function rejectOrder(guid: string, reasonNotes: string): Promise<RejectResult> {
+  const res = await httpClient.post<ApiData<RejectResult>>(
+    `/api/revision-sap/orders/${encodeURIComponent(guid)}/reject`,
+    { reasonNotes },
+  );
+  return res.data.data;
+}
+
+/**
+ * Reenvía la orden a SAP. Sin body: qué se manda lo decide el servidor con lo que está
+ * guardado, y quién lo manda sale de la sesión.
+ *
+ * Devuelve UNA ENTRADA POR CENTRO: el envío parte la orden en una orden SAP por centro
+ * de distribución, y cada una se acepta o se rechaza por su cuenta.
+ *
+ * Tarda: son varias llamadas a SAP, así que va con su propio timeout largo.
  */
 export async function resendToSap(guid: string): Promise<ResendResult> {
   const res = await httpClient.post<ApiData<ResendResult>>(
     `/api/revision-sap/orders/${encodeURIComponent(guid)}/resend`,
     {},
-    { timeout: 180000 },
+    { timeout: 210000 },
   );
   return res.data.data;
 }

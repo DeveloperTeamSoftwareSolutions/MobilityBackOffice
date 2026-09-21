@@ -258,23 +258,58 @@ export interface GroupInvoiceChangeResult {
 }
 
 /**
- * Resultado del reenvío a SAP.
+ * Una orden SAP del reenvío: un centro de distribución.
  *
- * `accepted` no es "la llamada salió bien": SAP puede contestar 200 y rechazar. Y
- * `skipped` es un tercer caso —ni se intentó— que no hay que mostrar como rechazo.
+ * El envío de BackOffice parte la orden en una orden SAP POR CENTRO, así que el
+ * resultado ya no es uno solo. `status` usa el mismo vocabulario que la pestaña
+ * "Órdenes SAP": lo que pasó al enviar y lo que queda registrado son la misma cosa, y
+ * llamarlas distinto obligaría al operador a traducir.
  */
-export interface ResendResult {
-  accepted: boolean;
-  skipped: boolean;
-  skippedReason: string | null;
+export interface ResendBucket {
+  centerCode: string;
+  itemsCount: number;
+  status: 'accepted' | 'accepted_no_dispatch' | 'rejected' | 'not_sent';
   sapOrderNumber: string | null;
   sapDispatchNumber: string | null;
   error: string | null;
   sapMessages: string[];
+}
+
+/**
+ * Resultado del reenvío a SAP, que son VARIAS órdenes SAP: una por centro.
+ *
+ * `accepted` es "salieron todos". `skipped` es que ni se intentó, y no hay que mostrarlo
+ * como rechazo. Y `partial` es el caso nuevo y el más delicado: **algunos pedidos ya
+ * existen en SAP y otros no**, así que reintentar la orden entera duplicaría los que
+ * salieron.
+ */
+export interface ResendResult {
+  accepted: boolean;
+  partial: boolean;
+  skipped: boolean;
+  skippedReason: string | null;
+  buckets: ResendBucket[];
+  totalBuckets: number;
+  acceptedBuckets: number;
+  failedBuckets: number;
+  error: string | null;
   filteredItemsCount: number;
   itemsSent: number;
-  /** La orden sigue en la bandeja: SAP rechazó, o creó el pedido pero no la entrega. */
+  /** La orden sigue en la bandeja: algún centro no salió. */
   stillInReview: boolean;
+}
+
+/**
+ * Resultado de rechazar la orden desde BackOffice.
+ *
+ * Es TERMINAL: la orden pasa a `Rejected`, sale de la bandeja y no se deshace. El
+ * vendedor la ve como "Rechazada" y sólo puede copiarla. El motivo NO viaja acá: quedó
+ * en el hilo de comentarios, que es donde él lo lee.
+ */
+export interface RejectResult {
+  ok: boolean;
+  /** El estado que quedó tras el recálculo del middleware. */
+  statusCode: string;
 }
 
 /** Una línea del motivo del rechazo: el tipo que devolvió SAP y su mensaje. */

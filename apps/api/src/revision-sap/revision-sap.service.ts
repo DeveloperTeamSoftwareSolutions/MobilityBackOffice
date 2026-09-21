@@ -8,6 +8,7 @@ import {
   DestinationChangeResult,
   GroupInvoiceChangeResult,
   ProductStock,
+  RejectResult,
   ResendResult,
   SapOrder,
   ReviewOptions,
@@ -133,6 +134,39 @@ export class RevisionSapService {
   }
 
   /**
+   * RECHAZA la orden: vuelve al vendedor como "Rechazada" y no se deshace.
+   *
+   * Se audita SIEMPRE y sin condición de `unchanged`: no hay rechazo que no cambie
+   * nada, y es la acción que cierra el documento. Si alguna vez hay que preguntar por
+   * qué una orden murió, esta fila es la respuesta.
+   *
+   * El comentario en el hilo del vendedor NO se escribe acá: lo deja el middleware,
+   * con el motivo. Es lo único que el vendedor va a poder leer —el estado sólo dice
+   * "Rechazada", igual que un rechazo de Créditos— y por eso el motivo es obligatorio.
+   */
+  async rejectOrder(
+    guid: string,
+    reasonNotes: string,
+    actor: Actor,
+  ): Promise<RejectResult> {
+    const actorEmail = this.requireEmail(actor);
+    const result = await this.client.rejectOrder(guid, { actorEmail, reasonNotes });
+
+    await this.audit.safeRecord({
+      action: 'REVISION_SAP_REJECT',
+      entity: 'BusinessOrders',
+      entityId: guid,
+      category: AuditCategory.SapReview,
+      guidUsers: actor.guid ?? null,
+      guidApiLoginClients: actor.guidApiLoginClients ?? null,
+      actorEmail,
+      detail: [`orden=${guid}`, `estado=${result.statusCode}`, `motivo=${reasonNotes}`].join(' | '),
+    });
+
+    return result;
+  }
+
+  /**
    * Reenvía la orden completa a SAP.
    *
    * Se audita SIEMPRE, acepte o rechace SAP: es la acción más fuerte de la sección
@@ -148,21 +182,25 @@ export class RevisionSapService {
     // por lo mismo que antes y no por accidente.
     this.requireEmail(actor);
 
-    // ⚠️ DESCONECTADO A PROPÓSITO (2026-09-17). El envío del Middleware
-    // (`businessorders2sap`) manda la orden como UNA sola orden SAP, que es como lo
-    // hace MobilityIA. Para BackOffice eso no alcanza: Gustavo tiene que armar el
-    // envío propio, que parta la orden en una orden SAP POR CENTRO de distribución.
+    // ⚠️ SIGUE DESCONECTADO (2026-09-18), pero YA NO por falta del endpoint.
     //
-    // Se corta acá, antes del cliente, y no sólo apagando el botón: mientras el
-    // endpoint responda, cualquier llamada crearía en SAP un pedido sin dividir —
-    // justo lo que este circuito viene a evitar, y en SAP no se deshace.
+    // El envío por centro existe desde el PR #681 del Middleware, y el cliente de acá
+    // ya le pega y traduce su respuesta por centro. Lo que falta es un BUG DE ESE
+    // ENDPOINT: arma sus ítems con un `.map` que no copia `centerCode` desde el
+    // repositorio, y después valida `it.centerCode` sobre ese mismo objeto — así que
+    // lee `undefined` en todas las líneas y CORTA SIEMPRE con 422 ("faltan centros"),
+    // tengan o no centro en la base. Avisado a Gustavo el 2026-09-18.
     //
-    // Lo que ya está hecho se conserva (el cliente, el modal, la lectura de la
-    // respuesta): los tres desenlaces —aceptada, aceptada sin entrega, rechazada— van
-    // a ser los mismos con la función nueva. Sólo cambia a qué endpoint se le pega.
+    // Se corta acá y no sólo apagando el botón: mientras el endpoint responda, el
+    // operador vería un error que además MIENTE —dice que asigne los centros, y los
+    // centros están— sin forma de avanzar.
+    //
+    // PARA RECONECTARLO, cuando el fix esté: borrar este `throw` y devolver
+    // `this.client.resendToSap(guid, actorEmail)`. Lo de abajo (auditoría) ya está
+    // escrito para eso. Verificar contra ORD00005729, que tiene 3 líneas en 2 centros.
     throw new NotImplementedException(
-      'El reenvío a SAP desde BackOffice todavía no está disponible: espera la función ' +
-        'que divide la orden en una orden SAP por centro de distribución.',
+      'El reenvío a SAP desde BackOffice todavía no está disponible: el envío por centro ' +
+        'del Middleware rebota todas las órdenes por un error en su validación de centros.',
     );
   }
 

@@ -572,6 +572,39 @@
 }
 
 /* Motivo del rechazo: tipo + mensaje */
+/* Resultado del reenvio, UNA TARJETA POR CENTRO: el envio parte la orden en una
+   orden SAP por centro y cada una se acepta o se rechaza por su cuenta. Un resumen
+   unico esconderia cual fallo, que es justo lo que hay que corregir. */
+.bo-rs__resend-buckets {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+.bo-rs__resend-bucket {
+  padding: 10px 12px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-bg);
+}
+.bo-rs__resend-bucket-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.bo-rs__resend-bucket-nums {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 6px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
 .bo-rs__sap-lines {
   display: flex;
   flex-direction: column;
@@ -722,6 +755,28 @@
 }
 .bo-rs__gi-effect--warn {
   border-left-color: var(--bo-warning);
+}
+
+/* El rechazo no se deshace: su aviso se distingue del que solo advierte. */
+.bo-rs__gi-effect--danger {
+  border-left-color: var(--bo-danger);
+}
+
+/* Accion destructiva. Dos clases para ganarle al .bo-rs__button base sin depender
+   del orden del archivo. */
+.bo-rs__button.bo-rs__button--danger {
+  background: var(--bo-danger);
+  border-color: var(--bo-danger);
+  color: #fff;
+}
+.bo-rs__button.bo-rs__button--danger:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+/* Rechazar queda a la izquierda, separado de guardar y reenviar: es la accion que
+   cierra la orden y no conviene que se apriete por inercia al lado de las otras. */
+.bo-rs__actions-reject {
+  margin-right: auto;
 }
 .bo-rs__gi-current {
   display: flex;

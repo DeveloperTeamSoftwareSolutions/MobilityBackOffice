@@ -14,6 +14,8 @@ import {
   DestinationChangeResult,
   GroupInvoiceChangeResult,
   ProductStock,
+  RejectResult,
+  ResendBucket,
   ResendResult,
   SapOrder,
   ReviewOptions,
@@ -30,59 +32,114 @@ const ORDERS_PATH = '/mobility/backoffice-review/orders';
 const ORDER_PATH = (guid: string) => `${ORDERS_PATH}/${encodeURIComponent(guid)}`;
 
 /**
- * El envío a SAP: el MISMO endpoint que usa el vendedor desde MobilityIA, con
- * `asBackoffice: true`. No cuelga del router de revisión.
+ * El envío PROPIO de BackOffice: parte la orden en una orden SAP por centro de
+ * distribución. No es el de MobilityIA (`/v2/mobility/businessorders2sap`), que manda
+ * todo junto bajo el centro de la cabecera. Los dos conviven en el middleware.
+ *
+ * No cuelga del router de revisión, así que la ruta se arma aparte.
  */
-const SEND_PATH = '/v2/mobility/businessorders2sap';
+const SEND_PATH = '/v2/mobility/businessorders2sap-from-backoffice';
 
-/** SAP puede demorar; el middleware le da 120 s, así que acá un poco más. */
-const SEND_TIMEOUT = 150000;
+/** SAP puede demorar, y ahora son VARIAS llamadas —una por centro—, así que va más largo. */
+const SEND_TIMEOUT = 180000;
 
-/** Lo que devuelve el envío del middleware: `data.sap` es el resultado real. */
+/** Una orden SAP del envío. El middleware las llama "buckets": una por centro. */
+interface MwBucket {
+  centerCode?: string | null;
+  itemsCount?: number | null;
+  sent?: boolean;
+  success?: boolean;
+  orderId?: string | null;
+  deliveryId?: string | null;
+  error?: string | null;
+  sapMessages?: string[] | null;
+}
+
+/**
+ * Lo que devuelve el envío multi-centro.
+ *
+ * `data.sap` tiene DOS formas posibles y hay que distinguirlas: con `buckets` cuando
+ * hubo envío, y `{ skipped, reason }` cuando el middleware cortó antes de llamar a SAP
+ * (agrupa factura con faltantes, o ningún ítem con stock).
+ */
 interface MwSendResponse {
   success: boolean;
   data?: {
     sap?: {
-      sent?: boolean;
-      success?: boolean;
       skipped?: boolean;
       reason?: string | null;
-      orderId?: string | null;
-      deliveryId?: string | null;
-      error?: string | null;
-      sapMessages?: string[] | null;
+      buckets?: MwBucket[] | null;
+      totalBuckets?: number | null;
+      successfulBuckets?: number | null;
+      failedBuckets?: number | null;
       filteredItemsCount?: number | null;
       itemsSent?: number | null;
+      success?: boolean;
+      error?: string | null;
     } | null;
   } | null;
 }
 
+const texto = (v: unknown): string | null => (v != null ? String(v).trim() || null : null);
+
+/** El estado de un centro, con el mismo vocabulario que la pestaña "Órdenes SAP". */
+function bucketStatus(b: MwBucket): ResendBucket['status'] {
+  if (b.sent === false) return 'not_sent';
+  if (b.success !== true) return 'rejected';
+  // Aceptado: el pedido existe. Sin entrega la mercadería no se despacha, y eso el
+  // middleware NO lo cuenta como fallo — pero para BackOffice no es lo mismo.
+  return texto(b.deliveryId) ? 'accepted' : 'accepted_no_dispatch';
+}
+
 /**
- * Traduce la respuesta del envío.
+ * Traduce la respuesta del envío multi-centro.
  *
- * `success: false` con `skipped` no es un rechazo de SAP: es que ni se intentó. Y sin
- * número de entrega la orden sigue en revisión aunque el pedido exista, que es el caso
- * silencioso que este circuito vino a evitar.
+ * ⚠️ NO se mira el `success` de arriba para decidir si SAP aceptó: el middleware lo pone
+ * en `false` en ramas que sólo avisan de ítems sin stock, aunque los pedidos se hayan
+ * creado. La verdad está en los buckets, y por eso `accepted` se calcula de ahí.
+ *
+ * El fallo parcial llega como HTTP 200 —no como error— y deja pedidos YA CREADOS en SAP.
+ * Ese es el caso que `partial` existe para hacer visible.
  */
 function mapResend(body: MwSendResponse): ResendResult {
   const sap = body?.data?.sap ?? {};
   const skipped = sap.skipped === true;
-  const accepted = body?.success === true && sap.success !== false && !skipped;
-  const sapOrderNumber = sap.orderId != null ? String(sap.orderId).trim() || null : null;
-  const sapDispatchNumber = sap.deliveryId != null ? String(sap.deliveryId).trim() || null : null;
+  const crudos = Array.isArray(sap.buckets) ? sap.buckets : [];
+
+  const buckets: ResendBucket[] = crudos.map((b) => ({
+    centerCode: texto(b.centerCode) ?? '—',
+    itemsCount: Number(b.itemsCount) || 0,
+    status: bucketStatus(b),
+    sapOrderNumber: texto(b.orderId),
+    sapDispatchNumber: texto(b.deliveryId),
+    error: b.error ?? null,
+    sapMessages: Array.isArray(b.sapMessages) ? b.sapMessages : [],
+  }));
+
+  // "Salió bien" es tener pedido. La falta de ENTREGA se avisa aparte (el middleware la
+  // da por buena, BackOffice no), pero no convierte el centro en un rechazo: el pedido
+  // existe y reintentarlo lo duplicaría.
+  const conPedido = buckets.filter((b) => b.status === 'accepted' || b.status === 'accepted_no_dispatch');
+  const fallados = buckets.filter((b) => b.status === 'rejected' || b.status === 'not_sent');
+  const accepted = !skipped && buckets.length > 0 && fallados.length === 0;
+
   return {
     accepted,
+    // Algunos pedidos YA existen en SAP y otros no: reintentar la orden entera duplicaría
+    // los que salieron.
+    partial: conPedido.length > 0 && fallados.length > 0,
     skipped,
     skippedReason: sap.reason ?? null,
-    sapOrderNumber,
-    sapDispatchNumber,
+    buckets,
+    totalBuckets: Number(sap.totalBuckets) || buckets.length,
+    acceptedBuckets: conPedido.length,
+    failedBuckets: fallados.length,
     error: sap.error ?? null,
-    sapMessages: Array.isArray(sap.sapMessages) ? sap.sapMessages : [],
     filteredItemsCount: Number(sap.filteredItemsCount) || 0,
     itemsSent: Number(sap.itemsSent) || 0,
-    // El envío exitoso ES el cierre de la revisión, pero sólo si SAP devolvió también
-    // la entrega: con pedido y sin entrega la orden se queda en BackOffice.
-    stillInReview: !accepted || !sapDispatchNumber,
+    // El middleware deja la orden en revisión si algún centro falló, y la cierra sólo
+    // cuando salieron todos.
+    stillInReview: !accepted,
   };
 }
 
@@ -270,6 +327,41 @@ export class RevisionSapClient {
         throw new BadRequestException(mwMessage(err) ?? 'No se pudo guardar agrupa factura');
       }
       throw new ServiceUnavailableException('No se pudo guardar agrupa factura');
+    }
+  }
+
+  /**
+   * RECHAZA la orden. Es terminal y no se deshace.
+   *
+   * Es POST y no PUT porque no edita un campo: cierra el documento. El motivo es
+   * obligatorio del lado del middleware —el estado sólo dice "Rechazada", así que el
+   * comentario del hilo es lo único que el vendedor va a poder leer— y por eso un
+   * motivo vacío vuelve como `400`.
+   */
+  async rejectOrder(
+    guid: string,
+    body: { actorEmail: string; reasonNotes: string },
+  ): Promise<RejectResult> {
+    try {
+      const res = await firstValueFrom(
+        this.http.post<MwData<RejectResult>>(
+          `${this.base()}${ORDER_PATH(guid)}/reject`,
+          body,
+          { headers: this.headers(), timeout: DEFAULT_TIMEOUT },
+        ),
+      );
+      return res.data.data;
+    } catch (err) {
+      const status = httpStatus(err);
+      if (status === 404) throw new NotFoundException(mwMessage(err) ?? 'Orden no encontrada');
+      // 409: salió de revisión —o ya la rechazaron— mientras se confirmaba.
+      if (status === 409) {
+        throw new ConflictException(mwMessage(err) ?? 'La orden ya no está en revisión');
+      }
+      if (status === 400) {
+        throw new BadRequestException(mwMessage(err) ?? 'No se pudo rechazar la orden');
+      }
+      throw new ServiceUnavailableException('No se pudo rechazar la orden');
     }
   }
 

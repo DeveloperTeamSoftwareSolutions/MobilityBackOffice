@@ -8,6 +8,7 @@ import {
   getReviewCatalogs,
   getReviewOrder,
   listSapOrders,
+  rejectOrder,
   resendToSap,
 } from './revision-sap.api';
 import {
@@ -15,6 +16,7 @@ import {
   initialDrafts,
   lineChanges,
   salesAreaParts,
+  sapOrdersByCenter,
   statusLabel,
   statusTone,
 } from './revision-sap.logic';
@@ -30,6 +32,7 @@ import { SapOrdersPanel } from './SapOrdersPanel';
 import { ReviewItemsTable } from './ReviewItemsTable';
 import { SapErrorMessage } from './SapErrorMessage';
 import { GroupInvoiceModal } from './GroupInvoiceModal';
+import { RejectOrderModal } from './RejectOrderModal';
 import { ResendModal } from './ResendModal';
 import { PreviewNotice } from './PreviewNotice';
 
@@ -68,6 +71,10 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
   const [sending, setSending] = useState(false);
   const [resendResult, setResendResult] = useState<ResendResult | null>(null);
   const [resendError, setResendError] = useState<string | null>(null);
+  // Rechazo: cierra la orden y no se deshace, así que se confirma aparte.
+  const [askReject, setAskReject] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectError, setRejectError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,6 +100,15 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
   }, [guid]);
 
   const changes = useMemo(() => (order ? lineChanges(order.items, drafts) : []), [order, drafts]);
+  /**
+   * En cuántas órdenes SAP va a salir la orden: una por centro distinto, contando el que
+   * cada línea hereda de la cabecera. Se calcula con lo que hay EN PANTALLA —incluidos
+   * los cambios sin guardar— porque es lo que el operador está por mandar.
+   */
+  const centersToSend = useMemo(
+    () => (order ? sapOrdersByCenter(order.items, drafts, order.centerCode).length : 0),
+    [order, drafts],
+  );
   const blocking = useMemo(
     () =>
       order && catalogs ? blockingItemCount(order.items, drafts, order.centerCode, catalogs) : 0,
@@ -231,6 +247,36 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
     setAskResend(false);
     setResendResult(null);
     setResendError(null);
+  }
+
+  /**
+   * Rechaza la orden: la cierra y se la devuelve al vendedor como "Rechazada".
+   *
+   * No se deshace, así que después de rechazar se RECARGA la orden en vez de parchear el
+   * estado local: lo que vuelve trae el estado nuevo, quién la rechazó y cuándo, y con
+   * `inReview` en false el detalle pasa solo a modo lectura. Parchearlo a mano dejaría la
+   * pantalla diciendo que todavía se puede editar.
+   *
+   * Los cambios sin guardar se descartan: sobre una orden cerrada ya no significan nada.
+   */
+  async function onConfirmReject(reasonNotes: string) {
+    if (!order) return;
+    setRejecting(true);
+    setRejectError(null);
+    try {
+      await rejectOrder(order.guid, reasonNotes);
+      const fresh = await getReviewOrder(order.guid);
+      setOrder(fresh);
+      setDrafts(initialDrafts(fresh.items));
+      setSaveErrors({});
+      setAskReject(false);
+      setSaveMessage(
+        'La orden quedó rechazada y volvió al vendedor. El motivo quedó en el hilo de comentarios.',
+      );
+    } catch (err) {
+      setRejectError(apiErrorMessage(err, 'No se pudo rechazar la orden.'));
+    }
+    setRejecting(false);
   }
 
   const backBar = (
@@ -446,12 +492,27 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
           orderNumber={order.orderNumber}
           pendingChanges={changes.length}
           blocking={blocking}
+          centersToSend={centersToSend}
           groupInvoice={order.groupInvoice}
           sending={sending}
           result={resendResult}
           error={resendError}
           onConfirm={() => void onConfirmResend()}
           onClose={onCloseResend}
+        />
+      )}
+
+      {askReject && (
+        <RejectOrderModal
+          orderNumber={order.orderNumber}
+          sellerEmail={order.sellerEmail}
+          saving={rejecting}
+          error={rejectError}
+          onConfirm={(reasonNotes) => void onConfirmReject(reasonNotes)}
+          onCancel={() => {
+            setAskReject(false);
+            setRejectError(null);
+          }}
         />
       )}
 
@@ -484,6 +545,21 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
           )}
         </p>
         <div className="bo-rs__actions-buttons">
+          {/* Rechazar cierra la orden y NO se deshace, así que va separado de los otros
+              —que guardan o reintentan— y en rojo. No se apaga por cambios sin guardar
+              ni por avisos: justamente se rechaza una orden que no se puede corregir.
+              Lo único que lo apaga es que ya no esté en revisión. */}
+          <button
+            type="button"
+            className="bo-rs__button bo-rs__button--danger bo-rs__actions-reject"
+            disabled={!editable}
+            onClick={() => {
+              setRejectError(null);
+              setAskReject(true);
+            }}
+          >
+            Rechazar orden
+          </button>
           <button
             type="button"
             className="bo-rs__button bo-rs__button--ghost"

@@ -1,4 +1,4 @@
-import { BadRequestException, NotImplementedException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { RevisionSapService } from './revision-sap.service';
 import { RevisionSapClient } from './revision-sap.client';
 import { AuditService } from '../audit/audit.service';
@@ -136,34 +136,117 @@ describe('RevisionSapService — cambio de destino', () => {
   });
 
   /**
-   * El reenvío está DESCONECTADO a propósito (2026-09-17).
+   * Reenvío a SAP — CONECTADO el 2026-09-21 (Middleware ≥ 1.361.1).
    *
-   * El envío del middleware manda la orden como UNA sola orden SAP, que es el camino de
-   * MobilityIA. BackOffice necesita el envío propio que la parte por centro, y hasta que
-   * exista no se puede llamar: crearía en SAP un pedido sin dividir, y eso no se deshace.
-   *
-   * Por eso se fija que corte ANTES del cliente, no sólo que el botón esté apagado.
+   * Lo que se fija acá es la auditoría, porque es la única huella que queda de una
+   * acción irreversible. Con la orden partida por centro, un resumen no alcanza: si
+   * mañana hay que reconstruir qué pasó, el detalle tiene que decir QUÉ centro salió y
+   * con qué número de pedido.
    */
-  describe('reenvío a SAP (desconectado hasta el envío por centro)', () => {
-    it('no llama a SAP y lo dice con un 501', async () => {
-      await expect(service.resendToSap(ORDER, actor)).rejects.toBeInstanceOf(
-        NotImplementedException,
-      );
-      expect(client.resendToSap).not.toHaveBeenCalled();
+  describe('reenvío a SAP, partido por centro', () => {
+    const resultado = (over: Record<string, unknown> = {}) => ({
+      accepted: true,
+      partial: false,
+      skipped: false,
+      skippedReason: null,
+      buckets: [
+        {
+          centerCode: '2801',
+          itemsCount: 1,
+          status: 'accepted' as const,
+          sapOrderNumber: '0004500123',
+          sapDispatchNumber: '0080001234',
+          error: null,
+          sapMessages: [],
+        },
+      ],
+      totalBuckets: 1,
+      acceptedBuckets: 1,
+      failedBuckets: 0,
+      error: null,
+      filteredItemsCount: 0,
+      itemsSent: 1,
+      stillInReview: false,
+      ...over,
     });
 
-    it('no deja auditoría de un envío que no ocurrió', async () => {
-      await expect(service.resendToSap(ORDER, actor)).rejects.toBeInstanceOf(
-        NotImplementedException,
-      );
-      expect(audit.safeRecord).not.toHaveBeenCalled();
+    it('manda el email de la sesión y devuelve el resultado por centro', async () => {
+      client.resendToSap.mockResolvedValue(resultado());
+
+      const r = await service.resendToSap(ORDER, actor);
+
+      expect(client.resendToSap).toHaveBeenCalledWith(ORDER, 'bo@duwest.com');
+      expect(r.buckets).toHaveLength(1);
     });
 
-    it('sin email en la sesión falla por eso, no por el 501', async () => {
+    it('la auditoría dice qué centro salió y con qué número de pedido', async () => {
+      client.resendToSap.mockResolvedValue(resultado());
+
+      await service.resendToSap(ORDER, actor);
+
+      const registro = audit.safeRecord.mock.calls[0][0];
+      expect(registro.action).toBe('REVISION_SAP_RESEND');
+      expect(registro.category).toBe(AuditCategory.SapReview);
+      expect(registro.detail).toContain('resultado=aceptada');
+      expect(registro.detail).toContain('centros=1/1');
+      expect(registro.detail).toContain('2801:accepted/0004500123');
+    });
+
+    /**
+     * El fallo parcial deja pedidos YA creados en SAP. Que se distinga en la auditoría
+     * no es cosmético: es la diferencia entre "no salió" y "salió a medias", y sólo el
+     * segundo caso hace que reintentar duplique.
+     */
+    it('un fallo parcial se marca como tal, no como un rechazo', async () => {
+      client.resendToSap.mockResolvedValue(
+        resultado({
+          accepted: false,
+          partial: true,
+          buckets: [
+            ...resultado().buckets,
+            {
+              centerCode: '2802',
+              itemsCount: 1,
+              status: 'rejected' as const,
+              sapOrderNumber: null,
+              sapDispatchNumber: null,
+              error: '[E] material no ampliado',
+              sapMessages: [],
+            },
+          ],
+          totalBuckets: 2,
+          acceptedBuckets: 1,
+          failedBuckets: 1,
+          stillInReview: true,
+        }),
+      );
+
+      await service.resendToSap(ORDER, actor);
+
+      const detalle = audit.safeRecord.mock.calls[0][0].detail;
+      expect(detalle).toContain('resultado=PARCIAL');
+      expect(detalle).toContain('centros=1/2');
+      expect(detalle).toContain('2802:rejected');
+    });
+
+    /** Se audita aunque SAP rechace todo: el intento también es un hecho. */
+    it('audita igual cuando SAP rechaza', async () => {
+      client.resendToSap.mockResolvedValue(
+        resultado({ accepted: false, buckets: [], totalBuckets: 0, acceptedBuckets: 0, stillInReview: true }),
+      );
+
+      await service.resendToSap(ORDER, actor);
+
+      expect(audit.safeRecord).toHaveBeenCalledTimes(1);
+      expect(audit.safeRecord.mock.calls[0][0].detail).toContain('resultado=rechazada');
+    });
+
+    it('sin email en la sesión no se envía nada', async () => {
       await expect(service.resendToSap(ORDER, { guid: 'g-1' })).rejects.toBeInstanceOf(
         BadRequestException,
       );
       expect(client.resendToSap).not.toHaveBeenCalled();
+      expect(audit.safeRecord).not.toHaveBeenCalled();
     });
   });
 

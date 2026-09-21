@@ -160,6 +160,22 @@ lecturas no se auditan: quedan en los `ApiLogs` del Middleware. El rechazo
 (`REVISION_SAP_REJECT`) se audita **siempre** y sin condicion de "cambio": no hay rechazo que
 no cambie nada, y es la accion que cierra el documento.
 
+**Que significa cada fallo del reenvio (v2.39.1)**: el mensaje distingue si la operacion se ejecuto o no.
+Antes cualquier fallo no contemplado caia en *"SAP no confirmo el envio, verifica en SAP"* — y un 401 por API key
+equivocada mandaba a buscar en SAP un pedido que nunca se intento crear.
+
+| Fallo | Que se le dice al operador | Se ejecuto algo? |
+|---|---|---|
+| `401` / `403` | Falta `MIDDLEWARE_API_KEY` o no coincide con la del Middleware | **No.** Ni se intento |
+| `422` | El motivo del Middleware (faltan centros, sin stock) + "no se creo ningun pedido" | **No.** Corto antes de SAP |
+| `409` | El pedido ya existe: reenviarlo lo duplicaria | No (lo frena) |
+| `404` | Orden inexistente | No |
+| `ECONNREFUSED` | No se pudo contactar al Middleware | **No.** No salio |
+| **timeout** / `5xx` | *"Verifica en SAP si se crearon pedidos antes de reintentar"* | **INCIERTO** — puede haber salido una parte |
+
+La ultima fila es la unica que manda a mirar SAP, y es la unica que lo amerita: con la orden partida por centro,
+un corte a mitad de camino puede dejar algunos pedidos creados y otros no.
+
 **Rechazar (v2.38.0)**: se eligio `Rejected` y no `Annulled` porque el estado dice la verdad de
 lo que paso —alguien que evaluo la orden dijo que no— y se ve en rojo. **Del lado del vendedor no
 hubo que tocar nada**: MobilityIA ya trata el estado legacy `AuthorizationRejected` como

@@ -50,29 +50,42 @@ export function SapOrdersPanel({ sapOrders }: Props) {
 
   return (
     <div className="bo-rs__sap-attempts">
-      {intentos.map((intento, i) => (
-        <section
-          key={`${intento.source}-${intento.attemptAt ?? i}`}
-          className="bo-rs__sap-attempt"
-          aria-label={`Intento del ${formatDateTime(intento.attemptAt)} desde ${sourceLabel(intento.source)}`}
-        >
-          {/* La divisoria: cuándo fue el envío y desde qué app. El número de intento
-              cuenta desde el más viejo, así el primero es siempre el 1 aunque la lista
-              se muestre al revés. */}
-          <header className="bo-rs__sap-attempt-head">
-            <span className="bo-rs__sap-attempt-n">Intento {intentos.length - i}</span>
-            <span className="bo-rs__sap-attempt-date">{formatDateTime(intento.attemptAt)}</span>
-            <span
-              className={`bo-rs__pill bo-rs__pill--muted bo-rs__sap-attempt-app bo-rs__sap-attempt-app--${intento.source}`}
-            >
-              desde {sourceLabel(intento.source)}
-            </span>
-            <span className="bo-rs__cell--muted">
-              {intento.orders.length === 1 ? '1 orden SAP' : `${intento.orders.length} órdenes SAP`}
-            </span>
-          </header>
+      {intentos.map((intento, i) => {
+        const rechazadas = intento.orders.filter((o) => o.status === 'rejected').length;
 
-          <ul className="bo-rs__sap-orders">
+        return (
+          /* Colapsable, y con `details` nativo: se abre con teclado y sin estado propio.
+             Sólo el intento MÁS RECIENTE arranca abierto — es el que se viene a mirar—, y
+             los viejos quedan plegados para que la pestaña no descargue todo de golpe. */
+          <details
+            key={`${intento.source}-${intento.attemptAt ?? i}`}
+            className="bo-rs__sap-attempt"
+            open={i === 0}
+          >
+            {/* La divisoria: cuándo fue el envío y desde qué app. El número de intento
+                cuenta desde el más viejo, así el primero es siempre el 1 aunque la lista
+                se muestre al revés. */}
+            <summary className="bo-rs__sap-attempt-head">
+              <span className="bo-rs__sap-attempt-n">Intento {intentos.length - i}</span>
+              <span className="bo-rs__sap-attempt-date">{formatDateTime(intento.attemptAt)}</span>
+              <span
+                className={`bo-rs__pill bo-rs__pill--muted bo-rs__sap-attempt-app bo-rs__sap-attempt-app--${intento.source}`}
+              >
+                desde {sourceLabel(intento.source)}
+              </span>
+              <span className="bo-rs__cell--muted">
+                {intento.orders.length === 1 ? '1 orden SAP' : `${intento.orders.length} órdenes SAP`}
+              </span>
+              {/* Plegado, el estado tiene que verse igual: si acá hay algo rechazado, el
+                  operador no debería tener que abrir para enterarse. */}
+              {rechazadas > 0 && (
+                <span className="bo-rs__pill bo-rs__pill--danger">
+                  {rechazadas === 1 ? '1 rechazada' : `${rechazadas} rechazadas`}
+                </span>
+              )}
+            </summary>
+
+            <ul className="bo-rs__sap-orders">
             {intento.orders.map((sapOrder) => {
               const status = STATUS[sapOrder.status];
               const rechazada = sapOrder.status === 'rejected';
@@ -149,13 +162,14 @@ export function SapOrdersPanel({ sapOrders }: Props) {
                   ))}
                 </tbody>
               </table>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ))}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+        );
+      })}
     </div>
   );
 }

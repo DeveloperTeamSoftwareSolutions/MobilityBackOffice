@@ -334,6 +334,37 @@ describe('ReviewOrderDetail', () => {
       expect(titulos).toEqual(['Intento 2', 'Intento 1']);
     });
 
+    /**
+     * Cada intento es colapsable para no descargar todo de golpe. El más reciente arranca
+     * ABIERTO —es el que se viene a mirar— y los viejos, plegados.
+     */
+    it('el intento más nuevo arranca abierto y los viejos plegados', async () => {
+      api.listSapOrders.mockResolvedValue([...sapOrders, desdeMobilityIA]);
+      await renderDetail();
+      verOrdenesSap();
+
+      const plegables = document.querySelectorAll('details.bo-rs__sap-attempt');
+      expect(plegables).toHaveLength(2);
+      expect((plegables[0] as HTMLDetailsElement).open).toBe(true);
+      expect((plegables[1] as HTMLDetailsElement).open).toBe(false);
+    });
+
+    /**
+     * Plegado, lo que no puede esconderse es que algo salió mal: si hay que abrir para
+     * enterarse de un rechazo, el resumen no está haciendo su trabajo.
+     */
+    it('un intento con rechazos lo avisa aunque esté plegado', async () => {
+      api.listSapOrders.mockResolvedValue([...sapOrders, desdeMobilityIA]);
+      await renderDetail();
+      verOrdenesSap();
+
+      const plegables = document.querySelectorAll('details.bo-rs__sap-attempt');
+      const plegado = plegables[1] as HTMLDetailsElement;
+      expect(plegado.open).toBe(false);
+      // El aviso vive en el RESUMEN, que es lo único visible con el intento cerrado.
+      expect(plegado.querySelector('summary')?.textContent).toContain('1 rechazada');
+    });
+
     it('con un solo envío igual se indica de dónde vino', async () => {
       api.listSapOrders.mockResolvedValue([desdeMobilityIA]);
       await renderDetail();

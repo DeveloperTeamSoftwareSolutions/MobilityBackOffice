@@ -250,6 +250,40 @@
   border-bottom: 1px solid var(--bo-border);
   font-size: 13px;
 }
+/* Colapsable: el head es el resumen clickeable. Se saca el triangulito nativo para
+   poner uno propio que gire, sin perder que `details` abre con teclado solo. */
+.bo-rs__sap-attempt-head {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.bo-rs__sap-attempt-head::-webkit-details-marker {
+  display: none;
+}
+.bo-rs__sap-attempt-head::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  color: var(--bo-text-muted);
+  transition: transform 120ms ease;
+}
+.bo-rs__sap-attempt[open] > .bo-rs__sap-attempt-head::before {
+  transform: rotate(90deg);
+}
+.bo-rs__sap-attempt-head:hover {
+  color: var(--bo-text);
+}
+.bo-rs__sap-attempt-head:focus-visible {
+  outline: 2px solid var(--bo-primary);
+  outline-offset: 2px;
+  border-radius: var(--bo-radius-sm);
+}
+@media (prefers-reduced-motion: reduce) {
+  .bo-rs__sap-attempt-head::before { transition: none; }
+}
 .bo-rs__sap-attempt-n {
   font-weight: 600;
   color: var(--bo-text);

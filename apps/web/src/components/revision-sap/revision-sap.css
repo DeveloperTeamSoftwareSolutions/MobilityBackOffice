@@ -34,17 +34,6 @@
   color: var(--bo-text-muted);
 }
 
-/* Aviso de vista previa */
-.bo-rs__preview {
-  margin: 0;
-  padding: 10px 14px;
-  border: 1px dashed var(--bo-state-review);
-  border-radius: var(--bo-radius-sm);
-  background: rgba(124, 58, 237, 0.05);
-  color: var(--bo-state-review);
-  font-size: 13px;
-}
-
 /* Barra de búsqueda */
 .bo-rs__toolbar {
   display: flex;
@@ -576,6 +565,41 @@
   color: var(--bo-danger);
 }
 
+/* Línea cancelada: no viaja a SAP, pero sigue acá.
+   Se apaga —no se tacha el renglón entero— porque el dato tiene que seguir siendo
+   legible: es la respuesta a "por qué el pedido que llegó a SAP es más chico". Lo único
+   tachado es el código de producto, que alcanza para leer la fila de un vistazo. */
+.bo-rs__item-row--cancelled td {
+  background: var(--bo-surface-muted, rgba(100, 116, 139, 0.05));
+  border-bottom: none;
+}
+.bo-rs__item-row--cancelled .bo-rs__cell--strong {
+  text-decoration: line-through;
+  color: var(--bo-text-muted);
+}
+.bo-rs__cancelled-row td {
+  padding-top: 0;
+  background: var(--bo-surface-muted, rgba(100, 116, 139, 0.05));
+}
+.bo-rs__cancelled-reason {
+  display: block;
+  padding: 6px 10px;
+  border-left: 3px solid var(--bo-border);
+  border-radius: 0 var(--bo-radius-sm) var(--bo-radius-sm) 0;
+  color: var(--bo-text-muted);
+  font-size: 12px;
+}
+.bo-rs__th--actions,
+.bo-rs__cell--actions {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+.bo-rs__button--small {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
 /* Barra de acciones: queda a la vista mientras se recorren los ítems. */
 .bo-rs__actions {
   position: sticky;
@@ -670,6 +694,65 @@
   margin-top: 6px;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
+}
+
+/* PREVISUALIZACION del reenvio: como va a salir cada orden SAP, antes de mandarla.
+   Misma forma de tarjeta que el resultado, a proposito: lo que se ve antes y lo que
+   se ve despues son la misma unidad —un centro— y reconocerla de un lado al otro es
+   lo que deja comparar lo que se pidio con lo que contesto SAP. */
+.bo-rs__plan {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+.bo-rs__plan-order {
+  padding: 10px 12px;
+  border: 1px solid var(--bo-border);
+  border-radius: var(--bo-radius-sm);
+  background: var(--bo-bg);
+}
+.bo-rs__plan-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.bo-rs__plan-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.bo-rs__plan-item {
+  display: grid;
+  /* Linea, codigo, descripcion, cantidad. La descripcion se lleva el sobrante y la
+     cantidad queda alineada a la derecha para poder leerla en columna. */
+  grid-template-columns: 2.5em 7em 1fr auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 0;
+  border-top: 1px solid var(--bo-border);
+  font-size: 12px;
+}
+.bo-rs__plan-item .bo-rs__cell--number {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .bo-rs__plan-item {
+    /* Apilado: en pantalla angosta cuatro columnas dejan la descripcion en un hilo. */
+    grid-template-columns: 2.5em 1fr auto;
+  }
+  .bo-rs__plan-item span:nth-child(3) {
+    grid-column: 2 / -1;
+  }
 }
 
 .bo-rs__sap-lines {

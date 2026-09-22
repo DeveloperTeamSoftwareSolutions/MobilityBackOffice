@@ -2,6 +2,8 @@ import axios from 'axios';
 import { httpClient } from '../../api/httpClient';
 import {
   GroupInvoiceChangeResult,
+  ItemCancellationResult,
+  NoSaleReason,
   Pagination,
   ProductStock,
   RejectResult,
@@ -140,6 +142,57 @@ export async function resendToSap(guid: string): Promise<ResendResult> {
     `/api/revision-sap/orders/${encodeURIComponent(guid)}/resend`,
     {},
     { timeout: 210000 },
+  );
+  return res.data.data;
+}
+
+/**
+ * CANCELA una línea con motivo de no venta: deja de viajar a SAP, pero sigue viéndose
+ * en la tabla con su motivo.
+ *
+ * El motivo es obligatorio y sale del catálogo: el código es lo que hace comparables los
+ * motivos entre órdenes. La nota es opcional y explica el caso puntual.
+ *
+ * Devuelve `activosRestantes` — cuántas líneas quedan sin cancelar— para poder avisar
+ * cuando ya no queda ninguna.
+ */
+export async function cancelItem(
+  guid: string,
+  itemGuid: string,
+  reasonCode: string,
+  reasonNotes: string | null,
+): Promise<ItemCancellationResult> {
+  const res = await httpClient.post<ApiData<ItemCancellationResult>>(
+    `/api/revision-sap/orders/${encodeURIComponent(guid)}/items/${encodeURIComponent(itemGuid)}/cancel`,
+    { reasonCode, reasonNotes },
+  );
+  return res.data.data;
+}
+
+/**
+ * Deshace la cancelación de una línea.
+ *
+ * Sólo mientras no haya habido un envío posterior: ese envío ya salió sin la línea, y el
+ * servidor lo frena con un `409` que explica eso mismo.
+ */
+export async function reactivateItem(
+  guid: string,
+  itemGuid: string,
+): Promise<ItemCancellationResult> {
+  const res = await httpClient.post<ApiData<ItemCancellationResult>>(
+    `/api/revision-sap/orders/${encodeURIComponent(guid)}/items/${encodeURIComponent(itemGuid)}/reactivate`,
+    {},
+  );
+  return res.data.data;
+}
+
+/**
+ * Catálogo de motivos de no venta, sólo los activos y ya ordenados. Es el mismo que usa
+ * MobilityIA: los dos tienen que nombrar los mismos motivos con los mismos códigos.
+ */
+export async function listNoSaleReasons(): Promise<NoSaleReason[]> {
+  const res = await httpClient.get<ApiData<NoSaleReason[]>>(
+    '/api/revision-sap/no-sale-reasons',
   );
   return res.data.data;
 }

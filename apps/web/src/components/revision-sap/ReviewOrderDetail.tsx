@@ -2,29 +2,36 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatDateTime } from '../soporte/DocumentHeader';
 import {
   apiErrorMessage,
+  cancelItem,
   changeGroupInvoice,
   changeItemCenter,
   changeItemDestination,
   getReviewCatalogs,
   getReviewOrder,
+  listNoSaleReasons,
   listSapOrders,
+  reactivateItem,
   rejectOrder,
   resendToSap,
 } from './revision-sap.api';
 import {
+  activeItems,
   blockingItemCount,
+  groupSapOrdersByAttempt,
   initialDrafts,
   lineChanges,
+  planResend,
   salesAreaParts,
-  sapOrdersByCenter,
   statusLabel,
   statusTone,
 } from './revision-sap.logic';
 import {
   LineDraft,
   LineDrafts,
+  NoSaleReason,
   ResendResult,
   ReviewCatalogs,
+  ReviewItem,
   ReviewOrderDetail as Detail,
   SapOrder,
 } from './revision-sap.types';
@@ -34,7 +41,7 @@ import { SapErrorMessage } from './SapErrorMessage';
 import { GroupInvoiceModal } from './GroupInvoiceModal';
 import { RejectOrderModal } from './RejectOrderModal';
 import { ResendModal } from './ResendModal';
-import { PreviewNotice } from './PreviewNotice';
+import { CancelItemModal } from './CancelItemModal';
 
 interface Props {
   guid: string;
@@ -75,6 +82,15 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
   const [askReject, setAskReject] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [rejectError, setRejectError] = useState<string | null>(null);
+  // Cancelar una línea: se confirma con motivo. Reactivar no, porque no se pierde nada.
+  const [cancelFor, setCancelFor] = useState<ReviewItem | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  /** La línea que está esperando al servidor: apaga su botón, no toda la tabla. */
+  const [busyItemGuid, setBusyItemGuid] = useState<string | null>(null);
+  const [reasons, setReasons] = useState<NoSaleReason[]>([]);
+  const [reasonsLoading, setReasonsLoading] = useState(true);
+  const [reasonsError, setReasonsError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -99,15 +115,62 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
     };
   }, [guid]);
 
-  const changes = useMemo(() => (order ? lineChanges(order.items, drafts) : []), [order, drafts]);
   /**
-   * En cuántas órdenes SAP va a salir la orden: una por centro distinto, contando el que
-   * cada línea hereda de la cabecera. Se calcula con lo que hay EN PANTALLA —incluidos
-   * los cambios sin guardar— porque es lo que el operador está por mandar.
+   * El catálogo de motivos se pide una vez y aparte: no depende de la orden y es lo que
+   * necesita el modal de cancelación. Si falla, no se rompe el detalle — sólo no se va a
+   * poder cancelar una línea, y el modal lo dice.
    */
-  const centersToSend = useMemo(
-    () => (order ? sapOrdersByCenter(order.items, drafts, order.centerCode).length : 0),
-    [order, drafts],
+  useEffect(() => {
+    let cancelled = false;
+    setReasonsLoading(true);
+    listNoSaleReasons()
+      .then((data) => {
+        if (!cancelled) setReasons(data);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setReasonsError(
+            apiErrorMessage(err, 'No se pudo cargar el catálogo de motivos de no venta.'),
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReasonsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const changes = useMemo(() => (order ? lineChanges(order.items, drafts) : []), [order, drafts]);
+  /** Código -> etiqueta, para mostrar el motivo de una línea cancelada con su nombre. */
+  const reasonLabels = useMemo(
+    () => Object.fromEntries(reasons.map((r) => [r.code, r.label])),
+    [reasons],
+  );
+  const activos = useMemo(() => (order ? activeItems(order.items) : []), [order]);
+  /**
+   * Cómo va a salir el próximo envío: una orden SAP por centro, con sus productos y el
+   * número de intento. Se calcula con lo que hay EN PANTALLA —incluidos los cambios sin
+   * guardar— porque es lo que el operador está por mandar; y sin las líneas canceladas,
+   * porque ésas no viajan.
+   *
+   * El número de intento sale de agrupar las órdenes SAP que ya existen: el próximo es el
+   * siguiente. Es el mismo agrupamiento que muestra la pestaña "Órdenes SAP", así que los
+   * dos números coinciden.
+   */
+  const plan = useMemo(
+    () =>
+      order
+        ? planResend(
+            order.items,
+            drafts,
+            order.centerCode,
+            catalogs?.centers ?? [],
+            groupSapOrdersByAttempt(sapOrders).length,
+          )
+        : { orders: [], attemptNumber: 1, cancelledCount: 0, itemCount: 0 },
+    [order, drafts, catalogs, sapOrders],
   );
   const blocking = useMemo(
     () =>
@@ -250,6 +313,61 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
   }
 
   /**
+   * Cancela una línea con su motivo de no venta.
+   *
+   * Recarga la orden en vez de parchear la línea: la respuesta trae la línea, pero el
+   * detalle también cambia alrededor —`BackofficeDecidedBy`, y el resto de las líneas si
+   * alguien más tocó la orden—. Parchear sólo la línea dejaría la pantalla contando una
+   * verdad a medias.
+   */
+  async function onConfirmCancelItem(reasonCode: string, reasonNotes: string | null) {
+    if (!order || !cancelFor) return;
+    setCancelling(true);
+    setCancelError(null);
+    try {
+      const result = await cancelItem(order.guid, cancelFor.guid, reasonCode, reasonNotes);
+      const fresh = await getReviewOrder(order.guid);
+      setOrder(fresh);
+      setDrafts(initialDrafts(fresh.items));
+      setCancelFor(null);
+      setSaveMessage(
+        result.activosRestantes === 0
+          ? 'La línea quedó cancelada. No queda ninguna línea activa: el envío a SAP no va a poder salir.'
+          : `La línea quedó cancelada y no se va a enviar a SAP. Quedan ${
+              result.activosRestantes === 1 ? '1 línea activa' : `${result.activosRestantes} líneas activas`
+            }.`,
+      );
+    } catch (err) {
+      setCancelError(apiErrorMessage(err, 'No se pudo cancelar la línea.'));
+    }
+    setCancelling(false);
+  }
+
+  /**
+   * Reactiva una línea cancelada. No se confirma: no destruye nada y se puede volver a
+   * cancelar. El servidor lo frena si hubo un envío después de la cancelación, y ese
+   * mensaje es el que se muestra.
+   */
+  async function onReactivateItem(item: ReviewItem) {
+    if (!order) return;
+    setBusyItemGuid(item.guid);
+    setSaveMessage(null);
+    try {
+      await reactivateItem(order.guid, item.guid);
+      const fresh = await getReviewOrder(order.guid);
+      setOrder(fresh);
+      setDrafts(initialDrafts(fresh.items));
+      setSaveMessage(`La línea ${item.lineNumber} vuelve a incluirse en el próximo envío.`);
+    } catch (err) {
+      setSaveErrors((prev) => ({
+        ...prev,
+        [item.guid]: apiErrorMessage(err, 'No se pudo reactivar la línea.'),
+      }));
+    }
+    setBusyItemGuid(null);
+  }
+
+  /**
    * Rechaza la orden: la cierra y se la devuelve al vendedor como "Rechazada".
    *
    * No se deshace, así que después de rechazar se RECARGA la orden en vez de parchear el
@@ -304,7 +422,6 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
   return (
     <>
       {backBar}
-      <PreviewNotice />
 
       {!order.backoffice.inReview && (
         <p className="bo-rs__error" role="status">
@@ -469,6 +586,13 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
             editable={editable}
             saveErrors={saveErrors}
             onChange={onChange}
+            onCancelItem={(item) => {
+              setCancelError(null);
+              setCancelFor(item);
+            }}
+            onReactivateItem={(item) => void onReactivateItem(item)}
+            busyItemGuid={busyItemGuid}
+            reasonLabels={reasonLabels}
           />
         </section>
       ) : (
@@ -492,7 +616,7 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
           orderNumber={order.orderNumber}
           pendingChanges={changes.length}
           blocking={blocking}
-          centersToSend={centersToSend}
+          plan={plan}
           groupInvoice={order.groupInvoice}
           sending={sending}
           result={resendResult}
@@ -512,6 +636,34 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
           onCancel={() => {
             setAskReject(false);
             setRejectError(null);
+          }}
+        />
+      )}
+
+      {cancelFor && (
+        <CancelItemModal
+          item={cancelFor}
+          reasons={reasons}
+          reasonsLoading={reasonsLoading}
+          reasonsError={reasonsError}
+          // Es la última si, sacándola, no queda ninguna activa. Se calcula con lo que
+          // hay en pantalla, que es lo mismo que va a ver el envío.
+          esLaUltima={activos.length === 1 && activos[0]?.guid === cancelFor.guid}
+          saving={cancelling}
+          error={cancelError}
+          onConfirm={(reasonCode, reasonNotes) =>
+            void onConfirmCancelItem(reasonCode, reasonNotes)
+          }
+          onCancel={() => {
+            setCancelFor(null);
+            setCancelError(null);
+          }}
+          onRejectOrder={() => {
+            // El rechazo reemplaza a la cancelación, no se suma: cerramos éste antes.
+            setCancelFor(null);
+            setCancelError(null);
+            setRejectError(null);
+            setAskReject(true);
           }}
         />
       )}

@@ -24,6 +24,8 @@ const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const DESTINATION_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const CENTER_RE = /^[A-Za-z0-9]{1,8}$/;
 const PRODUCT_RE = /^[A-Za-z0-9._-]{1,64}$/;
+/** Mismo largo que `NoSaleReasons.Code` en el middleware. */
+const REASON_CODE_RE = /^[A-Za-z0-9._-]{1,32}$/;
 const MAX_REASON = 500;
 
 /**
@@ -199,10 +201,71 @@ export class RevisionSapController {
     return { success: true, data };
   }
 
+  // POST /api/revision-sap/orders/:guid/items/:itemGuid/cancel
+  //
+  // Cancela una línea con motivo de no venta: deja de viajar a SAP, pero sigue viéndose
+  // con su motivo.
+  //
+  // Es POST y no PUT porque no edita un campo de la línea: estampa un hecho. El motivo
+  // es OBLIGATORIO y del catálogo —acá sólo se valida la FORMA del código; que exista y
+  // esté activo lo decide el middleware, que es dueño del catálogo.
+  @Post('orders/:guid/items/:itemGuid/cancel')
+  async cancelItem(
+    @Param('guid') guid: string,
+    @Param('itemGuid') itemGuid: string,
+    @Body() body: { reasonCode?: unknown; reasonNotes?: unknown } | undefined,
+    @Req() req: AuthedRequest,
+  ) {
+    const orderGuid = this.parseGuid(guid, 'guid');
+    const lineGuid = this.parseGuid(itemGuid, 'itemGuid');
+    const reasonCode = this.parseCode(
+      body?.reasonCode,
+      REASON_CODE_RE,
+      'reasonCode es obligatorio: el motivo de no venta sale del catálogo',
+    );
+    const data = await this.service.cancelItem(
+      orderGuid,
+      lineGuid,
+      reasonCode,
+      this.parseReason(body?.reasonNotes),
+      actorFrom(req),
+    );
+    return { success: true, data };
+  }
+
+  // POST /api/revision-sap/orders/:guid/items/:itemGuid/reactivate
+  //
+  // Deshace la cancelación. Sin body: no hay nada que elegir, y quién lo hace sale del
+  // token. El middleware lo frena si hubo un envío posterior a la cancelación.
+  @Post('orders/:guid/items/:itemGuid/reactivate')
+  async reactivateItem(
+    @Param('guid') guid: string,
+    @Param('itemGuid') itemGuid: string,
+    @Req() req: AuthedRequest,
+  ) {
+    const data = await this.service.reactivateItem(
+      this.parseGuid(guid, 'guid'),
+      this.parseGuid(itemGuid, 'itemGuid'),
+      actorFrom(req),
+    );
+    return { success: true, data };
+  }
+
+  // GET /api/revision-sap/no-sale-reasons
+  //
+  // Catálogo de motivos de no venta, sólo los activos. Es el MISMO que usa MobilityIA:
+  // el código es lo que hace comparables los motivos entre órdenes.
+  @Get('no-sale-reasons')
+  async noSaleReasons() {
+    const data = await this.service.listNoSaleReasons();
+    return { success: true, data };
+  }
+
   // POST /api/revision-sap/orders/:guid/resend
   //
   // Reenvía la orden COMPLETA a SAP. Sin body: qué se manda lo decide el servidor con
-  // lo que está guardado, y quién lo manda sale del token.
+  // lo que está guardado, y quién lo manda sale del token. Las líneas canceladas no
+  // viajan: las excluye el middleware al armar el envío.
   @Post('orders/:guid/resend')
   async resend(@Param('guid') guid: string, @Req() req: AuthedRequest) {
     const data = await this.service.resendToSap(this.parseGuid(guid, 'guid'), actorFrom(req));

@@ -10,6 +10,7 @@ import {
   parseSapError,
   salesAreaParts,
   sapErrorTypeLabel,
+  planResend,
   sapOrdersByCenter,
   sourceLabel,
   stockByCenter,
@@ -52,8 +53,23 @@ function item(over: Partial<ReviewItem> = {}): ReviewItem {
     centerCode: null,
     deliveryDestinationCode: '30000124',
     deliveryDestinationName: 'Inversiones',
+    cancelledAt: null,
+    cancelledBy: null,
+    noSaleReasonCode: null,
+    noSaleReasonNotes: null,
     ...over,
   };
+}
+
+/** Una línea cancelada: no viaja a SAP, pero sigue en la orden. */
+function cancelada(over: Partial<ReviewItem> = {}): ReviewItem {
+  return item({
+    cancelledAt: '2026-09-22T10:00:00.000Z',
+    cancelledBy: 'bo@duwest.com',
+    noSaleReasonCode: 'SIN_STOCK',
+    noSaleReasonNotes: null,
+    ...over,
+  });
 }
 
 const draft = (centerCode: string | null, destinationCode: string | null): LineDraft => ({
@@ -219,6 +235,116 @@ describe('centro y stock', () => {
       { centerCode: '2801', lines: [1, 2] },
       { centerCode: '2802', lines: [3] },
     ]);
+  });
+
+  /**
+   * Cancelar la línea problemática tiene que DESTRABAR la orden — es para lo que sirve.
+   * Si su aviso siguiera bloqueando, cancelarla no serviría de nada.
+   */
+  it('una línea cancelada deja de bloquear el envío', () => {
+    const rota = { guid: 'item-1', lineNumber: 1, deliveryDestinationCode: null };
+    const items = [item(rota), item({ guid: 'item-2', lineNumber: 2 })];
+    expect(blockingItemCount(items, initialDrafts(items), '2801', catalogs)).toBe(1);
+
+    const conCancelada = [cancelada(rota), item({ guid: 'item-2', lineNumber: 2 })];
+    expect(blockingItemCount(conCancelada, initialDrafts(conCancelada), '2801', catalogs)).toBe(0);
+  });
+
+  /**
+   * Una línea cancelada NO cuenta para el envío. Si contara, aparecería un centro que no
+   * va a salir — y con todas las líneas de un centro canceladas, ese centro no existe.
+   */
+  it('las líneas canceladas no cuentan para las órdenes SAP', () => {
+    const items = [
+      item(),
+      item({ guid: 'item-2', lineNumber: 2 }),
+      cancelada({ guid: 'item-3', lineNumber: 3 }),
+    ];
+    const drafts = { ...initialDrafts(items), 'item-3': draft('2802', '30000124') };
+    expect(sapOrdersByCenter(items, drafts, '2801')).toEqual([{ centerCode: '2801', lines: [1, 2] }]);
+
+    // Y con todas canceladas no queda ningún centro: no hay nada que enviar.
+    const todas = items.map((i) => cancelada({ guid: i.guid, lineNumber: i.lineNumber }));
+    expect(sapOrdersByCenter(todas, initialDrafts(todas), '2801')).toEqual([]);
+  });
+});
+
+/**
+ * LA PREVISUALIZACIÓN del reenvío (pedido 2026-09-22): "que salga un modal informando
+ * cómo van a salir las órdenes SAP (tantas como centros de distribución) con sus
+ * respectivos productos (excluyendo los cancelados), el número de intento".
+ *
+ * Se calcula en el navegador porque las dos reglas —partir por centro, excluir las
+ * canceladas— ya están acá. Lo delicado es que tiene que mostrar lo que el usuario ESTÁ
+ * POR mandar, no lo que está guardado: si movió una línea de centro y no guardó, mostrarle
+ * el centro viejo convertiría la confirmación en una trampa.
+ */
+describe('planResend', () => {
+  const centers = catalogs.centers;
+
+  it('agrupa por centro, con los productos de cada orden SAP', () => {
+    const items = [
+      item({ guid: 'item-1', lineNumber: 1 }),
+      item({ guid: 'item-2', lineNumber: 2 }),
+      item({ guid: 'item-3', lineNumber: 3, centerCode: '2802' }),
+    ];
+    const plan = planResend(items, initialDrafts(items), '2801', centers, 1);
+
+    expect(plan.orders).toHaveLength(2);
+    expect(plan.orders[0]).toMatchObject({ centerCode: '2801', centerName: 'DW Alm. Externo' });
+    expect(plan.orders[0].items.map((i) => i.lineNumber)).toEqual([1, 2]);
+    expect(plan.orders[1]).toMatchObject({ centerCode: '2802', centerName: 'DW Cartago' });
+    expect(plan.orders[1].items.map((i) => i.lineNumber)).toEqual([3]);
+    expect(plan.itemCount).toBe(3);
+    expect(plan.cancelledCount).toBe(0);
+  });
+
+  it('el intento es el siguiente al último que se hizo', () => {
+    const items = [item()];
+    expect(planResend(items, initialDrafts(items), '2801', centers, 0).attemptNumber).toBe(1);
+    expect(planResend(items, initialDrafts(items), '2801', centers, 2).attemptNumber).toBe(3);
+  });
+
+  it('las canceladas quedan afuera y se cuentan aparte', () => {
+    const items = [item(), cancelada({ guid: 'item-2', lineNumber: 2 })];
+    const plan = planResend(items, initialDrafts(items), '2801', centers, 1);
+
+    expect(plan.orders).toHaveLength(1);
+    expect(plan.orders[0].items.map((i) => i.lineNumber)).toEqual([1]);
+    expect(plan.cancelledCount).toBe(1);
+    expect(plan.itemCount).toBe(1);
+  });
+
+  /** El caso que hace rebotar el envío: sin líneas activas no sale ninguna orden SAP. */
+  it('con todo cancelado no queda ninguna orden SAP', () => {
+    const items = [cancelada(), cancelada({ guid: 'item-2', lineNumber: 2 })];
+    const plan = planResend(items, initialDrafts(items), '2801', centers, 1);
+
+    expect(plan.orders).toEqual([]);
+    expect(plan.itemCount).toBe(0);
+    expect(plan.cancelledCount).toBe(2);
+  });
+
+  /**
+   * Toma los DRAFTS, no lo guardado. Sin esto, el usuario confirmaría un envío distinto
+   * del que está mirando.
+   */
+  it('usa el centro sin guardar, no el que está en el servidor', () => {
+    const items = [item({ guid: 'item-1', lineNumber: 1, centerCode: '2801' })];
+    const drafts = { 'item-1': draft('2802', '30000124') };
+    const plan = planResend(items, drafts, '2801', centers, 0);
+
+    expect(plan.orders).toHaveLength(1);
+    expect(plan.orders[0].centerCode).toBe('2802');
+  });
+
+  /** Un centro que no está en el catálogo sale igual: esconderlo sería peor que no nombrarlo. */
+  it('un centro desconocido se muestra sin nombre, no se oculta', () => {
+    const items = [item({ guid: 'item-1', lineNumber: 1, centerCode: '9999' })];
+    const plan = planResend(items, initialDrafts(items), '2801', centers, 0);
+
+    expect(plan.orders).toHaveLength(1);
+    expect(plan.orders[0]).toMatchObject({ centerCode: '9999', centerName: null });
   });
 });
 

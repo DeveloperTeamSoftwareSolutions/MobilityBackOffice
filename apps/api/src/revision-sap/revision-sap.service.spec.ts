@@ -18,13 +18,23 @@ const item = {
   deliveryDestinationCode: '30000124',
   deliveryDestinationName: 'Inversiones',
   destinationExplicit: true,
+  cancelledAt: null,
+  cancelledBy: null,
+  noSaleReasonCode: null,
+  noSaleReasonNotes: null,
 };
 
 describe('RevisionSapService — cambio de destino', () => {
   let client: jest.Mocked<
     Pick<
       RevisionSapClient,
-      'changeItemDestination' | 'changeItemCenter' | 'changeGroupInvoice' | 'resendToSap'
+      | 'changeItemDestination'
+      | 'changeItemCenter'
+      | 'changeGroupInvoice'
+      | 'resendToSap'
+      | 'cancelItem'
+      | 'reactivateItem'
+      | 'listNoSaleReasons'
     >
   >;
   let audit: jest.Mocked<Pick<AuditService, 'safeRecord'>>;
@@ -37,6 +47,9 @@ describe('RevisionSapService — cambio de destino', () => {
       changeItemCenter: jest.fn(),
       changeGroupInvoice: jest.fn(),
       resendToSap: jest.fn(),
+      cancelItem: jest.fn(),
+      reactivateItem: jest.fn(),
+      listNoSaleReasons: jest.fn(),
     };
     audit = { safeRecord: jest.fn().mockResolvedValue(undefined) };
     service = new RevisionSapService(
@@ -133,6 +146,94 @@ describe('RevisionSapService — cambio de destino', () => {
     await expect(
       service.changeGroupInvoice(ORDER, false, null, { guid: 'g-1' }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  /**
+   * Cancelar una línea con motivo de no venta.
+   *
+   * Lo que se fija acá es la AUDITORÍA, y con el motivo adentro: la fila tiene que
+   * alcanzar para responder "¿por qué esta línea no llegó a SAP?" sin abrir la orden.
+   * A diferencia del centro y el destino, no hay `unchanged` que valga — no existe una
+   * cancelación que no cambie nada— así que se audita siempre.
+   */
+  describe('cancelar y reactivar una línea', () => {
+    const cancelada = {
+      ok: true,
+      activosRestantes: 1,
+      item: {
+        ...item,
+        cancelledAt: '2026-09-22T10:00:00.000Z',
+        cancelledBy: 'bo@duwest.com',
+        noSaleReasonCode: 'SIN_STOCK',
+        noSaleReasonNotes: 'el cliente no espera',
+      },
+    };
+
+    it('manda el motivo al middleware y lo deja en la auditoría', async () => {
+      client.cancelItem.mockResolvedValue(cancelada);
+      await service.cancelItem(ORDER, ITEM, 'SIN_STOCK', 'el cliente no espera', actor);
+
+      expect(client.cancelItem).toHaveBeenCalledWith(ORDER, ITEM, {
+        reasonCode: 'SIN_STOCK',
+        reasonNotes: 'el cliente no espera',
+        actorEmail: 'bo@duwest.com',
+      });
+      expect(audit.safeRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'REVISION_SAP_ITEM_CANCEL',
+          category: AuditCategory.SapReview,
+          entity: 'BusinessOrderItems',
+          entityId: ITEM,
+          actorEmail: 'bo@duwest.com',
+        }),
+      );
+      const detalle = audit.safeRecord.mock.calls[0][0].detail as string;
+      expect(detalle).toContain('motivo=SIN_STOCK');
+      expect(detalle).toContain('nota=el cliente no espera');
+      // Cuántas quedaron vivas: si mañana la orden se rechaza, esto lo explica solo.
+      expect(detalle).toContain('activosRestantes=1');
+    });
+
+    it('la nota es opcional y el motivo igual queda auditado', async () => {
+      client.cancelItem.mockResolvedValue({ ...cancelada, activosRestantes: 0 });
+      await service.cancelItem(ORDER, ITEM, 'PRECIO', null, actor);
+      const detalle = audit.safeRecord.mock.calls[0][0].detail as string;
+      expect(detalle).toContain('motivo=PRECIO');
+      expect(detalle).toContain('nota=-');
+      expect(detalle).toContain('activosRestantes=0');
+    });
+
+    it('sin email en la sesión no llama al middleware', async () => {
+      await expect(
+        service.cancelItem(ORDER, ITEM, 'SIN_STOCK', null, { guid: 'g-1' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(client.cancelItem).not.toHaveBeenCalled();
+    });
+
+    it('reactivar audita con su propia acción, distinta de la cancelación', async () => {
+      client.reactivateItem.mockResolvedValue({ ok: true, activosRestantes: 2, item });
+      await service.reactivateItem(ORDER, ITEM, actor);
+
+      expect(client.reactivateItem).toHaveBeenCalledWith(ORDER, ITEM, {
+        actorEmail: 'bo@duwest.com',
+      });
+      expect(audit.safeRecord).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'REVISION_SAP_ITEM_REACTIVATE' }),
+      );
+      await expect(
+        service.reactivateItem(ORDER, ITEM, { guid: 'g-1' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    /** El catálogo es una LECTURA: pasa derecho y no deja fila de auditoría. */
+    it('el catálogo de motivos no se audita', async () => {
+      client.listNoSaleReasons.mockResolvedValue([
+        { code: 'SIN_STOCK', label: 'Sin stock', sortOrder: 1 },
+      ]);
+      const reasons = await service.listNoSaleReasons();
+      expect(reasons).toHaveLength(1);
+      expect(audit.safeRecord).not.toHaveBeenCalled();
+    });
   });
 
   /**

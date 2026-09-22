@@ -93,6 +93,16 @@ export interface ReviewItem {
   deliveryDestinationCode: string | null;
   deliveryDestinationName: string | null;
   destinationExplicit: boolean;
+  /**
+   * Cancelada por BackOffice: no viaja a SAP, pero SIGUE VIÉNDOSE con su motivo. Si
+   * desapareciera, nadie podría saber por qué el pedido que llegó a SAP es más chico
+   * que el que cargó el vendedor.
+   */
+  cancelledAt: string | null;
+  cancelledBy: string | null;
+  /** Código del catálogo `NoSaleReasons`: hace comparables los motivos entre órdenes. */
+  noSaleReasonCode: string | null;
+  noSaleReasonNotes: string | null;
 }
 
 export interface SapAttempt {
@@ -161,6 +171,30 @@ export interface DestinationChangeResult {
 
 /** El cambio de centro devuelve la misma forma que el de destino. */
 export type CenterChangeResult = DestinationChangeResult;
+
+/**
+ * Motivo de no venta del catálogo `NoSaleReasons` del Middleware — el mismo que ya usa
+ * MobilityIA. Es un código y no texto libre porque hace COMPARABLES los motivos entre
+ * órdenes: cuántas líneas se perdieron por precio, cuántas por stock.
+ */
+export interface NoSaleReason {
+  code: string;
+  label: string;
+  sortOrder: number | null;
+}
+
+/**
+ * Cancelar o reactivar una línea.
+ *
+ * `activosRestantes` son las líneas que quedan SIN cancelar. La pantalla lo usa para
+ * avisar antes de cancelar la última: sin líneas activas no sale ninguna orden SAP, y
+ * para eso está "Rechazar orden".
+ */
+export interface ItemCancellationResult {
+  ok: boolean;
+  activosRestantes: number;
+  item: ReviewItem;
+}
 
 /**
  * Cambio de "agrupa factura". No devuelve una línea: es de cabecera y decide si la

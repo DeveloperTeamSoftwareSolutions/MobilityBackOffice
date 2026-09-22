@@ -253,9 +253,31 @@ Tres trampas del contrato del Middleware, resueltas en el cliente para que no se
 | 409 `SAP_ORDER_ALREADY_EXISTS` | El pedido ya existe: reenviarlo lo duplicaría |
 | Sin respuesta | *"Verificá en SAP si el pedido se creó antes de reintentar"* — **no** se reintenta a ciegas |
 
+### La previsualización del envío — 2026-09-22
+
+Antes de confirmar, el modal muestra **cómo va a salir**: una tarjeta por orden SAP, con
+su centro, **sus productos** y el **número de intento** que va a ser.
+
+No es decoración. El envío hace dos cosas que **no se ven mirando la orden**: la parte por
+centro de distribución, y deja afuera las líneas canceladas. Sin la previsualización,
+"Reenviar a SAP" es un botón que crea pedidos reales a ciegas — y un clic sin querer los
+crea igual.
+
+- Se calcula **en el navegador** (`planResend`), no se le pide al servidor: las dos reglas
+  ya están en la pantalla. Un endpoint para repetir lo que el front sabe sería una fuente
+  más de verdad que mantener sincronizada.
+- Toma los **drafts**, no lo guardado: si el usuario movió una línea de centro y todavía no
+  guardó, tiene que ver el centro que eligió. Mostrarle el viejo convertiría la
+  confirmación en una trampa.
+- El **número de intento** sale del mismo agrupamiento que muestra la pestaña "Órdenes
+  SAP" (`groupSapOrdersByAttempt`), así que los dos números coinciden.
+- **Sin líneas activas** el botón de confirmar queda apagado y el modal explica por qué, y
+  sugiere rechazar la orden. El servidor lo rechaza igual —es él quien manda— pero ofrecer
+  un botón que no funciona y devolver un error donde ya sabíamos la respuesta es peor.
+
 Lo que ya estaba resuelto y sigue valiendo:
 
-- **Confirma antes** de enviar, porque crea pedidos reales — y ahora dice **cuántos**:
+- **Confirma antes** de enviar, porque crea pedidos reales — y dice **cuántos**:
   el modal calcula los centros distintos con lo que hay en pantalla, incluidos los cambios
   sin guardar. El aviso también dice si hay cambios sin guardar (se reenviaría sin ellos)
   y cuántos productos siguen con un aviso que bloquea.
@@ -293,6 +315,38 @@ consulta devuelve lo mismo, pero sin ninguno devuelve `[]`.
 | Centro **heredado de la cabecera** fuera de los permitidos | No: avisa, puede ser el motivo del rechazo |
 | Centro sin stock / stock menor a lo pedido | No (decisión 4b) |
 
+Una línea **cancelada no genera avisos ni bloquea**: no viaja, así que su destino vacío no
+puede frenar el envío — si lo frenara, cancelar la línea problemática dejaría de destrabar
+la orden, que es justamente para lo que sirve.
+
+### Cancelar una línea con motivo de no venta — 2026-09-22
+
+Pedido: *"agregar opción para cancelar los items de la business order, con un motivo de no
+venta al cancelarlos... al reenviar a SAP no se tienen en cuenta estos items cancelados"*.
+
+La línea cancelada **no viaja a SAP pero no desaparece**: queda en la tabla, apagada, con
+su motivo y quién la canceló. Si desapareciera, nadie podría saber por qué el pedido que
+llegó a SAP es más chico que el que cargó el vendedor. Por eso en el Middleware es una
+marca propia (`CancelledAt`) y no el soft-delete.
+
+| Decisión | Por qué |
+|---|---|
+| **Motivo obligatorio del catálogo** `NoSaleReasons` + nota opcional | El código hace **comparables** las pérdidas entre órdenes (cuántas por precio, cuántas por stock); la nota explica el caso puntual. Es el mismo catálogo que usa MobilityIA |
+| **Reversible sólo si no hubo envío posterior** | Ese envío ya salió sin la línea: las órdenes SAP creadas son un hecho consumado. Lo frena el Middleware, dentro del mismo UPDATE |
+| **Se pueden cancelar todas**, pero cancelar la **última** avisa | Sin líneas el envío rebota. El modal lo dice y ofrece *Rechazar orden*, que es lo que cierra el documento y le avisa al vendedor. No lo prohíbe: quien quiera puede, sabiendo |
+| **Con todas canceladas el envío no sale** | El botón de confirmar queda apagado, y del lado del Middleware la guarda que ya existía (`422 "has no active items"`) lo corta |
+| El botón de la tabla dice **"Cancelar línea"**, no "Cancelar" | En la misma pantalla los modales usan "Cancelar" para cerrarse sin hacer nada. La misma palabra para las dos cosas es lo que hace apretar la equivocada |
+
+- Centro y destino quedan **bloqueados** mientras la línea está cancelada: elegirlos no
+  cambiaría nada y haría creer que va a salir.
+- **Reactivar no se confirma**: no destruye nada y se puede volver a cancelar. El motivo
+  queda en el hilo igual.
+- Auditoría `REVISION_SAP_ITEM_CANCEL` / `REVISION_SAP_ITEM_REACTIVATE`, **siempre** — no
+  hay cancelación que no cambie nada. El detalle lleva el motivo y cuántas líneas quedaron
+  activas: si mañana la orden se rechaza, esa fila lo explica sola.
+- El comentario en el hilo del vendedor lo deja el Middleware, con la **etiqueta** del
+  motivo y no el código: `SIN_STOCK` no le dice nada a quien lo lee desde el teléfono.
+
 ## Arquitectura
 
 ```
@@ -308,6 +362,9 @@ web  revision-sap.api.ts ──> api  /api/revision-sap/*  (rol RevisionSap)
 | `GET /api/revision-sap/orders/:guid/options?includeStock=1` | `GET /orders/:guid/options` | Centros, destinos y stock |
 | `PUT /api/revision-sap/orders/:guid/items/:itemGuid/destination` | `PUT …/destination` | Cambia el destino de una línea |
 | `PUT /api/revision-sap/orders/:guid/items/:itemGuid/center` | `PUT …/center` | Cambia el centro de una línea |
+| `POST /api/revision-sap/orders/:guid/items/:itemGuid/cancel` | `POST …/cancel` | Cancela una línea con motivo de no venta |
+| `POST /api/revision-sap/orders/:guid/items/:itemGuid/reactivate` | `POST …/reactivate` | Deshace la cancelación |
+| `GET /api/revision-sap/no-sale-reasons` | `GET /mobility/no-sale-reasons` | Catálogo de motivos, sólo activos |
 | `PUT /api/revision-sap/orders/:guid/group-invoice` | `PUT …/group-invoice` | Agrupa factura (cabecera) |
 | `GET /api/revision-sap/orders/:guid/sap-orders` | `GET …/sap-orders` | Órdenes SAP de la orden |
 
@@ -316,6 +373,9 @@ web  revision-sap.api.ts ──> api  /api/revision-sap/*  (rol RevisionSap)
   - BackOffice registra `REVISION_SAP_DESTINATION_CHANGE`, categoría `SapReview`.
   - El Middleware deja `BackofficeItemDestinationChange`, con antes y después, más un comentario en el hilo de la orden.
 - Contrato del Middleware: `MobilityMiddleWare/docs/API_BACKOFFICE_REVIEW.md` (PR #646).
+- El catálogo de motivos es el único que **no** cuelga de `backoffice-review`: es un
+  maestro compartido con MobilityIA, y ése es el punto — los dos tienen que nombrar los
+  mismos motivos con los mismos códigos.
 
 ## Archivos
 
@@ -329,20 +389,23 @@ web  revision-sap.api.ts ──> api  /api/revision-sap/*  (rol RevisionSap)
 | `RevisionSapPanel.tsx` | Contenedor: bandeja o detalle |
 | `ReviewQueueList.tsx` | Tabla de la bandeja, con el motivo separado en tipo y mensaje |
 | `ReviewOrderDetail.tsx` | Cabecera, motivo, las dos pestañas, guardado y acciones |
-| `ReviewItemsTable.tsx` | Pestaña **Productos**: centro, destino y "Ver stock" por línea |
+| `ReviewItemsTable.tsx` | Pestaña **Productos**: centro, destino, "Ver stock" y cancelar/reactivar por línea |
 | `GroupInvoiceModal.tsx` | Confirmación de agrupa factura, con lo que implica cada valor |
 | `RejectOrderModal.tsx` | Confirmación del rechazo: qué implica, y el motivo obligatorio |
-| `ResendModal.tsx` | Confirmación del reenvío (dice cuántos pedidos crea) y, después, el resultado **por centro** |
+| `CancelItemModal.tsx` | Cancelar una línea: motivo del catálogo + nota, y la advertencia de la última |
+| `ResendModal.tsx` | **Previsualización** del envío (una orden SAP por centro, con sus productos y el intento) y, después, el resultado **por centro** |
 | `SapOrdersPanel.tsx` | Pestaña **Órdenes SAP**: agrupadas por intento, con estado y productos de cada una. Solo consulta |
 | `SapErrorMessage.tsx` | El motivo de SAP: tipo como etiqueta y mensaje |
 | `ProductStockModal.tsx` | Stock por centro y almacén de un producto |
-| `PreviewNotice.tsx` | Aviso de lo que todavía no está conectado |
 | `revision-sap.api.ts` | Llamadas a la API |
 | `revision-sap.logic.ts` | Reglas puras: cambios, avisos, stock |
 | `revision-sap.types.ts` | Tipos |
 
 ## Deploy
 
+0. **Cancelar líneas exige Middleware ≥ 1.369.0** (PR #704) **y su migración SQL**
+   (`sql/MIGRATION_BusinessOrderItems_CancelacionConMotivo.sql`, aditiva e idempotente).
+   Sin las columnas, el detalle de la orden falla con `Invalid column name`.
 1. **Middleware ≥ 1.348.0** (PR #646) con `MIDDLEWARE_API_KEY` configurada.
 2. **SQL 008** (`008_AddRevisionSapRole.sql`) en la base del entorno, y asignar
    `MOBILITYBO_REVISION_SAP` en ITManager a quien opere la sección.

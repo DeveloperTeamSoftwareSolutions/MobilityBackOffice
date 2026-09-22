@@ -1,5 +1,12 @@
 import { Fragment, useState } from 'react';
-import { draftFor, effectiveCenter, formatQuantity, itemWarnings } from './revision-sap.logic';
+import { formatDateTime } from '../soporte/DocumentHeader';
+import {
+  draftFor,
+  effectiveCenter,
+  formatQuantity,
+  isCancelled,
+  itemWarnings,
+} from './revision-sap.logic';
 import { LineDraft, LineDrafts, ReviewCatalogs, ReviewItem } from './revision-sap.types';
 import { ProductStockModal } from './ProductStockModal';
 
@@ -12,6 +19,14 @@ interface Props {
   editable: boolean;
   saveErrors: Record<string, string>;
   onChange: (itemGuid: string, next: LineDraft) => void;
+  /** Abre el modal de cancelación de esa línea. */
+  onCancelItem: (item: ReviewItem) => void;
+  /** Reactiva la línea sin preguntar: no se pierde nada, y el motivo queda en el hilo. */
+  onReactivateItem: (item: ReviewItem) => void;
+  /** Guid de la línea que está esperando al servidor, para apagar su botón. */
+  busyItemGuid: string | null;
+  /** Etiqueta del motivo por código, del catálogo. Sin ella se muestra el código. */
+  reasonLabels: Record<string, string>;
 }
 
 /**
@@ -34,6 +49,10 @@ export function ReviewItemsTable({
   editable,
   saveErrors,
   onChange,
+  onCancelItem,
+  onReactivateItem,
+  busyItemGuid,
+  reasonLabels,
 }: Props) {
   // La línea entera, no sólo el código: el modal necesita la cantidad para decir si el
   // centro alcanza, y el guid para poder cargarle el centro elegido.
@@ -58,24 +77,36 @@ export function ReviewItemsTable({
               <th className="bo-rs__th--number">Cantidad</th>
               <th>Centro de distribución</th>
               <th>Destino de entrega</th>
+              <th className="bo-rs__th--actions">Envío</th>
             </tr>
           </thead>
           <tbody>
             {items.map((item) => {
               const draft = draftFor(item, drafts);
-              const warnings = itemWarnings(item, draft, headerCenterCode, catalogs);
+              const cancelled = isCancelled(item);
+              // Una línea cancelada no viaja: avisarle que no tiene stock, o que su
+              // destino quedó fuera del área, sería ruido sobre algo que no va a salir.
+              const warnings = cancelled
+                ? []
+                : itemWarnings(item, draft, headerCenterCode, catalogs);
               const saveError = saveErrors[item.guid];
               const changed =
-                draft.centerCode !== item.centerCode ||
-                draft.destinationCode !== item.deliveryDestinationCode;
+                !cancelled &&
+                (draft.centerCode !== item.centerCode ||
+                  draft.destinationCode !== item.deliveryDestinationCode);
               const centerKnown = catalogs.centers.some((c) => c.centerCode === draft.centerCode);
               const destination = catalogs.destinations.find(
                 (d) => d.destinationCode === draft.destinationCode,
               );
+              // Centro y destino quedan bloqueados mientras está cancelada: elegirlos no
+              // cambiaría nada y haría creer que la línea va a salir.
+              const editableLine = editable && !cancelled;
+              const busy = busyItemGuid === item.guid;
               const rowClass = [
                 'bo-rs__item-row',
                 changed ? 'bo-rs__item-row--changed' : '',
                 warnings.length > 0 || saveError ? 'bo-rs__item-row--warned' : '',
+                cancelled ? 'bo-rs__item-row--cancelled' : '',
               ]
                 .filter(Boolean)
                 .join(' ');
@@ -87,6 +118,9 @@ export function ReviewItemsTable({
                     <td>
                       <span className="bo-rs__cell--strong">{item.productCode}</span>
                       {changed && <span className="bo-rs__chip">Sin guardar</span>}
+                      {cancelled && (
+                        <span className="bo-rs__pill bo-rs__pill--muted">No se envía</span>
+                      )}
                       <span className="bo-rs__cell-sub">{item.productDescription ?? '—'}</span>
                     </td>
                     <td className="bo-rs__cell--number">
@@ -97,7 +131,7 @@ export function ReviewItemsTable({
                         className="bo-rs__select"
                         aria-label={`Centro de distribución de la línea ${item.lineNumber}`}
                         value={draft.centerCode ?? ''}
-                        disabled={!editable}
+                        disabled={!editableLine}
                         onChange={(e) =>
                           onChange(item.guid, { ...draft, centerCode: e.target.value || null })
                         }
@@ -132,7 +166,7 @@ export function ReviewItemsTable({
                         className="bo-rs__link-button bo-rs__stock-link"
                         onClick={() => setStockFor(item)}
                       >
-                        {editable ? 'Ver stock y elegir centro' : 'Ver stock por centro'}
+                        {editableLine ? 'Ver stock y elegir centro' : 'Ver stock por centro'}
                       </button>
                     </td>
                     <td>
@@ -140,7 +174,7 @@ export function ReviewItemsTable({
                         className="bo-rs__select"
                         aria-label={`Destino de entrega de la línea ${item.lineNumber}`}
                         value={draft.destinationCode ?? ''}
-                        disabled={!editable}
+                        disabled={!editableLine}
                         onChange={(e) =>
                           onChange(item.guid, { ...draft, destinationCode: e.target.value || null })
                         }
@@ -161,11 +195,70 @@ export function ReviewItemsTable({
                         <span className="bo-rs__cell-sub">{destination.deliveryAddress}</span>
                       )}
                     </td>
+                    <td className="bo-rs__cell--actions">
+                      {cancelled ? (
+                        <button
+                          type="button"
+                          className="bo-rs__button bo-rs__button--ghost bo-rs__button--small"
+                          disabled={!editable || busy}
+                          onClick={() => onReactivateItem(item)}
+                          title={
+                            editable
+                              ? 'Vuelve a incluirse en el próximo envío'
+                              : 'La orden ya no está en revisión'
+                          }
+                        >
+                          {busy ? 'Reactivando…' : 'Reactivar'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="bo-rs__button bo-rs__button--ghost bo-rs__button--small"
+                          disabled={!editable || busy}
+                          onClick={() => onCancelItem(item)}
+                          title={
+                            editable
+                              ? 'La línea deja de enviarse a SAP, con un motivo de no venta'
+                              : 'La orden ya no está en revisión'
+                          }
+                        >
+                          {/* "Cancelar línea" y no "Cancelar" a secas: en esta misma
+                              pantalla los modales usan "Cancelar" para cerrarse sin hacer
+                              nada, y acá significaría lo contrario —una acción que SÍ
+                              cambia la orden—. La misma palabra para las dos cosas es
+                              exactamente lo que hace apretar la equivocada. */}
+                          Cancelar línea
+                        </button>
+                      )}
+                    </td>
                   </tr>
+                  {cancelled && (
+                    // El motivo va en su propia fila y no en un tooltip: es la respuesta a
+                    // "por qué esto no llegó a SAP", y tiene que leerse sin pasar el mouse.
+                    <tr className="bo-rs__cancelled-row">
+                      <td />
+                      <td colSpan={5}>
+                        <span className="bo-rs__cancelled-reason">
+                          <strong>
+                            {item.noSaleReasonCode
+                              ? (reasonLabels[item.noSaleReasonCode] ?? item.noSaleReasonCode)
+                              : 'Sin motivo registrado'}
+                          </strong>
+                          {item.noSaleReasonNotes ? ` · ${item.noSaleReasonNotes}` : ''}
+                        </span>
+                        {item.cancelledBy && (
+                          <span className="bo-rs__cell-sub">
+                            Cancelada por {item.cancelledBy}
+                            {item.cancelledAt ? ` · ${formatDateTime(item.cancelledAt)}` : ''}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )}
                   {(warnings.length > 0 || saveError) && (
                     <tr className="bo-rs__warning-row">
                       <td />
-                      <td colSpan={4}>
+                      <td colSpan={5}>
                         <ul className="bo-rs__warnings">
                           {saveError && (
                             <li className="bo-rs__warning bo-rs__warning--blocking">{saveError}</li>
@@ -201,10 +294,11 @@ export function ReviewItemsTable({
           quantity={stockFor.quantity}
           currentCenter={effectiveCenter(draftFor(stockFor, drafts).centerCode, headerCenterCode).code}
           centers={catalogs.centers}
-          // Sólo se puede elegir si la orden se puede editar. En solo lectura el modal
-          // sigue sirviendo para mirar.
+          // Sólo se puede elegir si la orden se puede editar, y si la línea no está
+          // cancelada: elegirle un centro a algo que no va a salir no cambia nada. En
+          // solo lectura el modal sigue sirviendo para mirar.
           onSelectCenter={
-            editable
+            editable && !isCancelled(stockFor)
               ? (centerCode) => {
                   onChange(stockFor.guid, { ...draftFor(stockFor, drafts), centerCode });
                   setStockFor(null);

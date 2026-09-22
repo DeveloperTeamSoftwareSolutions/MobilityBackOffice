@@ -73,6 +73,37 @@ export interface ReviewItem {
   centerCode: string | null;
   deliveryDestinationCode: string | null;
   deliveryDestinationName: string | null;
+  /**
+   * Cancelada por BackOffice: NO viaja a SAP, pero sigue en la tabla con su motivo. Si
+   * desapareciera, nadie podría saber por qué el pedido que llegó a SAP es más chico que
+   * el que cargó el vendedor.
+   */
+  cancelledAt: string | null;
+  cancelledBy: string | null;
+  noSaleReasonCode: string | null;
+  noSaleReasonNotes: string | null;
+}
+
+/**
+ * Motivo de no venta del catálogo compartido con MobilityIA. Es un código y no texto
+ * libre porque hace comparables los motivos entre órdenes.
+ */
+export interface NoSaleReason {
+  code: string;
+  label: string;
+  sortOrder: number | null;
+}
+
+/**
+ * Resultado de cancelar o reactivar una línea.
+ *
+ * `activosRestantes` son las líneas que quedan SIN cancelar: es lo que deja avisar antes
+ * de cancelar la última, cuando ya no podría salir ninguna orden SAP.
+ */
+export interface ItemCancellationResult {
+  ok: boolean;
+  activosRestantes: number;
+  item: ReviewItem;
 }
 
 export interface SapAttempt {
@@ -276,6 +307,37 @@ export interface ProductStock {
   totals: { available: number; availableForCustomer: number; centers: number };
   rows: ProductStockRow[];
   errors: { source: string; message: string }[];
+}
+
+/**
+ * Una orden SAP tal como VA A SALIR, antes de apretar el botón.
+ *
+ * Es el reverso de `SapOrder`: la misma unidad —un centro de distribución— pero armada
+ * con lo que hay en pantalla, no con lo que volvió del servidor. Se calcula en el
+ * navegador y no se le pide al Middleware: el envío parte por centro y las líneas
+ * canceladas no viajan, y las dos cosas ya están acá.
+ */
+export interface PlannedSapOrder {
+  /** `null` es "el de la cabecera": la línea sale con el centro de la orden. */
+  centerCode: string | null;
+  centerName: string | null;
+  /** Las líneas ACTIVAS que caen en este centro. Las canceladas no están. */
+  items: ReviewItem[];
+}
+
+/**
+ * Cómo va a quedar el próximo envío. Es lo que se muestra al confirmar el reenvío, para
+ * que "Reenviar a SAP" deje de ser un botón a ciegas.
+ */
+export interface ResendPlan {
+  /** Una por centro. Vacío = no hay nada que enviar. */
+  orders: PlannedSapOrder[];
+  /** Qué número de intento va a ser. El primero es 1. */
+  attemptNumber: number;
+  /** Líneas canceladas que quedan fuera: se cuentan para que el faltante no sorprenda. */
+  cancelledCount: number;
+  /** Líneas que sí viajan, sumando todos los centros. */
+  itemCount: number;
 }
 
 /**

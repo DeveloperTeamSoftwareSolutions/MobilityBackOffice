@@ -36,9 +36,9 @@ prueba ahi corre contra datos productivos, y la columna PROD de las tablas de ab
 | 003 | `003_ContinentProfitCentersCompanyCode.sql` | `CompanyCode` + clave unica triple | [x] verificado 2026-07-20 (aplicado por MM) | [x] verificado 2026-09-22 (columna + `UX_..._Cont_Cebe_Company_Active`) |
 | 004 | `004_ViewProfitCentersMobility.sql` | Versiona `dbo.VIEW_ProfitCentersMobility` (se consumia sin estar en ningun repo) | [x] verificado 2026-07-20 (ya existia; **el script NO la modifico**) | [x] existe en PROD (dump 2026-08-05) |
 | 005 | `005_ViewV2CompaniesMobility.sql` | Crea `dbo.VIEW_V2_CompaniesMobility` (wrapper cross-DB sobre `[SAPServices].[dbo].[Companies]`). La consume el Middleware para el typeahead de sociedades del alta de CEBE | [x] ya existia en QATEST | [x] verificado 2026-09-22: la vista existe (creada 2026-08-04) |
-| 006 | `006_AddSupportRole.sql` | Rol `MOBILITYBO_SUPPORT` + permisos `SUPPORT_VIEW` / `SUPPORT_OVERRIDE` + mapeo (tambien a SUPERADMIN). Habilita la consola de soporte (v2.1.0) | [ ] **pendiente** | [ ] **PENDIENTE** — 2026-09-22: no existe `MOBILITYBO_SUPPORT` |
+| 006 | `006_AddSupportRole.sql` | Rol `MOBILITYBO_SUPPORT` + permisos `SUPPORT_VIEW` / `SUPPORT_OVERRIDE` + mapeo (tambien a SUPERADMIN). Habilita la consola de soporte (v2.1.0) | [ ] **pendiente** | [x] aplicado 2026-09-22 (`MOBILITYBO_SUPPORT` verificado) |
 | 007 | `007_AddUserRole.sql` | Rol `MOBILITYBO_USER` + permiso `USER_ACCESS` + herencia de los permisos de Administrador y Marketing (excluye los de soporte). Habilita el rol Usuario: todo el back-office menos la consola de soporte (v2.11.0) | [ ] **pendiente** | [x] verificado 2026-09-22: `MOBILITYBO_USER` existe |
-| 008 | `008_AddRevisionSapRole.sql` | Rol `MOBILITYBO_REVISION_SAP` + permisos `REVISION_SAP_VIEW` / `REVISION_SAP_RESEND` + mapeo (tambien a SUPERADMIN). Habilita la seccion "Ordenes rechazadas por SAP" (v2.27.0) | [x] aplicado 2026-09-15 | [ ] **PENDIENTE** — 2026-09-22: no existe `MOBILITYBO_REVISION_SAP` |
+| 008 | `008_AddRevisionSapRole.sql` | Rol `MOBILITYBO_REVISION_SAP` + permisos `REVISION_SAP_VIEW` / `REVISION_SAP_RESEND` + mapeo (tambien a SUPERADMIN). Habilita la seccion "Ordenes rechazadas por SAP" (v2.27.0) | [x] aplicado 2026-09-15 | [x] aplicado 2026-09-22 (`MOBILITYBO_REVISION_SAP` verificado) |
 
 Orden de ejecucion: **001 → 002 → 003 → 004 → 005 → 006 → 007 → 008**. El 003 requiere que el 002 ya exista.
 El 006, el 007 y el 008 requieren el 001 (sin la Application, el rol no tiene donde colgarse).
@@ -132,11 +132,10 @@ Es de solo lectura y describe estructura, no datos.
 | Base y collation | `Mobility-PROD`, `Latin1_General_100_CI_AI_SC`, SQL Server 15.0.4455.2 |
 
 Roles, por consulta directa `SELECT RoleKey FROM dbo.Roles WHERE RoleKey LIKE 'MOBILITYBO%'`:
-existen `MOBILITYBO_SUPERADMIN`, `MOBILITYBO_ADMIN`, `MOBILITYBO_MARKETING` y `MOBILITYBO_USER`.
+a la mañana existian cuatro (`SUPERADMIN`, `ADMIN`, `MARKETING`, `USER`). Faltaban el `006` y el
+`008`; se aplicaron ese mismo dia y la consulta devolvio los **seis** roles.
 
-**Falta correr en `Mobility-PROD`**: el `006` (rol Soporte) y el `008` (rol Revision SAP). Sin
-ellos esos roles no se pueden asignar en ITManager y sus secciones responden 403. El resto del
-back-office no se ve afectado.
+**No queda ningun script de BackOffice pendiente en `Mobility-PROD`.**
 
 ⚠️ La collation de la base NO es la `_CI_AS_` que menciona el `CLAUDE.md` del proyecto: es
 `Latin1_General_100_CI_AI_SC`. Conviene revisar esa afirmacion antes de escribir un JOIN

@@ -335,17 +335,51 @@ describe('groupSapOrdersByAttempt', () => {
   });
 
   /**
-   * `source` existe desde el Middleware 1.368.0. Contra uno anterior llega `undefined`, y
-   * la pantalla no puede quedar diciendo "desde" y nada: se cae al envío del vendedor,
-   * el mismo default que usa el middleware cuando no puede deducirlo.
+   * `source` existe desde el Middleware 1.368.0. Contra uno anterior llega `undefined` y
+   * hay que deducirlo del CENTRO, que es la misma huella del otro lado: el envío del
+   * vendedor no guarda `CenterCode` en la fila de SAPOrders; el de BackOffice sí, una
+   * por centro.
+   *
+   * Sin este respaldo, todas se leen como del vendedor —que nunca agrupa— y cada orden
+   * SAP aparece como un intento suelto. Es el caso real de la orden 475 contra el
+   * middleware 1.367.0.
    */
-  it('si el middleware es viejo y no manda el origen, no se rompe', () => {
-    const sinOrigen = { ...orden(), source: undefined as unknown as SapOrder['source'] };
-    const intentos = groupSapOrdersByAttempt([sinOrigen]);
+  describe('si el middleware es viejo y no manda el origen', () => {
+    const sinOrigen = (over: Partial<SapOrder> = {}) => ({
+      ...orden(over),
+      source: undefined as unknown as SapOrder['source'],
+    });
 
-    expect(intentos).toHaveLength(1);
-    expect(intentos[0].source).toBe('mobilityia');
-    expect(sourceLabel(intentos[0].source)).toBe('MobilityIA');
+    it('con centro se deduce BackOffice, y agrupan', () => {
+      const intentos = groupSapOrdersByAttempt([
+        sinOrigen({ centerCode: '2105', attemptAt: '2026-09-21T20:39:01.185Z' }),
+        sinOrigen({ centerCode: '2104', attemptAt: '2026-09-21T20:39:01.055Z' }),
+      ]);
+
+      expect(intentos).toHaveLength(1);
+      expect(intentos[0].source).toBe('backoffice');
+    });
+
+    it('sin centro se deduce MobilityIA', () => {
+      const intentos = groupSapOrdersByAttempt([sinOrigen({ centerCode: null })]);
+      expect(intentos[0].source).toBe('mobilityia');
+      expect(sourceLabel(intentos[0].source)).toBe('MobilityIA');
+    });
+
+    /** El caso completo de la orden 475: un envío del vendedor y un reenvío en dos. */
+    it('la orden 475 se lee bien igual: dos intentos, no tres', () => {
+      const intentos = groupSapOrdersByAttempt([
+        sinOrigen({ centerCode: '2105', attemptAt: '2026-09-21T20:39:01.185Z' }),
+        sinOrigen({ centerCode: '2104', attemptAt: '2026-09-21T20:39:01.055Z' }),
+        sinOrigen({ centerCode: null, attemptAt: '2026-09-21T12:53:56.690Z' }),
+      ]);
+
+      expect(intentos).toHaveLength(2);
+      expect(intentos[0].source).toBe('backoffice');
+      expect(intentos[0].orders).toHaveLength(2);
+      expect(intentos[1].source).toBe('mobilityia');
+      expect(intentos[1].orders).toHaveLength(1);
+    });
   });
 });
 

@@ -373,12 +373,24 @@ const APP: Record<SapOrderSource, string> = {
 /**
  * De qué app viene una orden SAP, tolerando que el middleware no lo mande.
  *
- * `source` existe desde el Middleware 1.368.0. Contra uno anterior llega `undefined`, y
- * sin esto la divisoria diría "desde" y nada. Se cae al envío del vendedor, que es el
- * mismo default que usa el middleware cuando no puede deducirlo.
+ * `source` existe desde el Middleware **1.368.0**. Contra uno anterior llega `undefined`,
+ * y ahí se cae al **centro**, que es la misma huella vista desde el otro lado:
+ *
+ *   - el envío del vendedor (`businessorders2sap`) manda la orden entera y **no guarda
+ *     `CenterCode`** en la fila de `SAPOrders`;
+ *   - el de BackOffice crea una fila POR CENTRO y lo guarda en cada una.
+ *
+ * Verificado en el repositorio del middleware: el insert clásico no incluye la columna y
+ * `updateSapResult` no la toca. Así que "tiene centro" equivale a "salió de BackOffice"
+ * mientras la fila venga de este circuito.
+ *
+ * El respaldo no es cosmético: sin él, contra un middleware anterior TODAS las órdenes
+ * SAP se leen como del vendedor —que nunca agrupa— y cada una aparece como un intento
+ * suelto. Que es justo lo que esta pantalla vino a evitar.
  */
 function sourceOf(orden: SapOrder): SapOrderSource {
-  return orden.source === 'backoffice' ? 'backoffice' : 'mobilityia';
+  if (orden.source === 'backoffice' || orden.source === 'mobilityia') return orden.source;
+  return orden.centerCode ? 'backoffice' : 'mobilityia';
 }
 
 /** El nombre de la app que hizo el envío, para el encabezado del intento. */

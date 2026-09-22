@@ -89,6 +89,10 @@ const sapOrders: SapOrder[] = [
     guid: 'sap-ok',
     status: 'accepted',
     statusCode: 'Authorized',
+    // Las dos salieron del MISMO envío de BackOffice: mismo número base, sufijo distinto
+    // por centro. Es lo que las agrupa en un solo intento.
+    orderNumber: 'ORD00005729S1',
+    source: 'backoffice',
     centerCode: '2801',
     centerName: 'DW Alm. Externo',
     attemptAt: '2026-09-15T16:00:00Z',
@@ -113,6 +117,8 @@ const sapOrders: SapOrder[] = [
     guid: 'sap-rej',
     status: 'rejected',
     statusCode: 'Draft',
+    orderNumber: 'ORD00005729S2',
+    source: 'backoffice',
     centerCode: '2802',
     centerName: 'DW Cartago',
     attemptAt: '2026-09-15T16:00:00Z',
@@ -282,6 +288,92 @@ describe('ReviewOrderDetail', () => {
     api.getReviewOrder.mockResolvedValue(order({ groupInvoice: true }));
     render(<ReviewOrderDetail guid={ORDER} onBack={() => undefined} />);
     expect(await screen.findByText(/no puede salir parcial/)).toBeTruthy();
+  });
+
+  /**
+   * Las órdenes SAP se separan POR ENVÍO (pedido 2026-09-22), con una divisoria que dice
+   * cuándo fue y desde qué app.
+   *
+   * Sin esto, una orden con órdenes SAP del vendedor y de un reenvío de BackOffice las
+   * muestra en una lista corrida, y parecen todas del mismo intento.
+   */
+  describe('las órdenes SAP se separan por intento', () => {
+    /** Un envío del vendedor (una sola orden SAP, sin centro) además de las dos de BackOffice. */
+    const desdeMobilityIA = {
+      ...sapOrders[1],
+      guid: 'sap-ia',
+      orderNumber: 'ORD00005729',
+      source: 'mobilityia' as const,
+      centerCode: null,
+      centerName: null,
+      attemptAt: '2026-09-15T10:00:00Z',
+    };
+
+    it('muestra una divisoria por envío, con su fecha y su app', async () => {
+      api.listSapOrders.mockResolvedValue([...sapOrders, desdeMobilityIA]);
+      await renderDetail();
+      verOrdenesSap();
+
+      // Dos intentos: el reenvío de BackOffice (2 órdenes SAP) y el del vendedor (1).
+      expect(screen.getByText('Intento 2')).toBeTruthy();
+      expect(screen.getByText('Intento 1')).toBeTruthy();
+      expect(screen.getByText('desde BackOffice')).toBeTruthy();
+      expect(screen.getByText('desde MobilityIA')).toBeTruthy();
+      // Y cuántas órdenes SAP salieron en cada uno.
+      expect(screen.getByText('2 órdenes SAP')).toBeTruthy();
+      expect(screen.getByText('1 orden SAP')).toBeTruthy();
+    });
+
+    /** El más reciente primero: es el que se mira al abrir. */
+    it('el intento más nuevo va arriba', async () => {
+      api.listSapOrders.mockResolvedValue([...sapOrders, desdeMobilityIA]);
+      await renderDetail();
+      verOrdenesSap();
+
+      const titulos = screen.getAllByText(/^Intento \d$/).map((n) => n.textContent);
+      expect(titulos).toEqual(['Intento 2', 'Intento 1']);
+    });
+
+    /**
+     * Cada intento es colapsable para no descargar todo de golpe. El más reciente arranca
+     * ABIERTO —es el que se viene a mirar— y los viejos, plegados.
+     */
+    it('el intento más nuevo arranca abierto y los viejos plegados', async () => {
+      api.listSapOrders.mockResolvedValue([...sapOrders, desdeMobilityIA]);
+      await renderDetail();
+      verOrdenesSap();
+
+      const plegables = document.querySelectorAll('details.bo-rs__sap-attempt');
+      expect(plegables).toHaveLength(2);
+      expect((plegables[0] as HTMLDetailsElement).open).toBe(true);
+      expect((plegables[1] as HTMLDetailsElement).open).toBe(false);
+    });
+
+    /**
+     * Plegado, lo que no puede esconderse es que algo salió mal: si hay que abrir para
+     * enterarse de un rechazo, el resumen no está haciendo su trabajo.
+     */
+    it('un intento con rechazos lo avisa aunque esté plegado', async () => {
+      api.listSapOrders.mockResolvedValue([...sapOrders, desdeMobilityIA]);
+      await renderDetail();
+      verOrdenesSap();
+
+      const plegables = document.querySelectorAll('details.bo-rs__sap-attempt');
+      const plegado = plegables[1] as HTMLDetailsElement;
+      expect(plegado.open).toBe(false);
+      // El aviso vive en el RESUMEN, que es lo único visible con el intento cerrado.
+      expect(plegado.querySelector('summary')?.textContent).toContain('1 rechazada');
+    });
+
+    it('con un solo envío igual se indica de dónde vino', async () => {
+      api.listSapOrders.mockResolvedValue([desdeMobilityIA]);
+      await renderDetail();
+      verOrdenesSap();
+
+      expect(screen.getByText('Intento 1')).toBeTruthy();
+      expect(screen.getByText('desde MobilityIA')).toBeTruthy();
+      expect(screen.getByText('1 orden SAP')).toBeTruthy();
+    });
   });
 
   it('cada orden SAP muestra su centro y su estado, en su pestaña', async () => {

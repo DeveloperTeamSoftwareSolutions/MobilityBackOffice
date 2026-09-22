@@ -3,6 +3,7 @@ import {
   blockingItemCount,
   cubreLaCantidad,
   effectiveCenter,
+  groupSapOrdersByAttempt,
   initialDrafts,
   itemWarnings,
   lineChanges,
@@ -10,10 +11,17 @@ import {
   salesAreaParts,
   sapErrorTypeLabel,
   sapOrdersByCenter,
+  sourceLabel,
   stockByCenter,
   stockFor,
 } from './revision-sap.logic';
-import { LineDraft, ProductStockRow, ReviewCatalogs, ReviewItem } from './revision-sap.types';
+import {
+  LineDraft,
+  ProductStockRow,
+  ReviewCatalogs,
+  ReviewItem,
+  SapOrder,
+} from './revision-sap.types';
 
 /**
  * Lo que se fija acá es qué frena y qué solo avisa.
@@ -211,6 +219,167 @@ describe('centro y stock', () => {
       { centerCode: '2801', lines: [1, 2] },
       { centerCode: '2802', lines: [3] },
     ]);
+  });
+});
+
+/**
+ * Separar las órdenes SAP POR INTENTO (pedido 2026-09-22).
+ *
+ * Una orden puede tener órdenes SAP de varios envíos: el del vendedor desde MobilityIA y
+ * los reenvíos de BackOffice, que además crean UNA POR CENTRO. Mostrarlas en una sola
+ * lista las hace parecer una tanda; hay que saber cuáles salieron juntas.
+ *
+ * Lo delicado es que no hay un "id de envío" guardado: se deduce. Estos tests fijan las
+ * reglas de esa deducción, que es donde puede fallar en silencio.
+ */
+describe('groupSapOrdersByAttempt', () => {
+  const orden = (over: Partial<SapOrder> = {}): SapOrder => ({
+    guid: 'sap-' + Math.random().toString(36).slice(2, 8),
+    status: 'accepted',
+    statusCode: 'Authorized',
+    orderNumber: 'ORD475S1',
+    source: 'backoffice',
+    centerCode: '2105',
+    centerName: null,
+    attemptAt: '2026-09-21T20:39:01.055Z',
+    sapOrderNumber: '0002489380',
+    sapDispatchNumber: '0082948112',
+    error: null,
+    items: [],
+    ...over,
+  });
+
+  /** El caso real de la orden 475: un envío del vendedor y un reenvío que salió en dos. */
+  it('separa el envío del vendedor del reenvío de BackOffice', () => {
+    const intentos = groupSapOrdersByAttempt([
+      orden({ centerCode: '2105', attemptAt: '2026-09-21T20:39:01.185Z' }),
+      orden({ centerCode: '2104', attemptAt: '2026-09-21T20:39:01.055Z' }),
+      orden({
+        source: 'mobilityia',
+        orderNumber: 'ORD475',
+        centerCode: null,
+        attemptAt: '2026-09-21T12:53:56.690Z',
+      }),
+    ]);
+
+    expect(intentos).toHaveLength(2);
+    expect(intentos[0].source).toBe('backoffice');
+    expect(intentos[0].orders).toHaveLength(2);
+    expect(intentos[1].source).toBe('mobilityia');
+    expect(intentos[1].orders).toHaveLength(1);
+  });
+
+  /**
+   * El envío del vendedor manda la orden ENTERA en una sola orden SAP, así que dos filas
+   * suyas son siempre dos intentos — aunque caigan con segundos de diferencia.
+   */
+  it('dos envíos del vendedor nunca se fusionan', () => {
+    const intentos = groupSapOrdersByAttempt([
+      orden({ source: 'mobilityia', centerCode: null, attemptAt: '2026-09-21T12:53:56Z' }),
+      orden({ source: 'mobilityia', centerCode: null, attemptAt: '2026-09-21T12:53:50Z' }),
+    ]);
+    expect(intentos).toHaveLength(2);
+  });
+
+  /**
+   * Un centro repetido es la señal más fuerte de que hay otro envío: el de BackOffice
+   * crea UNA orden SAP por centro, así que dentro de un mismo envío no se repite.
+   */
+  it('un centro que se repite abre un intento nuevo, aunque sea el mismo minuto', () => {
+    const intentos = groupSapOrdersByAttempt([
+      orden({ centerCode: '2105', attemptAt: '2026-09-21T20:39:05Z' }),
+      orden({ centerCode: '2105', attemptAt: '2026-09-21T20:39:01Z' }),
+    ]);
+    expect(intentos).toHaveLength(2);
+  });
+
+  /** Dos reenvíos separados en el tiempo, aunque usen centros distintos. */
+  it('una diferencia grande de tiempo separa los intentos', () => {
+    const intentos = groupSapOrdersByAttempt([
+      orden({ centerCode: '2105', attemptAt: '2026-09-21T20:39:00Z' }),
+      orden({ centerCode: '2104', attemptAt: '2026-09-21T14:00:00Z' }),
+    ]);
+    expect(intentos).toHaveLength(2);
+  });
+
+  /**
+   * Pero SAP puede tardar: el envío llama una vez por centro, en serie, con hasta 120 s
+   * cada una. Dos minutos de diferencia siguen siendo el mismo envío.
+   */
+  it('una demora de SAP no parte un envío en dos', () => {
+    const intentos = groupSapOrdersByAttempt([
+      orden({ centerCode: '2105', attemptAt: '2026-09-21T20:41:00Z' }),
+      orden({ centerCode: '2104', attemptAt: '2026-09-21T20:39:00Z' }),
+    ]);
+    expect(intentos).toHaveLength(1);
+    expect(intentos[0].orders).toHaveLength(2);
+    // La fecha del intento es la más reciente de sus órdenes.
+    expect(intentos[0].attemptAt).toBe('2026-09-21T20:41:00Z');
+  });
+
+  it('sin órdenes SAP no hay intentos', () => {
+    expect(groupSapOrdersByAttempt([])).toEqual([]);
+  });
+
+  it('una fecha ausente no rompe la agrupación', () => {
+    const intentos = groupSapOrdersByAttempt([
+      orden({ centerCode: '2105', attemptAt: null }),
+      orden({ centerCode: '2104', attemptAt: null }),
+    ]);
+    expect(intentos).toHaveLength(1);
+  });
+
+  it('cada app se nombra como la conoce el operador', () => {
+    expect(sourceLabel('mobilityia')).toBe('MobilityIA');
+    expect(sourceLabel('backoffice')).toBe('BackOffice');
+  });
+
+  /**
+   * `source` existe desde el Middleware 1.368.0. Contra uno anterior llega `undefined` y
+   * hay que deducirlo del CENTRO, que es la misma huella del otro lado: el envío del
+   * vendedor no guarda `CenterCode` en la fila de SAPOrders; el de BackOffice sí, una
+   * por centro.
+   *
+   * Sin este respaldo, todas se leen como del vendedor —que nunca agrupa— y cada orden
+   * SAP aparece como un intento suelto. Es el caso real de la orden 475 contra el
+   * middleware 1.367.0.
+   */
+  describe('si el middleware es viejo y no manda el origen', () => {
+    const sinOrigen = (over: Partial<SapOrder> = {}) => ({
+      ...orden(over),
+      source: undefined as unknown as SapOrder['source'],
+    });
+
+    it('con centro se deduce BackOffice, y agrupan', () => {
+      const intentos = groupSapOrdersByAttempt([
+        sinOrigen({ centerCode: '2105', attemptAt: '2026-09-21T20:39:01.185Z' }),
+        sinOrigen({ centerCode: '2104', attemptAt: '2026-09-21T20:39:01.055Z' }),
+      ]);
+
+      expect(intentos).toHaveLength(1);
+      expect(intentos[0].source).toBe('backoffice');
+    });
+
+    it('sin centro se deduce MobilityIA', () => {
+      const intentos = groupSapOrdersByAttempt([sinOrigen({ centerCode: null })]);
+      expect(intentos[0].source).toBe('mobilityia');
+      expect(sourceLabel(intentos[0].source)).toBe('MobilityIA');
+    });
+
+    /** El caso completo de la orden 475: un envío del vendedor y un reenvío en dos. */
+    it('la orden 475 se lee bien igual: dos intentos, no tres', () => {
+      const intentos = groupSapOrdersByAttempt([
+        sinOrigen({ centerCode: '2105', attemptAt: '2026-09-21T20:39:01.185Z' }),
+        sinOrigen({ centerCode: '2104', attemptAt: '2026-09-21T20:39:01.055Z' }),
+        sinOrigen({ centerCode: null, attemptAt: '2026-09-21T12:53:56.690Z' }),
+      ]);
+
+      expect(intentos).toHaveLength(2);
+      expect(intentos[0].source).toBe('backoffice');
+      expect(intentos[0].orders).toHaveLength(2);
+      expect(intentos[1].source).toBe('mobilityia');
+      expect(intentos[1].orders).toHaveLength(1);
+    });
   });
 });
 

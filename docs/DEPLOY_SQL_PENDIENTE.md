@@ -1,7 +1,7 @@
 # Checklist de scripts SQL — Mobility BackOffice
 
-> Ultima actualizacion: 2026-09-15
-> Version: 2.27.0
+> Ultima actualizacion: 2026-09-22
+> Version: 2.37.0
 
 Documento **vivo**: marcar la casilla y anotar la fecha al aplicar cada script en cada entorno.
 
@@ -20,21 +20,25 @@ Documento **vivo**: marcar la casilla y anotar la fecha al aplicar cada script e
 
 | Entorno | Base | Instancia |
 |---|---|---|
-| Local / Sandbox | `Mobility_QATEST` | `100.66.245.49:1433` |
+| Local | `Mobility_QATEST` | `100.66.245.49:1433` |
+| Sandbox (`100.100.46.73`) | **`Mobility-PROD`** (via su Middleware en `:62700`) | verificado 2026-09-22 |
 | Produccion | `Mobility-PROD` | `100.66.245.49:1433` |
+
+⚠️ El Sandbox **ya no** apunta a `Mobility_QATEST`: su Middleware lee `Mobility-PROD`. Lo que se
+prueba ahi corre contra datos productivos, y la columna PROD de las tablas de abajo es la que aplica.
 
 ## Scripts
 
 | # | Script | Contenido | QATEST | PROD |
 |---|---|---|---|---|
-| 001 | `001_RegisterMobilityBackOfficeApp.sql` | Registro de la app + 3 roles + **5 permisos + mapeo rol-permiso** en ITManager (`Applications`, `Roles`, `Permissions`, `RolePermissions`) | [x] aplicado 2026-07-20; **permisos agregados 2026-07-22** | [ ] |
-| 002 | `002_ContinentProfitCenters.sql` | Tabla M:N region↔CEBE + 2 indices | [x] verificado 2026-07-20 (aplicado por MM) | [ ] |
-| 003 | `003_ContinentProfitCentersCompanyCode.sql` | `CompanyCode` + clave unica triple | [x] verificado 2026-07-20 (aplicado por MM) | [ ] |
+| 001 | `001_RegisterMobilityBackOfficeApp.sql` | Registro de la app + 3 roles + **5 permisos + mapeo rol-permiso** en ITManager (`Applications`, `Roles`, `Permissions`, `RolePermissions`) | [x] aplicado 2026-07-20; **permisos agregados 2026-07-22** | [x] verificado 2026-09-22: la app y los 3 roles base existen |
+| 002 | `002_ContinentProfitCenters.sql` | Tabla M:N region↔CEBE + 2 indices | [x] verificado 2026-07-20 (aplicado por MM) | [x] verificado 2026-09-22 (49 filas) |
+| 003 | `003_ContinentProfitCentersCompanyCode.sql` | `CompanyCode` + clave unica triple | [x] verificado 2026-07-20 (aplicado por MM) | [x] verificado 2026-09-22 (columna + `UX_..._Cont_Cebe_Company_Active`) |
 | 004 | `004_ViewProfitCentersMobility.sql` | Versiona `dbo.VIEW_ProfitCentersMobility` (se consumia sin estar en ningun repo) | [x] verificado 2026-07-20 (ya existia; **el script NO la modifico**) | [x] existe en PROD (dump 2026-08-05) |
-| 005 | `005_ViewV2CompaniesMobility.sql` | Crea `dbo.VIEW_V2_CompaniesMobility` (wrapper cross-DB sobre `[SAPServices].[dbo].[Companies]`). La consume el Middleware para el typeahead de sociedades del alta de CEBE | [x] ya existia en QATEST | [ ] **FALTA en PROD — aplicar** |
-| 006 | `006_AddSupportRole.sql` | Rol `MOBILITYBO_SUPPORT` + permisos `SUPPORT_VIEW` / `SUPPORT_OVERRIDE` + mapeo (tambien a SUPERADMIN). Habilita la consola de soporte (v2.1.0) | [ ] **pendiente** | [ ] **pendiente** |
-| 007 | `007_AddUserRole.sql` | Rol `MOBILITYBO_USER` + permiso `USER_ACCESS` + herencia de los permisos de Administrador y Marketing (excluye los de soporte). Habilita el rol Usuario: todo el back-office menos la consola de soporte (v2.11.0) | [ ] **pendiente** | [ ] **pendiente** |
-| 008 | `008_AddRevisionSapRole.sql` | Rol `MOBILITYBO_REVISION_SAP` + permisos `REVISION_SAP_VIEW` / `REVISION_SAP_RESEND` + mapeo (tambien a SUPERADMIN). Habilita la seccion "Ordenes rechazadas por SAP" (v2.27.0) | [x] aplicado 2026-09-15 | [ ] **pendiente** |
+| 005 | `005_ViewV2CompaniesMobility.sql` | Crea `dbo.VIEW_V2_CompaniesMobility` (wrapper cross-DB sobre `[SAPServices].[dbo].[Companies]`). La consume el Middleware para el typeahead de sociedades del alta de CEBE | [x] ya existia en QATEST | [x] verificado 2026-09-22: la vista existe (creada 2026-08-04) |
+| 006 | `006_AddSupportRole.sql` | Rol `MOBILITYBO_SUPPORT` + permisos `SUPPORT_VIEW` / `SUPPORT_OVERRIDE` + mapeo (tambien a SUPERADMIN). Habilita la consola de soporte (v2.1.0) | [ ] **pendiente** | [x] aplicado 2026-09-22 (`MOBILITYBO_SUPPORT` verificado) |
+| 007 | `007_AddUserRole.sql` | Rol `MOBILITYBO_USER` + permiso `USER_ACCESS` + herencia de los permisos de Administrador y Marketing (excluye los de soporte). Habilita el rol Usuario: todo el back-office menos la consola de soporte (v2.11.0) | [ ] **pendiente** | [x] verificado 2026-09-22: `MOBILITYBO_USER` existe |
+| 008 | `008_AddRevisionSapRole.sql` | Rol `MOBILITYBO_REVISION_SAP` + permisos `REVISION_SAP_VIEW` / `REVISION_SAP_RESEND` + mapeo (tambien a SUPERADMIN). Habilita la seccion "Ordenes rechazadas por SAP" (v2.27.0) | [x] aplicado 2026-09-15 | [x] aplicado 2026-09-22 (`MOBILITYBO_REVISION_SAP` verificado) |
 
 Orden de ejecucion: **001 → 002 → 003 → 004 → 005 → 006 → 007 → 008**. El 003 requiere que el 002 ya exista.
 El 006, el 007 y el 008 requieren el 001 (sin la Application, el rol no tiene donde colgarse).
@@ -50,7 +54,7 @@ a traves del middleware ≥ 1.331.0. Se aplica y se registra **en ese repo**, no
 
 | Objeto | Repo | QATEST | PROD |
 |---|---|---|---|
-| `dbo.VIEW_RegionGroupProfitCenters` | MobilityMiddleWare | [x] aplicada 2026-09-10 | [ ] pendiente |
+| `dbo.VIEW_RegionGroupProfitCenters` | MobilityMiddleWare | [x] aplicada 2026-09-10 | [x] aplicada: existe desde 2026-09-11 (verificada 2026-09-22) |
 
 Orden de deploy: **vista → MW 1.331.0 → BackOffice 2.16.0**. Con un MW anterior, `GET /api/regions/groups`
 responde 503 "requiere MW ≥ 1.331.0" y la lista de la seccion Regiones no carga.
@@ -72,7 +76,7 @@ orden volveria sola a `Processed`, con el vendedor recuperando el boton de envia
 
 | Objeto | Repo | QATEST | PROD |
 |---|---|---|---|
-| `BusinessOrders.BackofficeRejectedAt` + `BackofficeRejectedByEmail` | MobilityMiddleWare | [x] aplicada 2026-09-18 | [ ] **pendiente** |
+| `BusinessOrders.BackofficeRejectedAt` + `BackofficeRejectedByEmail` | MobilityMiddleWare | [x] aplicada 2026-09-18 | [x] las dos columnas existen (verificado 2026-09-22) |
 
 Orden de deploy: **migracion → MW 1.360.0 → BackOffice 2.38.0**. Sin las columnas, el endpoint de rechazo
 falla y la proyeccion no ve el hecho. El script es aditivo e idempotente (chequea `sys.columns`).
@@ -90,7 +94,7 @@ PROD `Mobility-PROD-03-08.sql` y `SAPServices-PROD-03-08.sql` (2026-08-05) + QAT
 | `ContinentProfitCenters` (+ indices, unique triple) | existe | — | ninguna |
 | `VIEW_ProfitCentersMobility` | existe | existe | ninguna |
 | `Companies` | existe | existe | ninguna |
-| **`VIEW_V2_CompaniesMobility`** | **NO existe** | — | **correr `005` en Mobility-PROD** |
+| **`VIEW_V2_CompaniesMobility`** | existe (creada 2026-08-04) | — | ninguna: el `005` ya corrio |
 
 Nota de collation PROD: `ContinentProfitCenters` en PROD usa `SQL_Latin1_General_CP1_CI_AS`
 (vs. `Latin1_General_100_CI_*` en QATEST). No afecta a BackOffice —el Middleware es quien
@@ -110,13 +114,32 @@ Verificado por consulta directa, no asumido:
 - App `MobilityBackOffice` + 3 roles: creados por el 001. Re-ejecutado para confirmar
   idempotencia: sigue habiendo 1 fila en `Applications` y 3 en `Roles`.
 
-### PROD — NO verificado
+### Estado verificado en PROD — 2026-09-22
 
-**No se pudo conectar a `Mobility-PROD`**: las credenciales disponibles son de QATEST y el
-login del usuario `sa` es rechazado en PROD. Todo lo que figura como pendiente en la columna
-PROD esta **sin confirmar**, en ambos sentidos: puede que algun objeto ya exista.
+Verificado **sin credenciales de base**, por el endpoint de introspeccion del MobilityMiddleWare
+del Sandbox (`GET http://100.100.46.73:62700/api/v2/mobility/schema/...`), que lee `Mobility-PROD`.
+Es de solo lectura y describe estructura, no datos.
 
-Antes de desplegar a produccion hay que correr la verificacion de abajo con credenciales de PROD.
+| Objeto | Estado |
+|---|---|
+| `Continents`, `ContinentProfitCenters` (49 filas) | existen |
+| Columna `ContinentProfitCenters.CompanyCode` | existe |
+| Indices de `ContinentProfitCenters` | `PK_`, `UQ_..._Guid`, `IX_..._CompanyCode`, `IX_..._ProfitCenterCode` y el unico filtrado triple `UX_..._Cont_Cebe_Company_Active` |
+| `VIEW_ProfitCentersMobility`, `VIEW_V2_ProfitCentersMobility` | existen |
+| `VIEW_V2_CompaniesMobility` (script 005) | existe (creada 2026-08-04) |
+| `VIEW_RegionGroupProfitCenters` (MobilityMiddleWare) | existe (creada 2026-09-11) |
+| `BusinessOrders.BackofficeRejectedAt` / `...ByEmail` | existen |
+| Base y collation | `Mobility-PROD`, `Latin1_General_100_CI_AI_SC`, SQL Server 15.0.4455.2 |
+
+Roles, por consulta directa `SELECT RoleKey FROM dbo.Roles WHERE RoleKey LIKE 'MOBILITYBO%'`:
+a la mañana existian cuatro (`SUPERADMIN`, `ADMIN`, `MARKETING`, `USER`). Faltaban el `006` y el
+`008`; se aplicaron ese mismo dia y la consulta devolvio los **seis** roles.
+
+**No queda ningun script de BackOffice pendiente en `Mobility-PROD`.**
+
+⚠️ La collation de la base NO es la `_CI_AS_` que menciona el `CLAUDE.md` del proyecto: es
+`Latin1_General_100_CI_AI_SC`. Conviene revisar esa afirmacion antes de escribir un JOIN
+apoyandose en ella.
 
 ## Riesgo abierto — renombre SA → AN
 

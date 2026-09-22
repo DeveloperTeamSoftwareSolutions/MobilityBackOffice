@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { TokenService } from './token.service';
+import { setActor } from '../common/request-context';
 
 interface AuthRequest {
   headers?: { authorization?: string };
@@ -32,6 +33,8 @@ export class JwtGuard implements CanActivate {
 
     try {
       req.user = await this.tokens.verify(token);
+      // Para la auditoría del middleware: con qué rol se disparó el movimiento.
+      setActor(req.user);
       return true;
     } catch {
       throw new UnauthorizedException('Token inválido o expirado');

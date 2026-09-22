@@ -370,9 +370,20 @@ const APP: Record<SapOrderSource, string> = {
   backoffice: 'BackOffice',
 };
 
+/**
+ * De qué app viene una orden SAP, tolerando que el middleware no lo mande.
+ *
+ * `source` existe desde el Middleware 1.368.0. Contra uno anterior llega `undefined`, y
+ * sin esto la divisoria diría "desde" y nada. Se cae al envío del vendedor, que es el
+ * mismo default que usa el middleware cuando no puede deducirlo.
+ */
+function sourceOf(orden: SapOrder): SapOrderSource {
+  return orden.source === 'backoffice' ? 'backoffice' : 'mobilityia';
+}
+
 /** El nombre de la app que hizo el envío, para el encabezado del intento. */
 export function sourceLabel(source: SapOrderSource): string {
-  return APP[source] ?? source;
+  return APP[source] ?? APP.mobilityia;
 }
 
 /**
@@ -408,8 +419,9 @@ const enMilisegundos = (iso: string | null): number | null => {
  *    usen centros distintos (por ejemplo, si entre uno y otro se corrigió el centro).
  */
 function esDelMismoEnvio(intento: SapSendAttempt, orden: SapOrder): boolean {
-  if (intento.source !== orden.source) return false;
-  if (orden.source !== 'backoffice') return false;
+  const source = sourceOf(orden);
+  if (intento.source !== source) return false;
+  if (source !== 'backoffice') return false;
   if (intento.orders.some((o) => o.centerCode === orden.centerCode)) return false;
 
   const nuevo = enMilisegundos(orden.attemptAt);
@@ -442,7 +454,7 @@ export function groupSapOrdersByAttempt(sapOrders: SapOrder[]): SapSendAttempt[]
       if (previo === null || (nuevo !== null && nuevo > previo)) actual.attemptAt = orden.attemptAt;
       continue;
     }
-    intentos.push({ attemptAt: orden.attemptAt, source: orden.source, orders: [orden] });
+    intentos.push({ attemptAt: orden.attemptAt, source: sourceOf(orden), orders: [orden] });
   }
   return intentos;
 }

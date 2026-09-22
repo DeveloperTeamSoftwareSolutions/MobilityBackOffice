@@ -333,6 +333,20 @@ describe('groupSapOrdersByAttempt', () => {
     expect(sourceLabel('mobilityia')).toBe('MobilityIA');
     expect(sourceLabel('backoffice')).toBe('BackOffice');
   });
+
+  /**
+   * `source` existe desde el Middleware 1.368.0. Contra uno anterior llega `undefined`, y
+   * la pantalla no puede quedar diciendo "desde" y nada: se cae al envío del vendedor,
+   * el mismo default que usa el middleware cuando no puede deducirlo.
+   */
+  it('si el middleware es viejo y no manda el origen, no se rompe', () => {
+    const sinOrigen = { ...orden(), source: undefined as unknown as SapOrder['source'] };
+    const intentos = groupSapOrdersByAttempt([sinOrigen]);
+
+    expect(intentos).toHaveLength(1);
+    expect(intentos[0].source).toBe('mobilityia');
+    expect(sourceLabel(intentos[0].source)).toBe('MobilityIA');
+  });
 });
 
 describe('lineChanges y blockingItemCount', () => {

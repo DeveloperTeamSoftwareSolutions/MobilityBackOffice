@@ -232,6 +232,39 @@
 }
 
 /* Órdenes SAP */
+/* Las ordenes SAP separadas POR INTENTO: la divisoria dice cuando fue el envio y
+   desde que app. Sin esto, tres ordenes SAP de dos envios distintos se leen como
+   una sola tanda. */
+.bo-rs__sap-attempts {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.bo-rs__sap-attempt-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--bo-border);
+  font-size: 13px;
+}
+.bo-rs__sap-attempt-n {
+  font-weight: 600;
+  color: var(--bo-text);
+}
+.bo-rs__sap-attempt-date {
+  color: var(--bo-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* La app de origen es un dato DEDUCIDO, no guardado: se muestra sobria, sin
+   competir con el estado de cada orden SAP, que si es un hecho. */
+.bo-rs__sap-attempt-app--backoffice {
+  border-color: var(--bo-primary);
+  color: var(--bo-primary);
+}
+
 .bo-rs__sap-orders {
   display: flex;
   flex-direction: column;

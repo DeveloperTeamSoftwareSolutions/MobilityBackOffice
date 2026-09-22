@@ -263,10 +263,22 @@ export interface RejectResult {
 export type SapOrderStatus = 'accepted' | 'accepted_no_dispatch' | 'rejected' | 'no_response';
 
 /** Una orden SAP de la orden (fila de `SAPOrders`), con sus ítems sin precios. */
+/**
+ * Desde qué aplicación salió el envío que creó esta orden SAP.
+ *
+ * Lo **deduce** el middleware del número interno de la orden SAP: `SAPOrders` no guarda
+ * el origen. Ver `deduceSapOrderSource` en su repositorio.
+ */
+export type SapOrderSource = 'mobilityia' | 'backoffice';
+
 export interface SapOrder {
   guid: string;
   status: SapOrderStatus;
   statusCode: string | null;
+  /** Número INTERNO de la orden SAP (no el que devuelve SAP). */
+  orderNumber: string | null;
+  /** Qué app disparó el envío. Deducido, no guardado. */
+  source: SapOrderSource;
   /** Centro del que sale esta orden SAP: con la orden partida, distingue una de otra. */
   centerCode: string | null;
   centerName: string | null;

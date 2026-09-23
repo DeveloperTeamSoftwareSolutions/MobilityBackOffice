@@ -311,9 +311,40 @@ consulta devuelve lo mismo, pero sin ninguno devuelve `[]`.
 |---|---|
 | Sin destino | Sí |
 | Destino fuera del área de venta de la orden | Sí (el Middleware también lo rechaza) |
+| **Sin centro propio** (lo hereda de la cabecera) | **Sí** — el envío no hereda: ver abajo |
 | Centro **elegido** fuera de los permitidos del cliente | Sí (el Middleware también lo rechaza) |
 | Centro **heredado de la cabecera** fuera de los permitidos | No: avisa, puede ser el motivo del rechazo |
 | Centro sin stock / stock menor a lo pedido | No (decisión 4b) |
+
+### El centro va POR LÍNEA, y no se hereda — 2026-09-23
+
+El envío de BackOffice agrupa por el `CenterCode` de **cada línea** y **no** toma el de la
+cabecera. Una sola línea sin centro propio hace rebotar la orden entera:
+
+> Este endpoint agrupa por CenterCode y 1 item(s) no lo tienen. Asignar CenterCode a cada
+> linea antes de reintentar.
+
+Hasta esta fecha la pantalla ofrecía *"mismo de la cabecera"* como si fuera una opción
+válida y no avisaba nada: el operador apretaba **Reenviar** y recién ahí se enteraba. Peor,
+la previsualización las mostraba agrupadas bajo "Centro de la cabecera", **como si fueran a
+salir**.
+
+Ahora: la línea sin centro propio lleva un aviso **bloqueante** al lado, la previsualización
+cuenta cuántas heredan (`PlannedSapOrder.heredados`) y marca esa tarjeta en rojo, y el botón
+de confirmar queda apagado. Elegir el mismo centro que la cabecera **explícitamente** ya
+cuenta como centro propio: se guarda en la línea y el envío lo encuentra.
+
+### Lo que estás editando no se pierde — 2026-09-23
+
+Cancelar o reactivar una línea recarga la orden entera. Eso hacía `initialDrafts(frescos)`,
+que **descartaba en silencio** los cambios sin guardar de todas las demás líneas: cambiabas
+el centro de un producto, cancelabas otro, y el primero volvía solo a su valor original.
+Pasaba igual con el destino.
+
+`draftsTrasRecarga` conserva un draft **sólo si el usuario lo había cambiado** —difiere de
+lo que la línea tenía guardada antes de recargar—. Si no lo tocó, gana el valor fresco del
+servidor. Esa distinción importa: sin ella, un draft "sin tocar" pisaría un cambio que otra
+persona guardó mientras tanto, con un valor que este usuario nunca eligió.
 
 Una línea **cancelada no genera avisos ni bloquea**: no viaja, así que su destino vacío no
 puede frenar el envío — si lo frenara, cancelar la línea problemática dejaría de destrabar

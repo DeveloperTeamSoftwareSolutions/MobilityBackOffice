@@ -17,6 +17,7 @@ import {
 import {
   activeItems,
   blockingItemCount,
+  draftsTrasRecarga,
   groupSapOrdersByAttempt,
   initialDrafts,
   lineChanges,
@@ -328,7 +329,9 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
       const result = await cancelItem(order.guid, cancelFor.guid, reasonCode, reasonNotes);
       const fresh = await getReviewOrder(order.guid);
       setOrder(fresh);
-      setDrafts(initialDrafts(fresh.items));
+      // Los cambios sin guardar de las OTRAS líneas se conservan: cancelar una línea no
+      // es motivo para descartar lo que el usuario venía editando en el resto.
+      setDrafts((prev) => draftsTrasRecarga(fresh.items, order.items, prev));
       setCancelFor(null);
       setSaveMessage(
         result.activosRestantes === 0
@@ -356,7 +359,8 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
       await reactivateItem(order.guid, item.guid);
       const fresh = await getReviewOrder(order.guid);
       setOrder(fresh);
-      setDrafts(initialDrafts(fresh.items));
+      // Igual que al cancelar: lo que el usuario venía editando en otras líneas se queda.
+      setDrafts((prev) => draftsTrasRecarga(fresh.items, order.items, prev));
       setSaveMessage(`La línea ${item.lineNumber} vuelve a incluirse en el próximo envío.`);
     } catch (err) {
       setSaveErrors((prev) => ({

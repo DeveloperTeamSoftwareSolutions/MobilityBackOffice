@@ -580,8 +580,8 @@ describe('ReviewOrderDetail', () => {
      */
     const plan = (centros: number): ResendPlan => ({
       orders: [
-        { centerCode: '2801', centerName: 'DW Alm. Externo', items: [order().items[0]] },
-        { centerCode: '2802', centerName: 'DW Cartago', items: [order().items[1]] },
+        { centerCode: '2801', centerName: 'DW Alm. Externo', items: [order().items[0]], heredados: 0 },
+        { centerCode: '2802', centerName: 'DW Cartago', items: [order().items[1]], heredados: 0 },
       ].slice(0, centros),
       attemptNumber: 3,
       cancelledCount: 0,
@@ -738,6 +738,37 @@ describe('ReviewOrderDetail', () => {
       // Los productos, no sólo el conteo: es lo que deja ver que falta uno.
       expect(screen.getByText('1200183')).toBeTruthy();
       expect(screen.getByText('1200135')).toBeTruthy();
+    });
+
+    /**
+     * EL CENTRO HEREDADO NO SALE. El envío agrupa por el CenterCode de la línea y no
+     * hereda el de la cabecera: con una sola así, rebota la orden entera con
+     * "Este endpoint agrupa por CenterCode y N item(s) no lo tienen".
+     * Antes la previsualización las mostraba bajo "Centro de la cabecera" como si fueran
+     * a salir, y el operador se enteraba al apretar el botón (reportado 2026-09-23).
+     */
+    it('avisa de las líneas que heredan el centro y no deja confirmar', () => {
+      const conHeredados = plan(1);
+      conHeredados.orders[0] = { ...conHeredados.orders[0], heredados: 1 };
+      render(
+        <ResendModal
+          orderNumber="ORD00005729"
+          pendingChanges={0}
+          blocking={1}
+          groupInvoice={false}
+          plan={conHeredados}
+          sending={false}
+          result={null}
+          error={null}
+          onConfirm={() => undefined}
+          onClose={() => undefined}
+        />,
+      );
+      expect(screen.getByText(/1 línea sin centro de distribución propio/)).toBeTruthy();
+      expect(screen.getByText(/no hereda/)).toBeTruthy();
+      expect(
+        (screen.getByRole('button', { name: /reenviar a SAP/i }) as HTMLButtonElement).disabled,
+      ).toBe(true);
     });
 
     /** Las canceladas se cuentan aparte: el faltante no puede aparecer sin explicación. */
@@ -1176,5 +1207,131 @@ describe('ReviewOrderDetail', () => {
       expect(button('Reactivar').disabled).toBe(true);
       expect(cancelarLinea().disabled).toBe(true);
     });
+  });
+});
+
+/**
+ * LOS CAMBIOS SIN GUARDAR NO SE PIERDEN AL CANCELAR O REACTIVAR (reportado 2026-09-23).
+ *
+ * "Si primero modifico y cambio algún producto a otro centro de distribución, y después
+ * cancelo algún otro item, el producto al que le había cambiado el centro vuelve a su
+ * centro original."
+ *
+ * Cancelar recarga la orden entera, y eso hacía `initialDrafts(frescos)` — que descartaba
+ * en silencio lo que el usuario venía editando en TODAS las demás líneas. Se pierde un
+ * trabajo que la pantalla decía tener ("1 cambio sin guardar") sin avisar nada.
+ */
+describe('cancelar no descarta lo que estabas editando', () => {
+  /**
+   * "Si primero modifico y cambio algún producto a otro centro de distribución, y después
+   * cancelo algún otro item, el producto al que le había cambiado el centro vuelve a su
+   * centro original." — reportado el 2026-09-23.
+   *
+   * Cancelar recarga la orden entera, y eso hacía `initialDrafts(frescos)`: descartaba en
+   * silencio lo que el usuario venía editando en TODAS las demás líneas. Se perdía un
+   * trabajo que la pantalla decía tener ("1 cambio sin guardar"), sin avisar nada.
+   */
+
+  /** La orden como vuelve del servidor con la línea 1 ya cancelada. */
+  function conLinea1Cancelada() {
+    const base = order();
+    return order({
+      items: [
+        {
+          ...base.items[0],
+          cancelledAt: '2026-09-23T10:00:00Z',
+          cancelledBy: 'bo@duwest.com',
+          noSaleReasonCode: 'SIN_STOCK',
+          noSaleReasonNotes: null,
+        },
+        base.items[1],
+      ],
+    });
+  }
+
+  /** Abre el modal de la primera línea, elige motivo y confirma. */
+  async function cancelarPrimeraLinea() {
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cancelar línea' })[0]);
+    fireEvent.change(screen.getByLabelText(/Motivo de no venta/), {
+      target: { value: 'SIN_STOCK' },
+    });
+    fireEvent.click(button('Cancelar la línea'));
+    await waitFor(() => expect(api.cancelItem).toHaveBeenCalled());
+  }
+
+  it('el centro cambiado en otra línea sigue ahí después de cancelar', async () => {
+    await renderDetail();
+
+    // Cambio el centro de la línea 3 y NO guardo.
+    fireEvent.change(centerSelect(), { target: { value: '2801' } });
+    expect(centerSelect().value).toBe('2801');
+    expect(screen.getByText('1 cambio sin guardar')).toBeTruthy();
+
+    api.getReviewOrder.mockResolvedValue(conLinea1Cancelada());
+    await cancelarPrimeraLinea();
+
+    // El cambio sigue pendiente: la línea 3 no volvió a su centro original.
+    await waitFor(() => expect(centerSelect().value).toBe('2801'));
+    // Y la fila lo sigue marcando. Se mira el chip de la línea y no el contador de la
+    // barra, porque ahí ahora está el mensaje de la cancelación.
+    expect(screen.getByText('Sin guardar')).toBeTruthy();
+  });
+
+  it('lo mismo con el destino', async () => {
+    await renderDetail();
+    fireEvent.change(destinationSelect(), { target: { value: '10019279' } });
+    expect(destinationSelect().value).toBe('10019279');
+
+    api.getReviewOrder.mockResolvedValue(conLinea1Cancelada());
+    await cancelarPrimeraLinea();
+
+    await waitFor(() => expect(destinationSelect().value).toBe('10019279'));
+  });
+
+  /** Reactivar recarga igual, y tenía el mismo problema. */
+  it('reactivar tampoco descarta los cambios', async () => {
+    api.getReviewOrder.mockResolvedValue(conLinea1Cancelada());
+    await renderDetail();
+
+    fireEvent.change(centerSelect(), { target: { value: '2801' } });
+    expect(centerSelect().value).toBe('2801');
+
+    api.getReviewOrder.mockResolvedValue(order());
+    fireEvent.click(button('Reactivar'));
+    await waitFor(() => expect(api.reactivateItem).toHaveBeenCalled());
+
+    await waitFor(() => expect(centerSelect().value).toBe('2801'));
+  });
+
+  /**
+   * El reverso, y es lo que hace segura la regla: una línea que el usuario NO tocó toma
+   * lo que trae el servidor. Sin esto, un draft viejo pisaría lo que guardó otra persona
+   * con un valor que este usuario nunca eligió.
+   */
+  it('una línea sin tocar toma el valor que trae el servidor', async () => {
+    await renderDetail();
+    expect(centerSelect().value).toBe('2802');
+
+    const base = order();
+    api.getReviewOrder.mockResolvedValue(
+      order({
+        items: [
+          {
+            ...base.items[0],
+            cancelledAt: '2026-09-23T10:00:00Z',
+            cancelledBy: 'bo@duwest.com',
+            noSaleReasonCode: 'SIN_STOCK',
+            noSaleReasonNotes: null,
+          },
+          // Alguien le cambió el centro mientras tanto.
+          { ...base.items[1], centerCode: '2801' },
+        ],
+      }),
+    );
+    await cancelarPrimeraLinea();
+
+    await waitFor(() => expect(centerSelect().value).toBe('2801'));
+    // Y NO queda marcada como pendiente: el valor vino del servidor, no lo eligió nadie acá.
+    expect(screen.queryByText('Sin guardar')).toBeNull();
   });
 });

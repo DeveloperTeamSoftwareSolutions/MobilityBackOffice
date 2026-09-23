@@ -63,6 +63,11 @@ export function ResendModal({
   // Sin líneas activas no hay nada que mandar: el envío rebotaría sin crear ningún
   // pedido. Se avisa acá en vez de dejar que el usuario descubra el rechazo.
   const sinNadaQueEnviar = centersToSend === 0;
+  // Líneas que heredan el centro de la cabecera. El envío agrupa por CenterCode de la
+  // LÍNEA y no hereda: con una sola de éstas rebota la orden entera. Es un rechazo
+  // seguro, no una probabilidad, así que el modal lo trata como tal.
+  const heredados = plan.orders.reduce((n, o) => n + o.heredados, 0);
+  const noVaASalir = sinNadaQueEnviar || heredados > 0;
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -115,6 +120,19 @@ export function ResendModal({
               </p>
             ) : (
               <>
+                {heredados > 0 && (
+                  <p className="bo-rs__warning bo-rs__warning--blocking">
+                    <strong>
+                      {heredados === 1
+                        ? 'Hay 1 línea sin centro de distribución propio.'
+                        : `Hay ${heredados} líneas sin centro de distribución propio.`}
+                    </strong>{' '}
+                    El envío agrupa por el centro de <strong>cada línea</strong> y no hereda
+                    el de la cabecera: así como está, rebota la orden entera y no se crea
+                    ningún pedido. Elegí el centro en esas líneas y guardá antes de enviar.
+                  </p>
+                )}
+
                 <p className="bo-rs__modal-text">
                   Va a ser el <strong>intento {plan.attemptNumber}</strong>. La orden sale{' '}
                   <strong>partida por centro de distribución</strong>:{' '}
@@ -134,11 +152,20 @@ export function ResendModal({
                             ? 'Orden SAP'
                             : `Orden SAP ${i + 1} de ${centersToSend}`}
                         </strong>
-                        <span className="bo-rs__pill bo-rs__pill--muted">
+                        <span
+                          className={`bo-rs__pill bo-rs__pill--${o.heredados > 0 ? 'danger' : 'muted'}`}
+                        >
                           {o.centerCode
                             ? `Centro ${o.centerCode}${o.centerName ? ` · ${o.centerName}` : ''}`
                             : 'Centro de la cabecera'}
                         </span>
+                        {o.heredados > 0 && (
+                          <span className="bo-rs__cell--muted">
+                            {o.heredados === 1
+                              ? '1 línea lo hereda: el envío la rechaza'
+                              : `${o.heredados} líneas lo heredan: el envío las rechaza`}
+                          </span>
+                        )}
                         <span className="bo-rs__cell--muted">
                           {o.items.length === 1 ? '1 producto' : `${o.items.length} productos`}
                         </span>
@@ -312,14 +339,17 @@ export function ResendModal({
             <button
               type="button"
               className="bo-rs__button"
-              // Sin líneas activas el envío no puede salir. El servidor lo rechaza igual
-              // —es él quien manda— pero dejar el botón vivo sería ofrecer algo que no
-              // funciona y devolver un error donde ya sabíamos la respuesta.
-              disabled={sending || sinNadaQueEnviar}
+              // El envío no puede salir: sin líneas activas, o con alguna que hereda el
+              // centro de la cabecera. El servidor lo rechaza igual —es él quien manda—
+              // pero dejar el botón vivo sería ofrecer algo que no funciona y devolver un
+              // error donde ya sabíamos la respuesta.
+              disabled={sending || noVaASalir}
               title={
                 sinNadaQueEnviar
                   ? 'No queda ninguna línea para enviar: reactivá alguna o rechazá la orden'
-                  : undefined
+                  : heredados > 0
+                    ? 'Hay líneas sin centro propio: el envío las rechaza. Elegí el centro y guardá.'
+                    : undefined
               }
               onClick={onConfirm}
             >

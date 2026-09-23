@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   blockingItemCount,
   cubreLaCantidad,
+  draftsTrasRecarga,
   effectiveCenter,
   groupSapOrdersByAttempt,
   initialDrafts,
@@ -106,7 +107,13 @@ describe('itemWarnings', () => {
 
   it('un centro ELEGIDO no permitido bloquea; el heredado de la cabecera solo avisa', () => {
     expect(kinds(item(), draft('2899', '30000124'), '2801')).toEqual([['centro-no-permitido', true]]);
-    expect(kinds(item(), draft(null, '30000124'), '2800')).toEqual([['centro-de-cabecera-no-permitido', false]]);
+    // Heredar el de la cabecera son DOS problemas a la vez, y se dicen los dos: falta
+    // elegir centro (bloquea, porque el envío no hereda — 2026-09-23) y además el que
+    // heredaría tampoco está permitido para el cliente.
+    expect(kinds(item(), draft(null, '30000124'), '2800')).toEqual([
+      ['sin-centro-propio', true],
+      ['centro-de-cabecera-no-permitido', false],
+    ]);
   });
 
   it('sin stock o con stock insuficiente avisa pero no bloquea', () => {
@@ -242,11 +249,15 @@ describe('centro y stock', () => {
    * Si su aviso siguiera bloqueando, cancelarla no serviría de nada.
    */
   it('una línea cancelada deja de bloquear el envío', () => {
-    const rota = { guid: 'item-1', lineNumber: 1, deliveryDestinationCode: null };
-    const items = [item(rota), item({ guid: 'item-2', lineNumber: 2 })];
+    // Con centro propio, para que lo único que bloquee sea el destino que falta: sin eso,
+    // la regla del 2026-09-23 (sin centro propio bloquea) sumaría un aviso a cada línea y
+    // este test dejaría de medir lo suyo.
+    const rota = { guid: 'item-1', lineNumber: 1, centerCode: '2801', deliveryDestinationCode: null };
+    const sana = { guid: 'item-2', lineNumber: 2, centerCode: '2801' };
+    const items = [item(rota), item(sana)];
     expect(blockingItemCount(items, initialDrafts(items), '2801', catalogs)).toBe(1);
 
-    const conCancelada = [cancelada(rota), item({ guid: 'item-2', lineNumber: 2 })];
+    const conCancelada = [cancelada(rota), item(sana)];
     expect(blockingItemCount(conCancelada, initialDrafts(conCancelada), '2801', catalogs)).toBe(0);
   });
 
@@ -676,7 +687,9 @@ describe('lineChanges y blockingItemCount', () => {
   it('sin tocar nada no hay cambios, aunque la orden traiga un destino de otra área', () => {
     const drafts = initialDrafts(items);
     expect(lineChanges(items, drafts)).toEqual([]);
-    expect(blockingItemCount(items, drafts, '2801', catalogs)).toBe(1);
+    // 2 y no 1: al destino de otra área se le suma que NINGUNA de las dos líneas tiene
+    // centro propio, y sin eso el envío rebota (regla del 2026-09-23).
+    expect(blockingItemCount(items, drafts, '2801', catalogs)).toBe(2);
   });
 
   it('centro y destino de una misma línea son dos cambios, y corregir destraba', () => {
@@ -686,6 +699,115 @@ describe('lineChanges y blockingItemCount', () => {
       ['center', null, '2802'],
       ['destination', '30000112', '30000124'],
     ]);
-    expect(blockingItemCount(items, drafts, '2801', catalogs)).toBe(0);
+    // Corregir item-2 lo destraba a él. item-1 sigue bloqueando porque no tiene centro
+    // propio, y con eso el envío rebota la orden entera (regla del 2026-09-23). Antes
+    // esto esperaba 0: la pantalla lo daba por bueno y el servidor lo rechazaba.
+    expect(blockingItemCount(items, drafts, '2801', catalogs)).toBe(1);
+
+    // Con el centro elegido en las DOS, no queda nada bloqueando.
+    const todasConCentro = {
+      ...drafts,
+      'item-1': draft('2801', item({ guid: 'item-1' }).deliveryDestinationCode),
+    };
+    expect(blockingItemCount(items, todasConCentro, '2801', catalogs)).toBe(0);
+  });
+});
+
+/**
+ * DOS PROBLEMAS DE LOS SELECTS DE CENTRO Y DESTINO (reportados 2026-09-23).
+ *
+ * 1. Sin tocar los selects, reenviar fallaba con
+ *    "Este endpoint agrupa por CenterCode y 1 item(s) no lo tienen".
+ *    La pantalla ofrecía "mismo de la cabecera" como si fuera válido, pero el envío
+ *    agrupa por el centro de CADA LÍNEA y no hereda el de la cabecera.
+ *
+ * 2. Si cambiabas el centro de un producto y después cancelabas otro, el primero volvía
+ *    solo a su centro original: recargar la orden hacía `initialDrafts` y descartaba en
+ *    silencio TODOS los cambios sin guardar. Pasaba igual con el destino.
+ */
+describe('el centro propio de cada línea', () => {
+  it('sin centro propio bloquea, porque el envío no hereda el de la cabecera', () => {
+    const sinCentro = item({ centerCode: null });
+    const avisos = itemWarnings(sinCentro, draft(null, '30000124'), '2801', catalogs);
+    const aviso = avisos.find((w) => w.kind === 'sin-centro-propio');
+
+    expect(aviso).toBeTruthy();
+    expect(aviso?.blocking).toBe(true);
+    // Dice el porqué, no sólo "falta algo": es lo que evita el viaje en falso.
+    expect(aviso?.message).toMatch(/no hereda/);
+    expect(aviso?.message).toMatch(/2801/);
+  });
+
+  it('con centro propio no molesta', () => {
+    const avisos = itemWarnings(item({ centerCode: '2801' }), draft('2801', '30000124'), '2801', catalogs);
+    expect(avisos.some((w) => w.kind === 'sin-centro-propio')).toBe(false);
+  });
+
+  /** Elegir el MISMO centro que la cabecera ya es tener centro propio: se guarda. */
+  it('elegir el de la cabecera explícitamente alcanza', () => {
+    const avisos = itemWarnings(item({ centerCode: null }), draft('2801', '30000124'), '2801', catalogs);
+    expect(avisos.some((w) => w.kind === 'sin-centro-propio')).toBe(false);
+  });
+
+  it('una línea sin centro propio hace bloquear el envío', () => {
+    const items = [item({ guid: 'item-1', centerCode: null })];
+    expect(blockingItemCount(items, initialDrafts(items), '2801', catalogs)).toBe(1);
+  });
+
+  /** La previsualización tiene que DECIRLO, no mostrarlas como si fueran a salir. */
+  it('la previsualización cuenta las líneas que heredan el centro', () => {
+    const items = [
+      item({ guid: 'item-1', lineNumber: 1, centerCode: null }),
+      item({ guid: 'item-2', lineNumber: 2, centerCode: '2802' }),
+    ];
+    const plan = planResend(items, initialDrafts(items), '2801', catalogs.centers, 0);
+
+    const cabecera = plan.orders.find((o) => o.centerCode === '2801');
+    const propio = plan.orders.find((o) => o.centerCode === '2802');
+    expect(cabecera?.heredados).toBe(1);
+    expect(propio?.heredados).toBe(0);
+  });
+});
+
+describe('draftsTrasRecarga — lo que el usuario venía editando no se pierde', () => {
+  const previos = [
+    item({ guid: 'item-1', lineNumber: 1, centerCode: '2801' }),
+    item({ guid: 'item-2', lineNumber: 2, centerCode: '2801' }),
+  ];
+
+  /** EL CASO REPORTADO: cambio el centro de una, cancelo otra, y la primera no se toca. */
+  it('conserva el centro cambiado de otra línea al recargar', () => {
+    const drafts = { ...initialDrafts(previos), 'item-1': draft('2802', '30000124') };
+    // item-2 vuelve cancelada; item-1 llega igual que antes.
+    const frescos = [previos[0], cancelada({ guid: 'item-2', lineNumber: 2, centerCode: '2801' })];
+
+    const next = draftsTrasRecarga(frescos, previos, drafts);
+    expect(next['item-1'].centerCode).toBe('2802');
+  });
+
+  it('hace lo mismo con el destino', () => {
+    const drafts = { ...initialDrafts(previos), 'item-1': draft('2801', '30000999') };
+    const next = draftsTrasRecarga(previos, previos, drafts);
+    expect(next['item-1'].destinationCode).toBe('30000999');
+  });
+
+  /** Sin cambios pendientes gana el servidor: es lo que evita pisar lo que guardó otro. */
+  it('una línea sin tocar toma el valor fresco del servidor', () => {
+    const drafts = initialDrafts(previos);
+    const frescos = [item({ guid: 'item-1', lineNumber: 1, centerCode: '2802' }), previos[1]];
+
+    const next = draftsTrasRecarga(frescos, previos, drafts);
+    expect(next['item-1'].centerCode).toBe('2802');
+  });
+
+  it('una línea nueva arranca con lo que trae el servidor', () => {
+    const frescos = [...previos, item({ guid: 'item-3', lineNumber: 3, centerCode: '2802' })];
+    const next = draftsTrasRecarga(frescos, previos, initialDrafts(previos));
+    expect(next['item-3'].centerCode).toBe('2802');
+  });
+
+  it('una línea que ya no está desaparece de los drafts', () => {
+    const next = draftsTrasRecarga([previos[0]], previos, initialDrafts(previos));
+    expect(Object.keys(next)).toEqual(['item-1']);
   });
 });

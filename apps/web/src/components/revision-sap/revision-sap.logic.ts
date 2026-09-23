@@ -218,6 +218,47 @@ export function initialDrafts(items: ReviewItem[]): LineDrafts {
   );
 }
 
+/**
+ * Los drafts DESPUÉS de recargar la orden, conservando lo que el usuario venía editando.
+ *
+ * El problema que resuelve (reportado 2026-09-23): cancelar o reactivar una línea recarga
+ * la orden entera, y hasta ahora eso hacía `initialDrafts(frescos)` — que **descartaba en
+ * silencio** los cambios sin guardar de TODAS las demás líneas. Cambiabas el centro de un
+ * producto, cancelabas otro, y el primero volvía solo a su centro original. Pasaba igual
+ * con el destino.
+ *
+ * La regla: un draft se conserva sólo si el usuario lo había CAMBIADO —difiere de lo que
+ * la línea tenía guardada antes de recargar—. Si no lo tocó, se toma el valor fresco del
+ * servidor. Esa distinción importa: sin ella, un draft "sin tocar" pisaría un cambio que
+ * otra persona guardó mientras tanto, con un valor que este usuario nunca eligió.
+ */
+export function draftsTrasRecarga(
+  frescos: ReviewItem[],
+  previos: ReviewItem[],
+  drafts: LineDrafts,
+): LineDrafts {
+  const antes = new Map(previos.map((item) => [item.guid, item]));
+
+  return Object.fromEntries(
+    frescos.map((item) => {
+      const inicial: LineDraft = {
+        centerCode: item.centerCode,
+        destinationCode: item.deliveryDestinationCode,
+      };
+      const draft = drafts[item.guid];
+      const previo = antes.get(item.guid);
+      // Línea nueva, o sin draft: no hay nada que conservar.
+      if (!draft || !previo) return [item.guid, inicial];
+
+      const pendiente =
+        draft.centerCode !== previo.centerCode ||
+        draft.destinationCode !== previo.deliveryDestinationCode;
+
+      return [item.guid, pendiente ? draft : inicial];
+    }),
+  );
+}
+
 /** Lo elegido para una línea; si no se tocó, lo guardado. */
 export function draftFor(item: ReviewItem, drafts: LineDrafts): LineDraft {
   return (
@@ -317,6 +358,26 @@ export function itemWarnings(
   }
 
   const center = effectiveCenter(draft.centerCode, headerCenterCode);
+
+  // SIN CENTRO PROPIO NO SE PUEDE ENVIAR, y no es una opinión de la pantalla: el envío
+  // de BackOffice agrupa POR CenterCode y **no hereda** el de la cabecera. Una línea sin
+  // centro propio hace rebotar la orden ENTERA con
+  //   "Este endpoint agrupa por CenterCode y N item(s) no lo tienen"
+  // y no se crea ningún pedido.
+  //
+  // Hasta el 2026-09-23 la pantalla ofrecía "mismo de la cabecera" como si fuera válido y
+  // no avisaba nada: el operador apretaba Reenviar y recién ahí se enteraba. Bloquea, para
+  // que el problema se vea al lado de la línea que lo causa y antes de intentar.
+  if (!draft.centerCode) {
+    warnings.push({
+      kind: 'sin-centro-propio',
+      blocking: true,
+      message: headerCenterCode
+        ? `Elegí el centro de distribución. El envío no hereda el ${headerCenterCode} de la cabecera: lo necesita en la línea.`
+        : 'Elegí el centro de distribución: el envío lo necesita en cada línea.',
+    });
+  }
+
   const allowed = catalogs.centers.some((c) => c.centerCode === center.code);
   if (center.code && catalogs.centers.length > 0 && !allowed) {
     warnings.push(
@@ -542,6 +603,9 @@ export function planResend(
     // Dentro de cada orden SAP, por número de línea: es el orden en que el usuario las
     // ve en la tabla de arriba.
     items: [...lines].sort((a, b) => a.lineNumber - b.lineNumber),
+    // Las que caen acá por HERENCIA de la cabecera y no por centro propio. El envío no
+    // hereda: con una sola de éstas la orden entera rebota.
+    heredados: lines.filter((item) => !draftFor(item, drafts).centerCode).length,
   }));
 
   return {

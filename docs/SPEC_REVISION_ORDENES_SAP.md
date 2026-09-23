@@ -1,11 +1,9 @@
 # Órdenes rechazadas por SAP — Spec
 
-> Última actualización: 2026-09-18 · Versión: 2.38.0
-> Estado: **bandeja, detalle, correcciones y rechazo conectados** (requiere Middleware ≥
-> 1.356.0, PR #646, y `MIDDLEWARE_API_KEY` configurada en los dos lados).
-> **El reenvío a SAP NO**: el envío por centro ya existe (PR #681 del Middleware) y este
-> lado ya lo consume, pero ese endpoint **rebota todo con 422** por un error suyo de
-> validación de centros. Avisado a Gustavo el 2026-09-18.
+> Última actualización: 2026-09-21 · Versión: 2.39.0
+> Estado: **la sección completa, conectada** — bandeja, detalle, correcciones, rechazo y
+> **reenvío por centro**. Requiere **Middleware ≥ 1.361.1** y `MIDDLEWARE_API_KEY`
+> configurada en los dos lados.
 
 ## Qué resuelve
 
@@ -18,8 +16,7 @@ MobilityIA la deja en solo lectura y el vendedor ya no puede reenviarla. BackOff
 3. corrige **por ítem** el centro de distribución y el destino de entrega *(conectado)*;
 4. ve en cuántas órdenes SAP salió la orden y el estado de cada una *(conectado)*;
 5. **rechaza** la orden si no se puede resolver, con motivo obligatorio *(conectado)*;
-6. reenvía la orden a SAP, **partida en una orden SAP por centro** *(preparado, pero
-   desconectado: el endpoint del Middleware tiene un bug — ver abajo)*.
+6. reenvía la orden a SAP, **partida en una orden SAP por centro** *(conectado)*.
 
 ## Respuestas del jefe (2026-09-15)
 
@@ -209,37 +206,27 @@ MobilityManager.
     rechazar, y se leería como "borrador".
   - **Reenviar es de la orden COMPLETA** (confirmado con el equipo el 2026-09-17): se
     manda la `BusinessOrder` y el Middleware la parte en una orden SAP por centro. El
-    botón vive en la barra de acciones, junto a Guardar, **deshabilitado** (ver abajo).
+    botón vive en la barra de acciones, junto a Guardar. Lo único que lo apaga es que la
+    orden ya no esté en revisión.
 
 **Reenvío a SAP** (`POST /api/revision-sap/orders/:guid/resend`, sin body) —
-⚠️ **DESCONECTADO**, pero ya no por falta del endpoint.
+**CONECTADO el 2026-09-21**.
 
-**Qué cambió el 2026-09-18.** El envío propio de BackOffice existe: es
-`POST /api/v2/mobility/businessorders2sap-from-backoffice` (PR #681 del Middleware).
-Agrupa los ítems por `CenterCode` y hace **una llamada a SAP por cada centro distinto**,
-con un N° de pedido sintético por centro (`ORD…S<id>`). Este lado ya le pega y ya traduce
-su respuesta.
+Pega contra `POST /api/v2/mobility/businessorders2sap-from-backoffice` (PR #681 del
+Middleware): agrupa los ítems por `CenterCode` y hace **una llamada a SAP por cada centro
+distinto**, con un N° de pedido sintético por centro (`ORD…S<id>`).
 
-**Por qué sigue cortado.** Ese endpoint tiene un **bug que lo rebota siempre**: arma sus
-ítems con un `.map` que no copia `centerCode` desde el repositorio, y después valida
-`it.centerCode` sobre ese mismo objeto. Lee `undefined` en todas las líneas y corta con
-**422 "faltan centros"** tengan o no centro en la base. Avisado a Gustavo el 2026-09-18.
+**Por qué estuvo cortado hasta hoy** — vale dejarlo escrito, porque explica el piso de
+versión. Desde el 2026-09-17 el botón estuvo apagado: primero porque el envío por centro
+no existía (el del vendedor manda todo junto bajo el centro de la cabecera), y después
+porque ese endpoint **rebotaba todas las órdenes con 422**: armaba sus ítems con un `.map`
+que no copiaba `centerCode` y luego validaba `it.centerCode` sobre ese mismo objeto, así
+que leía `undefined` tuvieran o no centro en la base. Lo arregló el **PR #687**, que de
+paso montó la ruta con `requireApiKey`.
 
-No se reconecta con el botón apagado porque el error que vería el operador además
-**miente**: le pide asignar centros que ya están asignados.
-
-| Capa | Estado |
-|---|---|
-| Botón | Visible pero **deshabilitado**, con el motivo en el `title` |
-| `RevisionSapService.resendToSap` | Corta **antes** del cliente con `501 Not Implemented` |
-| `RevisionSapClient.resendToSap` | **Listo**: apunta al endpoint por centro y traduce sus *buckets*. No se llama |
-
-El corte está en el **servicio**, no sólo en el botón: mientras el endpoint respondiera,
-cualquier llamada crearía pedidos. Un botón apagado no es una garantía.
-
-**Para reconectarlo**, cuando el fix esté: borrar el `throw` del servicio y devolver
-`this.client.resendToSap(guid, actorEmail)`. La auditoría ya está escrita. Probar contra
-**ORD00005729**, que tiene 3 líneas en 2 centros distintos.
+⚠️ **Piso: Middleware 1.361.1.** Con una versión anterior el reenvío falla siempre, y el
+mensaje que vería el operador además *miente*: le pide asignar centros que ya están
+asignados.
 
 ### El resultado es POR CENTRO
 

@@ -149,7 +149,7 @@ trae precios. Ver `docs/SPEC_REVISION_ORDENES_SAP.md`.
 | PUT | `/api/revision-sap/orders/:guid/items/:itemGuid/destination` | Body `{ destinationCode, reasonNotes? }`. Quien hace el cambio sale del token. 400 destino invalido o fuera del area; 404 orden o linea inexistente; 409 la orden ya no esta en revision |
 | PUT | `/api/revision-sap/orders/:guid/items/:itemGuid/center` | Body `{ centerCode, reasonNotes? }`. 400 centro invalido o no permitido para el cliente; 404 orden o linea inexistente; 409 la orden ya no esta en revision. Un centro sin stock se acepta |
 | PUT | `/api/revision-sap/orders/:guid/group-invoice` | Body `{ groupInvoice: boolean, reasonNotes? }` — agrupa factura es de CABECERA: decide si la orden puede salir parcial. `groupInvoice` debe ser booleano (`"si"` o `1` dan 400). 404 orden inexistente; 409 la orden ya no esta en revision |
-| POST | `/api/revision-sap/orders/:guid/resend` | Reenvia la orden a SAP, **partida en una orden SAP POR CENTRO**. **Sin body**: que se manda lo decide el servidor y quien lo manda sale del token. Llama al envio PROPIO de BackOffice del middleware (`businessorders2sap-from-backoffice` con `asBackoffice: true`), que agrupa los items por `CenterCode` y hace una llamada a SAP por cada centro distinto. Devuelve `{ accepted, partial, skipped, buckets[], totalBuckets, acceptedBuckets, failedBuckets, error, filteredItemsCount, itemsSent, stillInReview }`, con un `bucket` por centro (`{ centerCode, itemsCount, status, sapOrderNumber, sapDispatchNumber, error, sapMessages }`). 409 si el pedido ya existe en SAP; 503 si SAP no confirmo (⚠️ los pedidos pudieron haberse creado). Audita `REVISION_SAP_RESEND` siempre. **⚠️ HOY DESCONECTADO** — ver abajo |
+| POST | `/api/revision-sap/orders/:guid/resend` | Reenvia la orden a SAP, **partida en una orden SAP POR CENTRO**. **Sin body**: que se manda lo decide el servidor y quien lo manda sale del token. Llama al envio PROPIO de BackOffice del middleware (`businessorders2sap-from-backoffice` con `asBackoffice: true`), que agrupa los items por `CenterCode` y hace una llamada a SAP por cada centro distinto. Devuelve `{ accepted, partial, skipped, buckets[], totalBuckets, acceptedBuckets, failedBuckets, error, filteredItemsCount, itemsSent, stillInReview }`, con un `bucket` por centro (`{ centerCode, itemsCount, status, sapOrderNumber, sapDispatchNumber, error, sapMessages }`). 409 si el pedido ya existe en SAP; 503 si SAP no confirmo (⚠️ los pedidos pudieron haberse creado). Audita `REVISION_SAP_RESEND` siempre, con el desenlace POR CENTRO en el detalle. **Requiere Middleware ≥ 1.361.1** (antes de esa version el envio por centro rebotaba todo con 422) |
 | POST | `/api/revision-sap/orders/:guid/reject` | **Rechaza la orden. Es TERMINAL y no se deshace.** Body `{ reasonNotes }` — el motivo es **obligatorio** (vacio da 400): el estado que le llega al vendedor solo dice "Rechazada", asi que el comentario del hilo es lo unico que va a poder leer. La orden pasa a `Rejected`, sale de la bandeja y el vendedor solo puede copiarla. 404 orden inexistente; 409 si ya no esta en revision o ya fue rechazada. Audita `REVISION_SAP_REJECT` siempre |
 | GET | `/api/revision-sap/orders/:guid/sap-orders` | Ordenes SAP de la orden con su centro, su estado (`accepted` \| `accepted_no_dispatch` \| `rejected` \| `no_response`) y sus items, sin precios. Cada item trae la linea original (`itemGuid`, centro, destino) para poder corregirla |
 | GET | `/api/revision-sap/orders/:guid/stock/:productCode` | Stock de un producto de la orden por centro y almacen, marcando los habilitados para el cliente. 404 si el producto no es de esa orden |
@@ -159,6 +159,22 @@ trae precios. Ver `docs/SPEC_REVISION_ORDENES_SAP.md`.
 lecturas no se auditan: quedan en los `ApiLogs` del Middleware. El rechazo
 (`REVISION_SAP_REJECT`) se audita **siempre** y sin condicion de "cambio": no hay rechazo que
 no cambie nada, y es la accion que cierra el documento.
+
+**Que significa cada fallo del reenvio (v2.39.1)**: el mensaje distingue si la operacion se ejecuto o no.
+Antes cualquier fallo no contemplado caia en *"SAP no confirmo el envio, verifica en SAP"* — y un 401 por API key
+equivocada mandaba a buscar en SAP un pedido que nunca se intento crear.
+
+| Fallo | Que se le dice al operador | Se ejecuto algo? |
+|---|---|---|
+| `401` / `403` | Falta `MIDDLEWARE_API_KEY` o no coincide con la del Middleware | **No.** Ni se intento |
+| `422` | El motivo del Middleware (faltan centros, sin stock) + "no se creo ningun pedido" | **No.** Corto antes de SAP |
+| `409` | El pedido ya existe: reenviarlo lo duplicaria | No (lo frena) |
+| `404` | Orden inexistente | No |
+| `ECONNREFUSED` | No se pudo contactar al Middleware | **No.** No salio |
+| **timeout** / `5xx` | *"Verifica en SAP si se crearon pedidos antes de reintentar"* | **INCIERTO** — puede haber salido una parte |
+
+La ultima fila es la unica que manda a mirar SAP, y es la unica que lo amerita: con la orden partida por centro,
+un corte a mitad de camino puede dejar algunos pedidos creados y otros no.
 
 **Rechazar (v2.38.0)**: se eligio `Rejected` y no `Annulled` porque el estado dice la verdad de
 lo que paso —alguien que evaluo la orden dijo que no— y se ve en rojo. **Del lado del vendedor no

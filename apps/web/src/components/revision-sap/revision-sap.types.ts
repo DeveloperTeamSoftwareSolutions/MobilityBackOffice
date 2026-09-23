@@ -181,10 +181,23 @@ export interface ItemWarning {
 export type SapOrderStatus = 'accepted' | 'accepted_no_dispatch' | 'rejected' | 'no_response';
 
 /** Una orden SAP de la orden, con sus ítems sin precios. */
+/**
+ * Desde qué aplicación salió el envío que creó esta orden SAP.
+ *
+ * Lo **deduce** el middleware del número interno de la orden SAP: la tabla no guarda el
+ * origen. El envío de BackOffice numera `ORD…S<id>` —porque crea una orden SAP por
+ * centro— y el del vendedor deja el número tal cual.
+ */
+export type SapOrderSource = 'mobilityia' | 'backoffice';
+
 export interface SapOrder {
   guid: string;
   status: SapOrderStatus;
   statusCode: string | null;
+  /** Número INTERNO de la orden SAP (no el que devuelve SAP). */
+  orderNumber: string | null;
+  /** Qué app disparó el envío. Deducido, no guardado. */
+  source: SapOrderSource;
   /** Centro del que sale esta orden SAP: con la orden partida, distingue una de otra. */
   centerCode: string | null;
   centerName: string | null;
@@ -193,6 +206,23 @@ export interface SapOrder {
   sapDispatchNumber: string | null;
   error: string | null;
   items: SapOrderItem[];
+}
+
+/**
+ * Un ENVÍO: las órdenes SAP que salieron juntas, desde la misma app.
+ *
+ * Es lo que separa la pestaña "Órdenes SAP" con una línea divisoria. Sin esto, tres
+ * órdenes SAP de dos envíos distintos se leen como una sola tanda.
+ *
+ * ⚠️ No confundir con `SapAttempt`, que es otra cosa: los intentos registrados en la
+ * cabecera de la orden (`sapAttempts`), sin las órdenes SAP que produjeron.
+ */
+export interface SapSendAttempt {
+  /** Cuándo se hizo el envío: el más reciente de sus órdenes SAP. */
+  attemptAt: string | null;
+  source: SapOrderSource;
+  /** Una por centro, en el orden en que las devolvió el servidor. */
+  orders: SapOrder[];
 }
 
 /**

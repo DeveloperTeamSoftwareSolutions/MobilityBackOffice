@@ -1,5 +1,5 @@
 import { formatDateTime } from '../soporte/DocumentHeader';
-import { formatQuantity } from './revision-sap.logic';
+import { formatQuantity, groupSapOrdersByAttempt, sourceLabel } from './revision-sap.logic';
 import { SapOrder, SapOrderStatus } from './revision-sap.types';
 import { SapErrorMessage } from './SapErrorMessage';
 
@@ -41,17 +41,60 @@ export function SapOrdersPanel({ sapOrders }: Props) {
     return <p className="bo-rs__empty">Esta orden todavía no generó ninguna orden SAP.</p>;
   }
 
+  /**
+   * Las órdenes SAP se agrupan POR ENVÍO. Una orden puede tener órdenes SAP del vendedor
+   * y de uno o más reenvíos de BackOffice —que además crean una por centro—, y en una
+   * lista corrida todas parecen la misma tanda.
+   */
+  const intentos = groupSapOrdersByAttempt(sapOrders);
+
   return (
-    <ul className="bo-rs__sap-orders">
-      {sapOrders.map((sapOrder) => {
-        const status = STATUS[sapOrder.status];
-        const rechazada = sapOrder.status === 'rejected';
+    <div className="bo-rs__sap-attempts">
+      {intentos.map((intento, i) => {
+        const rechazadas = intento.orders.filter((o) => o.status === 'rejected').length;
 
         return (
-          <li
-            key={sapOrder.guid}
-            className={`bo-rs__sap-order${rechazada ? ' bo-rs__sap-order--rejected' : ''}`}
+          /* Colapsable, y con `details` nativo: se abre con teclado y sin estado propio.
+             Sólo el intento MÁS RECIENTE arranca abierto — es el que se viene a mirar—, y
+             los viejos quedan plegados para que la pestaña no descargue todo de golpe. */
+          <details
+            key={`${intento.source}-${intento.attemptAt ?? i}`}
+            className="bo-rs__sap-attempt"
+            open={i === 0}
           >
+            {/* La divisoria: cuándo fue el envío y desde qué app. El número de intento
+                cuenta desde el más viejo, así el primero es siempre el 1 aunque la lista
+                se muestre al revés. */}
+            <summary className="bo-rs__sap-attempt-head">
+              <span className="bo-rs__sap-attempt-n">Intento {intentos.length - i}</span>
+              <span className="bo-rs__sap-attempt-date">{formatDateTime(intento.attemptAt)}</span>
+              <span
+                className={`bo-rs__pill bo-rs__pill--muted bo-rs__sap-attempt-app bo-rs__sap-attempt-app--${intento.source}`}
+              >
+                desde {sourceLabel(intento.source)}
+              </span>
+              <span className="bo-rs__cell--muted">
+                {intento.orders.length === 1 ? '1 orden SAP' : `${intento.orders.length} órdenes SAP`}
+              </span>
+              {/* Plegado, el estado tiene que verse igual: si acá hay algo rechazado, el
+                  operador no debería tener que abrir para enterarse. */}
+              {rechazadas > 0 && (
+                <span className="bo-rs__pill bo-rs__pill--danger">
+                  {rechazadas === 1 ? '1 rechazada' : `${rechazadas} rechazadas`}
+                </span>
+              )}
+            </summary>
+
+            <ul className="bo-rs__sap-orders">
+            {intento.orders.map((sapOrder) => {
+              const status = STATUS[sapOrder.status];
+              const rechazada = sapOrder.status === 'rejected';
+
+              return (
+                <li
+                  key={sapOrder.guid}
+                  className={`bo-rs__sap-order${rechazada ? ' bo-rs__sap-order--rejected' : ''}`}
+                >
             <div className="bo-rs__sap-order-head">
               {/* El StatusCode crudo no se muestra: no aporta y engaña — una rechazada
                   se queda en 'Draft' porque SAP no lo actualiza. Queda en el title. */}
@@ -119,11 +162,14 @@ export function SapOrdersPanel({ sapOrders }: Props) {
                   ))}
                 </tbody>
               </table>
-            </div>
-
-          </li>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
         );
       })}
-    </ul>
+    </div>
   );
 }

@@ -8,7 +8,10 @@ import {
   ReviewCatalogs,
   ReviewItem,
   SalesArea,
+  SapSendAttempt,
   SapErrorLine,
+  SapOrder,
+  SapOrderSource,
   StockByCenter,
   StockCenterOption,
 } from './revision-sap.types';
@@ -359,6 +362,113 @@ export function blockingItemCount(
   return items.filter((item) =>
     itemWarnings(item, draftFor(item, drafts), headerCenterCode, catalogs).some((w) => w.blocking),
   ).length;
+}
+
+/** Cómo se nombra cada app en pantalla. */
+const APP: Record<SapOrderSource, string> = {
+  mobilityia: 'MobilityIA',
+  backoffice: 'BackOffice',
+};
+
+/**
+ * De qué app viene una orden SAP, tolerando que el middleware no lo mande.
+ *
+ * `source` existe desde el Middleware **1.368.0**. Contra uno anterior llega `undefined`,
+ * y ahí se cae al **centro**, que es la misma huella vista desde el otro lado:
+ *
+ *   - el envío del vendedor (`businessorders2sap`) manda la orden entera y **no guarda
+ *     `CenterCode`** en la fila de `SAPOrders`;
+ *   - el de BackOffice crea una fila POR CENTRO y lo guarda en cada una.
+ *
+ * Verificado en el repositorio del middleware: el insert clásico no incluye la columna y
+ * `updateSapResult` no la toca. Así que "tiene centro" equivale a "salió de BackOffice"
+ * mientras la fila venga de este circuito.
+ *
+ * El respaldo no es cosmético: sin él, contra un middleware anterior TODAS las órdenes
+ * SAP se leen como del vendedor —que nunca agrupa— y cada una aparece como un intento
+ * suelto. Que es justo lo que esta pantalla vino a evitar.
+ */
+function sourceOf(orden: SapOrder): SapOrderSource {
+  if (orden.source === 'backoffice' || orden.source === 'mobilityia') return orden.source;
+  return orden.centerCode ? 'backoffice' : 'mobilityia';
+}
+
+/** El nombre de la app que hizo el envío, para el encabezado del intento. */
+export function sourceLabel(source: SapOrderSource): string {
+  return APP[source] ?? APP.mobilityia;
+}
+
+/**
+ * Margen para considerar que dos órdenes SAP salieron en el MISMO envío.
+ *
+ * El envío de BackOffice llama a SAP **una vez por centro, en serie**, y el middleware le
+ * da hasta 120 s a cada llamada. Así que dos órdenes SAP del mismo envío pueden quedar
+ * separadas por un par de minutos si SAP estuvo lento. Cinco minutos deja holgura sin
+ * llegar a fusionar dos envíos distintos, que siempre tienen una persona mirando el
+ * resultado en el medio.
+ */
+const MISMO_ENVIO_MS = 5 * 60 * 1000;
+
+const enMilisegundos = (iso: string | null): number | null => {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? null : t;
+};
+
+/**
+ * ¿Esta orden SAP salió en el mismo envío que las del intento que venimos armando?
+ *
+ * Tres condiciones, y cada una tapa un agujero distinto:
+ *
+ * 1. **Misma app.** Un envío es de una sola.
+ * 2. **Sólo BackOffice agrupa.** El envío del vendedor manda la orden entera en UNA orden
+ *    SAP, así que dos filas suyas son siempre dos intentos distintos — aunque caigan
+ *    seguidas.
+ * 3. **El centro no se repite.** El envío de BackOffice crea una orden SAP POR CENTRO: si
+ *    el centro ya está en el grupo, esta fila es de otro envío. Es la señal más fuerte,
+ *    porque no depende del reloj.
+ * 4. **Y dentro de la ventana de tiempo**, como respaldo para el caso en que dos envíos
+ *    usen centros distintos (por ejemplo, si entre uno y otro se corrigió el centro).
+ */
+function esDelMismoEnvio(intento: SapSendAttempt, orden: SapOrder): boolean {
+  const source = sourceOf(orden);
+  if (intento.source !== source) return false;
+  if (source !== 'backoffice') return false;
+  if (intento.orders.some((o) => o.centerCode === orden.centerCode)) return false;
+
+  const nuevo = enMilisegundos(orden.attemptAt);
+  const grupo = enMilisegundos(intento.attemptAt);
+  // Sin fecha en alguno de los dos no se puede comparar: se agrupa igual, porque las
+  // otras tres condiciones ya se cumplieron.
+  if (nuevo === null || grupo === null) return true;
+  return Math.abs(grupo - nuevo) <= MISMO_ENVIO_MS;
+}
+
+/**
+ * Separa las órdenes SAP en INTENTOS: las que salieron juntas, en un mismo envío.
+ *
+ * Es lo que permite mostrar la pestaña con una línea divisoria por intento, diciendo
+ * cuándo fue y desde qué app. Sin esto, una orden con tres órdenes SAP —una del vendedor
+ * y dos de un reenvío de BackOffice— se lee como una sola tanda de tres.
+ *
+ * Espera la lista como la manda el servidor: **de la más reciente a la más vieja**. Se
+ * respeta ese orden, así que el intento más nuevo queda primero, que es el que se mira.
+ */
+export function groupSapOrdersByAttempt(sapOrders: SapOrder[]): SapSendAttempt[] {
+  const intentos: SapSendAttempt[] = [];
+  for (const orden of sapOrders) {
+    const actual = intentos[intentos.length - 1];
+    if (actual && esDelMismoEnvio(actual, orden)) {
+      actual.orders.push(orden);
+      // La fecha del intento es la más reciente de sus órdenes SAP.
+      const previo = enMilisegundos(actual.attemptAt);
+      const nuevo = enMilisegundos(orden.attemptAt);
+      if (previo === null || (nuevo !== null && nuevo > previo)) actual.attemptAt = orden.attemptAt;
+      continue;
+    }
+    intentos.push({ attemptAt: orden.attemptAt, source: sourceOf(orden), orders: [orden] });
+  }
+  return intentos;
 }
 
 /** Cuántas órdenes SAP saldrían: una por cada centro distinto de las líneas. */

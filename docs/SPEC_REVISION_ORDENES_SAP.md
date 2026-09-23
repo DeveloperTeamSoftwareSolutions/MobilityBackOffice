@@ -173,6 +173,23 @@ MobilityManager.
     —"deja rastro de todos los intentos"—. Esconderlas ocultaría justamente el motivo por
     el que la orden está en revisión.
 
+    **Se agrupan POR INTENTO** (2026-09-22), con una línea divisoria que dice **cuándo**
+    fue el envío y **desde qué app**. Una orden puede tener órdenes SAP del vendedor y de
+    uno o más reenvíos de BackOffice —que además crean una por centro—; en una lista
+    corrida todas parecen la misma tanda. El intento más reciente va arriba, y se numeran
+    desde el más viejo, así el primero siempre es el 1.
+
+    El **origen se deduce**: `SAPOrders` no guarda de qué app salió. La huella es el
+    número interno, que compone el propio Middleware — `ORD…S<id>` para BackOffice (una
+    fila por centro, y el número no puede repetirse) y el número de la orden tal cual para
+    MobilityIA. Detalle y advertencias en `docs/API_BACKOFFICE_REVIEW.md` del Middleware.
+
+    **Qué separa un intento de otro** (`groupSapOrdersByAttempt`): cambia la app, se
+    repite un centro —el envío de BackOffice crea una por centro, así que dentro de un
+    mismo envío no se repite— o pasan más de 5 minutos. Ese margen no es arbitrario: el
+    envío llama a SAP una vez por centro, en serie, con hasta 120 s cada una, así que dos
+    órdenes del mismo envío pueden quedar separadas por un par de minutos.
+
     El estado **se calcula**, no se lee de una columna. El Middleware lo deriva de tres
     campos de la fila, y las etiquetas son **las mismas que usa MobilityIA** para estas
     mismas órdenes SAP: dos pantallas que miran el mismo dato tienen que llamarlo igual.
@@ -316,7 +333,7 @@ web  revision-sap.api.ts ──> api  /api/revision-sap/*  (rol RevisionSap)
 | `GroupInvoiceModal.tsx` | Confirmación de agrupa factura, con lo que implica cada valor |
 | `RejectOrderModal.tsx` | Confirmación del rechazo: qué implica, y el motivo obligatorio |
 | `ResendModal.tsx` | Confirmación del reenvío (dice cuántos pedidos crea) y, después, el resultado **por centro** |
-| `SapOrdersPanel.tsx` | Pestaña **Órdenes SAP**: estado y productos de cada una, solo consulta |
+| `SapOrdersPanel.tsx` | Pestaña **Órdenes SAP**: agrupadas por intento, con estado y productos de cada una. Solo consulta |
 | `SapErrorMessage.tsx` | El motivo de SAP: tipo como etiqueta y mensaje |
 | `ProductStockModal.tsx` | Stock por centro y almacén de un producto |
 | `PreviewNotice.tsx` | Aviso de lo que todavía no está conectado |

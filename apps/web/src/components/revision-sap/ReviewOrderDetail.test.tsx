@@ -383,7 +383,7 @@ describe('ReviewOrderDetail', () => {
    */
   it('el reenvío es de la orden completa, no por orden SAP', async () => {
     await renderDetail();
-    // Que esté apagado lo cubre el test de abajo; acá lo que importa es DÓNDE vive.
+    // Lo que importa acá es DÓNDE vive: en la barra, una sola vez, no por orden SAP.
     expect(button('Reenviar a SAP')).toBeTruthy();
 
     verOrdenesSap();
@@ -392,31 +392,70 @@ describe('ReviewOrderDetail', () => {
   });
 
   /**
-   * El reenvío está DESCONECTADO (2026-09-17): el envío del middleware manda la orden
-   * como una sola orden SAP —el camino de MobilityIA— y BackOffice necesita el que la
-   * parte por centro, que todavía no existe. El botón queda a la vista para que se sepa
-   * que va ahí, pero apagado y explicando por qué.
+   * CONECTADO el 2026-09-21 (Middleware ≥ 1.361.1). Estuvo apagado desde el 2026-09-17:
+   * primero porque el envío por centro no existía, después porque rebotaba todo con 422.
+   *
+   * Confirma antes de enviar, y eso no es ceremonia: crea pedidos REALES en SAP que no
+   * se deshacen desde acá. Por eso el primer clic abre el aviso y no manda nada.
    */
-  it('el reenvío está a la vista pero apagado, con el motivo en el título', async () => {
+  it('el reenvío pide confirmación antes de crear nada en SAP', async () => {
     await renderDetail();
     const reenviar = button('Reenviar a SAP');
-    expect(reenviar.disabled).toBe(true);
-    expect(reenviar.title).toMatch(/por centro de distribución/);
+    expect(reenviar.disabled).toBe(false);
 
     fireEvent.click(reenviar);
-    // Ni siquiera abre la confirmación: no hay forma de llegar a SAP desde acá.
-    expect(screen.queryByText(/Crea un pedido real en SAP/)).toBeNull();
+    // Se abrió el aviso, y todavía no se llamó a nadie.
+    expect(screen.getByText(/Crea 2 pedidos reales en SAP/)).toBeTruthy();
     expect(api.resendToSap).not.toHaveBeenCalled();
+
+    // Recién al confirmar sale, y vuelve el resultado por centro.
+    fireEvent.click(button('Sí, reenviar a SAP'));
+    await waitFor(() => expect(api.resendToSap).toHaveBeenCalledWith(ORDER));
+    expect(await screen.findByText('Centro 2801')).toBeTruthy();
+    expect(screen.getByText('Centro 2802')).toBeTruthy();
+  });
+
+  /**
+   * La orden de prueba tiene líneas en 2801 y 2802, así que salen DOS pedidos. Decirlo
+   * antes importa: es la diferencia entre crear uno y crear dos cosas irreversibles.
+   */
+  it('avisa cuántos pedidos va a crear, contando los cambios sin guardar', async () => {
+    await renderDetail();
+    // Unifico las dos líneas en un solo centro: ahora sería UN pedido, no dos.
+    fireEvent.change(centerSelect(), { target: { value: '2801' } });
+
+    fireEvent.click(button('Reenviar a SAP'));
+    expect(screen.getByText(/todas las líneas van juntas en una sola orden SAP/)).toBeTruthy();
+    expect(screen.getByText(/Crea un pedido real en SAP/)).toBeTruthy();
+  });
+
+  it('una orden fuera de revisión ya no se reenvía', async () => {
+    api.getReviewOrder.mockResolvedValue(
+      order({ backoffice: { inReview: false, decidedBy: 'bo@duwest.com', decidedAt: null } }),
+    );
+    await renderDetail();
+    expect(button('Reenviar a SAP').disabled).toBe(true);
+  });
+
+  it('si el envío falla, el modal lo dice y no se pierde', async () => {
+    await renderDetail();
+    api.resendToSap.mockRejectedValue(new Error('503'));
+
+    fireEvent.click(button('Reenviar a SAP'));
+    fireEvent.click(button('Sí, reenviar a SAP'));
+
+    await screen.findByText('No se pudo reenviar la orden a SAP.');
+    // Y el aviso de no reintentar a ciegas: el pedido pudo haberse creado.
+    expect(screen.getByText(/No reintentes sin mirar/)).toBeTruthy();
   });
 
   /**
    * El reenvío crea UNA orden SAP POR CENTRO, así que el resultado no es uno solo.
    *
-   * Estos tests montan el modal directamente: el botón está apagado a propósito (ver
-   * arriba), así que por la pantalla no hay forma de llegar al resultado todavía. Lo que
-   * se fija acá es lo que el operador tiene que poder leer cuando se reconecte — sobre
-   * todo el fallo parcial, donde parte de la orden YA existe en SAP y reintentar la
-   * duplicaría.
+   * Estos tests montan el modal directamente para llegar a cada desenlace sin depender
+   * de lo que conteste el servidor. Lo que se fija acá es lo que el operador tiene que
+   * poder leer — sobre todo el fallo parcial, donde parte de la orden YA existe en SAP
+   * y reintentar la duplicaría.
    */
   describe('resultado del reenvío, por centro', () => {
     const bucket = (over: Partial<ResendBucket> = {}): ResendBucket => ({

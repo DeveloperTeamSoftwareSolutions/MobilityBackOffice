@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotImplementedException } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service';
 import { AuditCategory } from '../audit/audit.categories';
 import { Actor } from '../common/actor';
@@ -167,41 +167,61 @@ export class RevisionSapService {
   }
 
   /**
-   * Reenvía la orden completa a SAP.
+   * Reenvía la orden a SAP, **partida en una orden SAP por centro de distribución**.
    *
-   * Se audita SIEMPRE, acepte o rechace SAP: es la acción más fuerte de la sección
-   * —crea un pedido real— y saber que alguien la disparó importa igual que el
-   * resultado. Un rechazo auditado es justamente lo que explica por qué la orden
-   * sigue en la bandeja.
+   * CONECTADO el 2026-09-21. Estuvo cortado desde el 2026-09-17: primero porque el
+   * envío por centro no existía, y después porque el del Middleware rebotaba todas las
+   * órdenes con 422 (no propagaba `centerCode` a su propia validación). Las dos cosas
+   * están resueltas — PR #681 y #687 del Middleware, desde 1.361.1.
+   *
+   * Se audita SIEMPRE, salgan o no los pedidos: es la acción más fuerte de la sección
+   * —crea pedidos reales en SAP— y saber quién la disparó importa igual que el
+   * resultado. Un rechazo auditado es justamente lo que explica por qué la orden sigue
+   * en la bandeja.
+   *
+   * El detalle de la auditoría lleva el desenlace POR CENTRO, no un resumen: con una
+   * orden partida, "falló" no dice nada si no se sabe cuál. El fallo parcial se marca
+   * aparte porque es el caso que deja pedidos creados en SAP.
    *
    * El comentario en el hilo del vendedor NO se escribe acá: lo deja el propio envío
-   * del middleware, con el número de pedido o el motivo del rechazo.
+   * del middleware, con los números de pedido o el motivo del rechazo de cada centro.
    */
   async resendToSap(guid: string, actor: Actor): Promise<ResendResult> {
-    // Se valida igual: si mañana esto se conecta, la sesión sin email tiene que fallar
-    // por lo mismo que antes y no por accidente.
-    this.requireEmail(actor);
+    const actorEmail = this.requireEmail(actor);
+    const result = await this.client.resendToSap(guid, actorEmail);
 
-    // ⚠️ SIGUE DESCONECTADO (2026-09-18), pero YA NO por falta del endpoint.
-    //
-    // El envío por centro existe desde el PR #681 del Middleware, y el cliente de acá
-    // ya le pega y traduce su respuesta por centro. Lo que falta es un BUG DE ESE
-    // ENDPOINT: arma sus ítems con un `.map` que no copia `centerCode` desde el
-    // repositorio, y después valida `it.centerCode` sobre ese mismo objeto — así que
-    // lee `undefined` en todas las líneas y CORTA SIEMPRE con 422 ("faltan centros"),
-    // tengan o no centro en la base. Avisado a Gustavo el 2026-09-18.
-    //
-    // Se corta acá y no sólo apagando el botón: mientras el endpoint responda, el
-    // operador vería un error que además MIENTE —dice que asigne los centros, y los
-    // centros están— sin forma de avanzar.
-    //
-    // PARA RECONECTARLO, cuando el fix esté: borrar este `throw` y devolver
-    // `this.client.resendToSap(guid, actorEmail)`. Lo de abajo (auditoría) ya está
-    // escrito para eso. Verificar contra ORD00005729, que tiene 3 líneas en 2 centros.
-    throw new NotImplementedException(
-      'El reenvío a SAP desde BackOffice todavía no está disponible: el envío por centro ' +
-        'del Middleware rebota todas las órdenes por un error en su validación de centros.',
-    );
+    const desenlace = result.skipped
+      ? 'no-enviada'
+      : result.accepted
+        ? 'aceptada'
+        : result.partial
+          ? 'PARCIAL'
+          : 'rechazada';
+
+    await this.audit.safeRecord({
+      action: 'REVISION_SAP_RESEND',
+      entity: 'BusinessOrders',
+      entityId: guid,
+      category: AuditCategory.SapReview,
+      guidUsers: actor.guid ?? null,
+      guidApiLoginClients: actor.guidApiLoginClients ?? null,
+      actorEmail,
+      detail: [
+        `orden=${guid}`,
+        `resultado=${desenlace}`,
+        `centros=${result.acceptedBuckets}/${result.totalBuckets}`,
+        // Qué pasó en cada uno, con su número de pedido: es lo que hace reconstruible
+        // un envío partido meses después.
+        `detalle=${
+          result.buckets
+            .map((b) => `${b.centerCode}:${b.status}${b.sapOrderNumber ? `/${b.sapOrderNumber}` : ''}`)
+            .join(' ') || '-'
+        }`,
+        `motivo=${result.skippedReason ?? result.error ?? '-'}`,
+      ].join(' | '),
+    });
+
+    return result;
   }
 
   /**

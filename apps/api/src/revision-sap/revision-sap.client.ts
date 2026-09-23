@@ -167,6 +167,41 @@ function mwMessage(err: unknown): string | undefined {
   return (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
 }
 
+/**
+ * El middleware rechazó la llamada por credenciales: falta `MIDDLEWARE_API_KEY` o no
+ * coincide con la suya.
+ *
+ * Importa distinguirlo porque **no se ejecutó nada del otro lado**. Metido en el cajón
+ * de "no se pudo", un problema de configuración se lee como un problema de datos y manda
+ * a buscar donde no hay nada.
+ */
+function esFaltaDeApiKey(status: number | undefined): boolean {
+  return status === 401 || status === 403;
+}
+
+/**
+ * La llamada se cortó por tiempo, o nunca llegó a establecerse.
+ *
+ * `ECONNABORTED` (timeout de axios) y `ETIMEDOUT` son el caso **incierto**: la petición
+ * salió y no sabemos qué pasó del otro lado. `ECONNREFUSED`/`ENOTFOUND` son lo
+ * contrario — no llegó a ningún lado— y por eso no cuentan acá.
+ */
+function esTimeout(err: unknown): boolean {
+  const code = (err as { code?: string })?.code;
+  return code === 'ECONNABORTED' || code === 'ETIMEDOUT';
+}
+
+/** Nunca se estableció la conexión: el middleware está caído o la URL es otra. */
+function noLlego(err: unknown): boolean {
+  const code = (err as { code?: string })?.code;
+  return code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EHOSTUNREACH';
+}
+
+/** Mensaje de credenciales, uno solo para todo el cliente. */
+const SIN_API_KEY =
+  'El Middleware rechazó la credencial de BackOffice: falta MIDDLEWARE_API_KEY o no coincide con la suya. ' +
+  'La operación no se ejecutó.';
+
 @Injectable()
 export class RevisionSapClient {
   constructor(
@@ -320,6 +355,7 @@ export class RevisionSapClient {
       return res.data.data;
     } catch (err) {
       const status = httpStatus(err);
+      if (esFaltaDeApiKey(status)) throw new ServiceUnavailableException(SIN_API_KEY);
       if (status === 404) throw new NotFoundException(mwMessage(err) ?? 'Orden no encontrada');
       // 409: la orden salió de revisión mientras se editaba.
       if (status === 409) throw new ConflictException(mwMessage(err) ?? 'La orden ya no está en revisión');
@@ -353,6 +389,7 @@ export class RevisionSapClient {
       return res.data.data;
     } catch (err) {
       const status = httpStatus(err);
+      if (esFaltaDeApiKey(status)) throw new ServiceUnavailableException(SIN_API_KEY);
       if (status === 404) throw new NotFoundException(mwMessage(err) ?? 'Orden no encontrada');
       // 409: salió de revisión —o ya la rechazaron— mientras se confirmaba.
       if (status === 409) {
@@ -400,18 +437,45 @@ export class RevisionSapClient {
     } catch (err) {
       const status = httpStatus(err);
       const message = mwMessage(err);
+
+      // CREDENCIALES. El middleware exige `x-api-key` para aceptar `asBackoffice: true`
+      // y responde 401 SIN ejecutar nada. Va PRIMERO y con mensaje propio porque el
+      // genérico de abajo —"verificá en SAP"— sería una mentira alarmante: manda a
+      // buscar un pedido que nunca se intentó crear.
+      if (esFaltaDeApiKey(status)) {
+        throw new ServiceUnavailableException(
+          `${message ?? SIN_API_KEY} No se creó ningún pedido en SAP.`,
+        );
+      }
       // El pedido ya existe en SAP: reenviarlo lo duplicaría. El middleware lo frena
       // sólo para BackOffice, y el mensaje explica qué hacer en su lugar.
       if (status === 409) {
         throw new ConflictException(message ?? 'La orden ya tiene un pedido creado en SAP');
       }
       if (status === 404) throw new NotFoundException(message ?? 'Orden no encontrada');
+      // El middleware rechazó ANTES de llamar a SAP (faltan centros, sin stock, crédito
+      // vencido): no hay nada creado y el motivo es accionable.
       if (status === 400 || status === 422) {
-        throw new BadRequestException(message ?? 'La orden no está en condiciones de enviarse');
+        throw new BadRequestException(
+          `${message ?? 'La orden no está en condiciones de enviarse'} No se creó ningún pedido en SAP.`,
+        );
       }
-      // Sin respuesta: el pedido PUDO haberse creado. No se reintenta a ciegas.
+      // Nunca salió de acá: el middleware no respondió el saludo.
+      if (noLlego(err)) {
+        throw new ServiceUnavailableException(
+          'No se pudo contactar al Middleware: el envío no salió y no se creó ningún pedido en SAP.',
+        );
+      }
+      // INCIERTO, y sólo acá. La petición salió y se cortó por tiempo, o el middleware
+      // falló a mitad de camino: puede haber pedidos creados. Es el único caso en que
+      // reintentar a ciegas duplicaría, así que es el único que manda a mirar SAP.
+      const porTiempo = esTimeout(err);
       throw new ServiceUnavailableException(
-        'SAP no confirmó el envío. Verificá en SAP si el pedido se creó antes de reintentar.',
+        (porTiempo
+          ? 'El envío superó el tiempo de espera y SAP no confirmó el resultado.'
+          : 'El Middleware no confirmó el envío.') +
+          ' Verificá en SAP si se crearon pedidos antes de reintentar: con la orden partida por' +
+          ' centro, puede haber salido una parte.',
       );
     }
   }
@@ -435,6 +499,7 @@ export class RevisionSapClient {
     } catch (err) {
       const status = httpStatus(err);
       const message = mwMessage(err);
+      if (esFaltaDeApiKey(status)) throw new ServiceUnavailableException(SIN_API_KEY);
       if (status === 404) throw new NotFoundException(message ?? 'La orden o la línea no existen');
       if (status === 409) {
         throw new ConflictException(message ?? 'La orden ya no está en revisión');

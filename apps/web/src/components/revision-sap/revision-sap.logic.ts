@@ -5,6 +5,7 @@ import {
   LineDraft,
   LineDrafts,
   ProductStockRow,
+  ResendPlan,
   ReviewCatalogs,
   ReviewItem,
   SalesArea,
@@ -359,7 +360,11 @@ export function blockingItemCount(
   headerCenterCode: string | null,
   catalogs: ReviewCatalogs,
 ): number {
-  return items.filter((item) =>
+  // Sólo las ACTIVAS. Una línea cancelada no viaja, así que su destino vacío o su centro
+  // no permitido no pueden hacer rebotar el envío: sería un bloqueo sobre algo que no se
+  // manda, y cancelar la línea problemática dejaría de destrabar la orden — que es
+  // justamente para lo que sirve.
+  return activeItems(items).filter((item) =>
     itemWarnings(item, draftFor(item, drafts), headerCenterCode, catalogs).some((w) => w.blocking),
   ).length;
 }
@@ -478,10 +483,56 @@ export function sapOrdersByCenter(
   headerCenterCode: string | null,
 ): { centerCode: string | null; lines: number[] }[] {
   const groups = new Map<string, number[]>();
-  for (const item of items) {
+  for (const item of activeItems(items)) {
     const code = effectiveCenter(draftFor(item, drafts).centerCode, headerCenterCode).code ?? '';
     if (!groups.has(code)) groups.set(code, []);
     groups.get(code)?.push(item.lineNumber);
   }
   return [...groups.entries()].map(([code, lines]) => ({ centerCode: code || null, lines }));
+}
+
+/**
+ * Arma CÓMO VA A SALIR el próximo envío: una orden SAP por centro, con sus productos.
+ *
+ * Se calcula en el navegador y no se le pide al servidor, porque no hay nada que
+ * preguntar: el envío parte por centro y excluye las canceladas, y las dos reglas ya
+ * están acá. Pedirlo sería inventar un endpoint para repetir lo que la pantalla sabe.
+ *
+ * Toma los DRAFTS, no lo guardado: si el usuario movió una línea de centro y todavía no
+ * guardó, la previsualización tiene que mostrar el centro que eligió. Mostrarle el viejo
+ * convertiría la confirmación en una trampa.
+ *
+ * `attemptsSoFar` son los envíos que ya se hicieron: el próximo es el siguiente número.
+ */
+export function planResend(
+  items: ReviewItem[],
+  drafts: LineDrafts,
+  headerCenterCode: string | null,
+  centers: CenterOption[],
+  attemptsSoFar: number,
+): ResendPlan {
+  const nombres = new Map(centers.map((c) => [c.centerCode, c.centerName]));
+  const porCentro = new Map<string, ReviewItem[]>();
+
+  for (const item of activeItems(items)) {
+    const code = effectiveCenter(draftFor(item, drafts).centerCode, headerCenterCode).code ?? '';
+    if (!porCentro.has(code)) porCentro.set(code, []);
+    porCentro.get(code)?.push(item);
+  }
+
+  const orders = [...porCentro.entries()].map(([code, lines]) => ({
+    centerCode: code || null,
+    centerName: code ? (nombres.get(code) ?? null) : null,
+    // Dentro de cada orden SAP, por número de línea: es el orden en que el usuario las
+    // ve en la tabla de arriba.
+    items: [...lines].sort((a, b) => a.lineNumber - b.lineNumber),
+  }));
+
+  return {
+    // Por centro, para que dos previsualizaciones seguidas no bailen.
+    orders: orders.sort((a, b) => (a.centerCode ?? '').localeCompare(b.centerCode ?? '')),
+    attemptNumber: Math.max(0, attemptsSoFar) + 1,
+    cancelledCount: items.length - activeItems(items).length,
+    itemCount: activeItems(items).length,
+  };
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { ResendBucket, ResendResult } from './revision-sap.types';
+import { formatQuantity } from './revision-sap.logic';
+import { ResendBucket, ResendPlan, ResendResult } from './revision-sap.types';
 import { SapErrorMessage } from './SapErrorMessage';
 
 interface Props {
@@ -9,8 +10,8 @@ interface Props {
   /** Productos con un aviso que impide enviar. */
   blocking: number;
   groupInvoice: boolean;
-  /** En cuántas órdenes SAP va a salir: una por centro distinto. */
-  centersToSend: number;
+  /** Cómo va a salir el envío: una orden SAP por centro, con sus productos. */
+  plan: ResendPlan;
   sending: boolean;
   /** Resultado del envío; mientras es `null`, el modal pregunta. */
   result: ResendResult | null;
@@ -36,8 +37,13 @@ const ESTADO: Record<ResendBucket['status'], { label: string; tone: 'ok' | 'warn
  * un toast que se va: los números de pedido son el dato que BackOffice necesita copiar, y
  * los motivos de rechazo son lo que hay que leer para corregir.
  *
- * **El resultado va POR CENTRO**, porque el envío parte la orden en una orden SAP por
- * centro de distribución. Un resumen único no alcanzaría: con tres centros puede que dos
+ * **Antes de enviar muestra CÓMO VA A SALIR**: una tarjeta por orden SAP, con sus
+ * productos y el número de intento. No es decoración — el envío parte la orden por centro
+ * y deja afuera las líneas canceladas, y ninguna de esas dos cosas se ve mirando la orden.
+ * Sin esto, "Reenviar a SAP" es un botón que crea pedidos a ciegas, y un clic sin querer
+ * los crea igual.
+ *
+ * **El resultado va POR CENTRO**, por la misma razón: con tres centros puede que dos
  * salgan y uno no, y hace falta saber CUÁL falló para corregir sólo ese.
  */
 export function ResendModal({
@@ -45,7 +51,7 @@ export function ResendModal({
   pendingChanges,
   blocking,
   groupInvoice,
-  centersToSend,
+  plan,
   sending,
   result,
   error,
@@ -53,6 +59,10 @@ export function ResendModal({
   onClose,
 }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const centersToSend = plan.orders.length;
+  // Sin líneas activas no hay nada que mandar: el envío rebotaría sin crear ningún
+  // pedido. Se avisa acá en vez de dejar que el usuario descubra el rechazo.
+  const sinNadaQueEnviar = centersToSend === 0;
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -90,25 +100,86 @@ export function ResendModal({
           {titulo}
         </h2>
 
-        {/* ---- Antes de enviar: qué va a pasar ---- */}
+        {/* ---- Antes de enviar: CÓMO va a salir, y después qué va a pasar ---- */}
         {!result && !error && (
           <>
-            <p className="bo-rs__modal-text">
-              La orden sale <strong>partida por centro de distribución</strong>:{' '}
-              {centersToSend === 1
-                ? 'todas las líneas van juntas en una sola orden SAP.'
-                : `se crean ${centersToSend} órdenes SAP, una por centro.`}{' '}
-              SAP decide cada una por separado.
-            </p>
-            <ul className="bo-rs__gi-effects">
-              <li className="bo-rs__gi-effect bo-rs__gi-effect--warn">
-                <strong>
+            {sinNadaQueEnviar ? (
+              <p className="bo-rs__warning bo-rs__warning--blocking">
+                <strong>No queda ninguna línea para enviar.</strong>{' '}
+                {plan.cancelledCount > 0
+                  ? `Las ${plan.cancelledCount} líneas de la orden están canceladas.`
+                  : 'La orden no tiene productos.'}{' '}
+                El envío rebotaría sin crear ningún pedido. Si la orden no va a salir, lo
+                que corresponde es <strong>rechazarla</strong>: cierra el documento y le
+                avisa al vendedor con el motivo.
+              </p>
+            ) : (
+              <>
+                <p className="bo-rs__modal-text">
+                  Va a ser el <strong>intento {plan.attemptNumber}</strong>. La orden sale{' '}
+                  <strong>partida por centro de distribución</strong>:{' '}
                   {centersToSend === 1
-                    ? 'Crea un pedido real en SAP.'
-                    : `Crea ${centersToSend} pedidos reales en SAP.`}
-                </strong>{' '}
-                No se puede deshacer desde BackOffice: si sale mal, se resuelve en SAP.
-              </li>
+                    ? 'todas las líneas van juntas en una sola orden SAP.'
+                    : `se crean ${centersToSend} órdenes SAP, una por centro.`}{' '}
+                  SAP decide cada una por separado.
+                </p>
+
+                {/* La previsualización: qué lleva cada orden SAP, producto por producto. */}
+                <ul className="bo-rs__plan">
+                  {plan.orders.map((o, i) => (
+                    <li key={o.centerCode ?? `sin-centro-${i}`} className="bo-rs__plan-order">
+                      <div className="bo-rs__plan-head">
+                        <strong>
+                          {centersToSend === 1
+                            ? 'Orden SAP'
+                            : `Orden SAP ${i + 1} de ${centersToSend}`}
+                        </strong>
+                        <span className="bo-rs__pill bo-rs__pill--muted">
+                          {o.centerCode
+                            ? `Centro ${o.centerCode}${o.centerName ? ` · ${o.centerName}` : ''}`
+                            : 'Centro de la cabecera'}
+                        </span>
+                        <span className="bo-rs__cell--muted">
+                          {o.items.length === 1 ? '1 producto' : `${o.items.length} productos`}
+                        </span>
+                      </div>
+                      <ul className="bo-rs__plan-items">
+                        {o.items.map((item) => (
+                          <li key={item.guid} className="bo-rs__plan-item">
+                            <span className="bo-rs__cell--muted">{item.lineNumber}</span>
+                            <span className="bo-rs__cell--strong">{item.productCode}</span>
+                            <span>{item.productDescription ?? '—'}</span>
+                            <span className="bo-rs__cell--number">
+                              {formatQuantity(item.quantity)} {item.unitOfMeasure ?? ''}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            <ul className="bo-rs__gi-effects">
+              {plan.cancelledCount > 0 && !sinNadaQueEnviar && (
+                <li className="bo-rs__gi-effect">
+                  {plan.cancelledCount === 1
+                    ? '1 línea cancelada queda afuera'
+                    : `${plan.cancelledCount} líneas canceladas quedan afuera`}
+                  : no viajan a SAP. Si alguna tenía que ir, reactivala antes de enviar.
+                </li>
+              )}
+              {!sinNadaQueEnviar && (
+                <li className="bo-rs__gi-effect bo-rs__gi-effect--warn">
+                  <strong>
+                    {centersToSend === 1
+                      ? 'Crea un pedido real en SAP.'
+                      : `Crea ${centersToSend} pedidos reales en SAP.`}
+                  </strong>{' '}
+                  No se puede deshacer desde BackOffice: si sale mal, se resuelve en SAP.
+                </li>
+              )}
               {centersToSend > 1 && (
                 <li className="bo-rs__gi-effect bo-rs__gi-effect--warn">
                   Cada centro va por su cuenta: <strong>puede que unos salgan y otros no</strong>.
@@ -238,7 +309,20 @@ export function ResendModal({
             {result || error ? 'Cerrar' : 'Cancelar'}
           </button>
           {!result && !error && (
-            <button type="button" className="bo-rs__button" disabled={sending} onClick={onConfirm}>
+            <button
+              type="button"
+              className="bo-rs__button"
+              // Sin líneas activas el envío no puede salir. El servidor lo rechaza igual
+              // —es él quien manda— pero dejar el botón vivo sería ofrecer algo que no
+              // funciona y devolver un error donde ya sabíamos la respuesta.
+              disabled={sending || sinNadaQueEnviar}
+              title={
+                sinNadaQueEnviar
+                  ? 'No queda ninguna línea para enviar: reactivá alguna o rechazá la orden'
+                  : undefined
+              }
+              onClick={onConfirm}
+            >
               {sending ? 'Enviando a SAP…' : 'Sí, reenviar a SAP'}
             </button>
           )}

@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ReviewOrderDetail } from './ReviewOrderDetail';
 import { ResendModal } from './ResendModal';
 import {
   ProductStock,
   ResendBucket,
+  ResendPlan,
   ResendResult,
   ReviewCatalogs,
   ReviewOrderDetail as Detail,
@@ -64,6 +65,10 @@ function order(over: Partial<Detail> = {}): Detail {
         centerCode: '2801',
         deliveryDestinationCode: '30000124',
         deliveryDestinationName: 'Inversiones',
+        cancelledAt: null,
+        cancelledBy: null,
+        noSaleReasonCode: null,
+        noSaleReasonNotes: null,
       },
       {
         guid: 'item-3',
@@ -75,6 +80,10 @@ function order(over: Partial<Detail> = {}): Detail {
         centerCode: '2802',
         deliveryDestinationCode: '30000124',
         deliveryDestinationName: 'Inversiones',
+        cancelledAt: null,
+        cancelledBy: null,
+        noSaleReasonCode: null,
+        noSaleReasonNotes: null,
       },
     ],
     sapAttempts: [
@@ -185,6 +194,9 @@ const api = vi.hoisted(() => ({
   rejectOrder: vi.fn(),
   resendToSap: vi.fn(),
   getProductStock: vi.fn(),
+  cancelItem: vi.fn(),
+  reactivateItem: vi.fn(),
+  listNoSaleReasons: vi.fn(),
 }));
 
 vi.mock('./revision-sap.api', () => ({
@@ -197,8 +209,17 @@ vi.mock('./revision-sap.api', () => ({
   rejectOrder: api.rejectOrder,
   resendToSap: api.resendToSap,
   getProductStock: api.getProductStock,
+  cancelItem: api.cancelItem,
+  reactivateItem: api.reactivateItem,
+  listNoSaleReasons: api.listNoSaleReasons,
   apiErrorMessage: (_err: unknown, fallback: string) => fallback,
 }));
+
+/** El catálogo de motivos: el mismo que usa MobilityIA. */
+const MOTIVOS = [
+  { code: 'SIN_STOCK', label: 'Sin stock', sortOrder: 1 },
+  { code: 'PRECIO', label: 'Precio no aceptado', sortOrder: 2 },
+];
 
 /**
  * El envío devuelve UNA ENTRADA POR CENTRO: parte la orden en una orden SAP por centro
@@ -248,6 +269,9 @@ beforeEach(() => {
   api.rejectOrder.mockReset().mockResolvedValue({ ok: true, statusCode: 'Rejected' });
   api.resendToSap.mockReset().mockResolvedValue(envioAceptado);
   api.getProductStock.mockReset().mockResolvedValue(stock);
+  api.cancelItem.mockReset().mockResolvedValue({ ok: true, activosRestantes: 1, item: {} });
+  api.reactivateItem.mockReset().mockResolvedValue({ ok: true, activosRestantes: 2, item: {} });
+  api.listNoSaleReasons.mockReset().mockResolvedValue(MOTIVOS);
 });
 
 async function renderDetail() {
@@ -550,6 +574,20 @@ describe('ReviewOrderDetail', () => {
    * y reintentar la duplicaría.
    */
   describe('resultado del reenvío, por centro', () => {
+    /**
+     * Cómo va a salir el envío. `centros` arma una orden SAP por centro con la línea que
+     * le corresponde de la orden de prueba, que es lo que muestra la previsualización.
+     */
+    const plan = (centros: number): ResendPlan => ({
+      orders: [
+        { centerCode: '2801', centerName: 'DW Alm. Externo', items: [order().items[0]] },
+        { centerCode: '2802', centerName: 'DW Cartago', items: [order().items[1]] },
+      ].slice(0, centros),
+      attemptNumber: 3,
+      cancelledCount: 0,
+      itemCount: centros,
+    });
+
     const bucket = (over: Partial<ResendBucket> = {}): ResendBucket => ({
       centerCode: '2801',
       itemsCount: 1,
@@ -569,7 +607,7 @@ describe('ReviewOrderDetail', () => {
           pendingChanges={0}
           blocking={0}
           groupInvoice={false}
-          centersToSend={result.totalBuckets}
+          plan={plan(result.totalBuckets)}
           sending={false}
           result={result}
           error={null}
@@ -658,7 +696,7 @@ describe('ReviewOrderDetail', () => {
           pendingChanges={0}
           blocking={0}
           groupInvoice={false}
-          centersToSend={2}
+          plan={plan(2)}
           sending={false}
           result={null}
           error={null}
@@ -670,6 +708,83 @@ describe('ReviewOrderDetail', () => {
       expect(screen.getByText(/Crea 2 pedidos reales en SAP/)).toBeTruthy();
       // Y que cada uno va por su cuenta: unos pueden salir y otros no.
       expect(screen.getByText(/puede que unos salgan y otros no/)).toBeTruthy();
+    });
+
+    /**
+     * LA PREVISUALIZACIÓN. Antes de crear pedidos reales hay que poder ver QUÉ se manda:
+     * el envío parte la orden por centro y deja afuera las canceladas, y ninguna de esas
+     * dos cosas se ve mirando la orden.
+     */
+    it('antes de enviar muestra cada orden SAP con sus productos y el intento', () => {
+      render(
+        <ResendModal
+          orderNumber="ORD00005729"
+          pendingChanges={0}
+          blocking={0}
+          groupInvoice={false}
+          plan={plan(2)}
+          sending={false}
+          result={null}
+          error={null}
+          onConfirm={() => undefined}
+          onClose={() => undefined}
+        />,
+      );
+      expect(screen.getByText(/intento 3/)).toBeTruthy();
+      expect(screen.getByText('Orden SAP 1 de 2')).toBeTruthy();
+      expect(screen.getByText('Orden SAP 2 de 2')).toBeTruthy();
+      expect(screen.getByText(/Centro 2801/)).toBeTruthy();
+      expect(screen.getByText(/Centro 2802/)).toBeTruthy();
+      // Los productos, no sólo el conteo: es lo que deja ver que falta uno.
+      expect(screen.getByText('1200183')).toBeTruthy();
+      expect(screen.getByText('1200135')).toBeTruthy();
+    });
+
+    /** Las canceladas se cuentan aparte: el faltante no puede aparecer sin explicación. */
+    it('avisa cuántas líneas canceladas quedan afuera', () => {
+      render(
+        <ResendModal
+          orderNumber="ORD00005729"
+          pendingChanges={0}
+          blocking={0}
+          groupInvoice={false}
+          plan={{ ...plan(1), cancelledCount: 2 }}
+          sending={false}
+          result={null}
+          error={null}
+          onConfirm={() => undefined}
+          onClose={() => undefined}
+        />,
+      );
+      expect(screen.getByText(/2 líneas canceladas quedan afuera/)).toBeTruthy();
+    });
+
+    /**
+     * SIN NADA QUE ENVIAR. Con todas las líneas canceladas el envío rebota, así que el
+     * modal lo dice y apaga el botón en vez de dejar que el usuario descubra el rechazo.
+     */
+    it('con todo cancelado no deja confirmar y sugiere rechazar la orden', () => {
+      render(
+        <ResendModal
+          orderNumber="ORD00005729"
+          pendingChanges={0}
+          blocking={0}
+          groupInvoice={false}
+          plan={{ orders: [], attemptNumber: 2, cancelledCount: 3, itemCount: 0 }}
+          sending={false}
+          result={null}
+          error={null}
+          onConfirm={() => undefined}
+          onClose={() => undefined}
+        />,
+      );
+      expect(screen.getByText(/No queda ninguna línea para enviar/)).toBeTruthy();
+      expect(screen.getByText(/las 3 líneas de la orden están canceladas/i)).toBeTruthy();
+      expect(
+        (screen.getByRole('button', { name: /reenviar a SAP/i }) as HTMLButtonElement).disabled,
+      ).toBe(true);
+      // Y no promete pedidos que no se van a crear.
+      expect(screen.queryByText(/pedidos reales en SAP/)).toBeNull();
     });
   });
 
@@ -882,5 +997,184 @@ describe('ReviewOrderDetail', () => {
     expect(screen.getByText(/ya no está en revisión/)).toBeTruthy();
     expect(centerSelect().disabled).toBe(true);
     expect(destinationSelect().disabled).toBe(true);
+  });
+
+  /**
+   * CANCELAR UNA LÍNEA con motivo de no venta (pedido 2026-09-22).
+   *
+   * Lo que se fija acá:
+   *  - el motivo es obligatorio y sale del CATÁLOGO, no es texto libre;
+   *  - la línea cancelada NO desaparece: sigue en la tabla, con su motivo, porque es la
+   *    respuesta a "por qué el pedido que llegó a SAP es más chico";
+   *  - cancelar la ÚLTIMA activa avisa y ofrece rechazar la orden, que es lo que
+   *    corresponde cuando no va a salir nada;
+   *  - reactivar no se confirma, porque no destruye nada.
+   */
+  describe('cancelar una línea con motivo de no venta', () => {
+    /** Cómo vuelve la línea 1 ya cancelada desde el servidor. */
+    function conLinea1Cancelada() {
+      const base = order();
+      return order({
+        items: [
+          {
+            ...base.items[0],
+            cancelledAt: '2026-09-22T10:00:00Z',
+            cancelledBy: 'bo@duwest.com',
+            noSaleReasonCode: 'SIN_STOCK',
+            noSaleReasonNotes: 'el cliente no espera',
+          },
+          base.items[1],
+        ],
+      });
+    }
+
+    const cancelarLinea = () =>
+      screen.getAllByRole('button', { name: 'Cancelar línea' })[0] as HTMLButtonElement;
+
+    it('pide un motivo del catálogo y no deja confirmar sin elegirlo', async () => {
+      await renderDetail();
+      fireEvent.click(cancelarLinea());
+
+      expect(screen.getByText('Cancelar línea 1')).toBeTruthy();
+      // El botón arranca apagado: sin motivo no se puede cancelar.
+      expect(button('Cancelar la línea').disabled).toBe(true);
+
+      const select = screen.getByLabelText(/Motivo de no venta/) as HTMLSelectElement;
+      // Las opciones son las del catálogo, con su etiqueta legible.
+      expect(screen.getByRole('option', { name: 'Sin stock' })).toBeTruthy();
+      expect(screen.getByRole('option', { name: 'Precio no aceptado' })).toBeTruthy();
+
+      fireEvent.change(select, { target: { value: 'SIN_STOCK' } });
+      expect(button('Cancelar la línea').disabled).toBe(false);
+    });
+
+    it('manda el motivo y la nota, y avisa cuántas líneas quedan', async () => {
+      await renderDetail();
+      fireEvent.click(cancelarLinea());
+      fireEvent.change(screen.getByLabelText(/Motivo de no venta/), {
+        target: { value: 'SIN_STOCK' },
+      });
+      fireEvent.change(screen.getByLabelText(/Aclaración/), {
+        target: { value: 'el cliente no espera' },
+      });
+      api.getReviewOrder.mockResolvedValue(conLinea1Cancelada());
+
+      fireEvent.click(button('Cancelar la línea'));
+
+      await waitFor(() =>
+        expect(api.cancelItem).toHaveBeenCalledWith(
+          ORDER,
+          'item-1',
+          'SIN_STOCK',
+          'el cliente no espera',
+        ),
+      );
+      expect(await screen.findByText(/Quedan 1 línea activa/)).toBeTruthy();
+    });
+
+    it('la nota es opcional', async () => {
+      await renderDetail();
+      fireEvent.click(cancelarLinea());
+      fireEvent.change(screen.getByLabelText(/Motivo de no venta/), {
+        target: { value: 'PRECIO' },
+      });
+      fireEvent.click(button('Cancelar la línea'));
+
+      await waitFor(() =>
+        expect(api.cancelItem).toHaveBeenCalledWith(ORDER, 'item-1', 'PRECIO', null),
+      );
+    });
+
+    /** Lo que distingue esto de un borrado: la línea sigue, y dice por qué no va. */
+    it('la línea cancelada sigue en la tabla, con su motivo y quién la canceló', async () => {
+      api.getReviewOrder.mockResolvedValue(conLinea1Cancelada());
+      await renderDetail();
+
+      expect(screen.getByText('1200183')).toBeTruthy();
+      expect(screen.getByText('No se envía')).toBeTruthy();
+      // El motivo con su ETIQUETA, no el código: 'SIN_STOCK' no le dice nada a nadie.
+      expect(screen.getByText(/Sin stock/)).toBeTruthy();
+      expect(screen.getByText(/el cliente no espera/)).toBeTruthy();
+      expect(screen.getByText(/Cancelada por bo@duwest.com/)).toBeTruthy();
+      // Y no se le puede cambiar el centro: no va a salir.
+      expect(
+        (screen.getByLabelText('Centro de distribución de la línea 1') as HTMLSelectElement)
+          .disabled,
+      ).toBe(true);
+    });
+
+    it('reactivar no pide confirmación y recarga la orden', async () => {
+      api.getReviewOrder.mockResolvedValue(conLinea1Cancelada());
+      await renderDetail();
+
+      api.getReviewOrder.mockResolvedValue(order());
+      fireEvent.click(button('Reactivar'));
+
+      await waitFor(() => expect(api.reactivateItem).toHaveBeenCalledWith(ORDER, 'item-1'));
+      expect(await screen.findByText(/vuelve a incluirse en el próximo envío/)).toBeTruthy();
+    });
+
+    /** El servidor frena la reactivación si hubo un envío: ese mensaje es el que importa. */
+    it('si ya se reenvió, el fallo de reactivar queda al lado de la línea', async () => {
+      api.getReviewOrder.mockResolvedValue(conLinea1Cancelada());
+      await renderDetail();
+      api.reactivateItem.mockRejectedValue(new Error('409'));
+
+      fireEvent.click(button('Reactivar'));
+      expect(await screen.findByText('No se pudo reactivar la línea.')).toBeTruthy();
+    });
+
+    /**
+     * LA ÚLTIMA LÍNEA. Cancelarla deja el envío sin nada que mandar, así que el modal
+     * avisa y ofrece el camino correcto en vez de dejar que lo descubra al reenviar.
+     */
+    it('al cancelar la última línea activa avisa y ofrece rechazar la orden', async () => {
+      const base = order();
+      api.getReviewOrder.mockResolvedValue(
+        order({
+          items: [
+            {
+              ...base.items[0],
+              cancelledAt: '2026-09-22T10:00:00Z',
+              cancelledBy: 'bo@duwest.com',
+              noSaleReasonCode: 'SIN_STOCK',
+              noSaleReasonNotes: null,
+            },
+            base.items[1],
+          ],
+        }),
+      );
+      await renderDetail();
+
+      fireEvent.click(cancelarLinea());
+      expect(screen.getByText(/Es la última línea que queda/)).toBeTruthy();
+      expect(screen.getByText(/va a rebotar sin crear ningún pedido/)).toBeTruthy();
+
+      // Y el atajo lleva al rechazo, cerrando este modal: son alternativas, no se suman.
+      // Se busca DENTRO del diálogo: "Rechazar orden" también está en la barra de acciones
+      // de atrás, y el que importa es el del modal.
+      fireEvent.click(
+        within(screen.getByRole('dialog')).getByRole('button', { name: 'Rechazar orden' }),
+      );
+      expect(await screen.findByText('Rechazar ORD00005729')).toBeTruthy();
+      expect(screen.queryByText(/Cancelar línea 3/)).toBeNull();
+    });
+
+    it('fuera de revisión no se puede cancelar ni reactivar', async () => {
+      const base = order();
+      api.getReviewOrder.mockResolvedValue(
+        order({
+          backoffice: { inReview: false, decidedBy: 'bo@duwest.com', decidedAt: null },
+          items: [
+            { ...base.items[0], cancelledAt: '2026-09-22T10:00:00Z', cancelledBy: 'bo@duwest.com', noSaleReasonCode: 'SIN_STOCK', noSaleReasonNotes: null },
+            base.items[1],
+          ],
+        }),
+      );
+      await renderDetail();
+
+      expect(button('Reactivar').disabled).toBe(true);
+      expect(cancelarLinea().disabled).toBe(true);
+    });
   });
 });

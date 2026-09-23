@@ -7,6 +7,8 @@ import {
   CenterChangeResult,
   DestinationChangeResult,
   GroupInvoiceChangeResult,
+  ItemCancellationResult,
+  NoSaleReason,
   ProductStock,
   RejectResult,
   ResendResult,
@@ -218,6 +220,89 @@ export class RevisionSapService {
             .join(' ') || '-'
         }`,
         `motivo=${result.skippedReason ?? result.error ?? '-'}`,
+      ].join(' | '),
+    });
+
+    return result;
+  }
+
+  /** Catálogo de motivos de no venta. Es una LECTURA: no se audita. */
+  listNoSaleReasons(): Promise<NoSaleReason[]> {
+    return this.client.listNoSaleReasons();
+  }
+
+  /**
+   * CANCELA una línea con motivo de no venta: deja de viajar a SAP, pero sigue viéndose.
+   *
+   * Se audita SIEMPRE —no hay cancelación que no cambie nada— y con el motivo adentro:
+   * la fila de auditoría tiene que alcanzar para responder "¿por qué esta línea no
+   * llegó a SAP?" sin abrir la orden.
+   *
+   * El comentario en el hilo del vendedor NO se escribe acá: lo deja el middleware, con
+   * la etiqueta del motivo.
+   */
+  async cancelItem(
+    guid: string,
+    itemGuid: string,
+    reasonCode: string,
+    reasonNotes: string | null,
+    actor: Actor,
+  ): Promise<ItemCancellationResult> {
+    const actorEmail = this.requireEmail(actor);
+    const result = await this.client.cancelItem(guid, itemGuid, {
+      reasonCode,
+      reasonNotes,
+      actorEmail,
+    });
+
+    await this.audit.safeRecord({
+      action: 'REVISION_SAP_ITEM_CANCEL',
+      entity: 'BusinessOrderItems',
+      entityId: result.item.guid,
+      category: AuditCategory.SapReview,
+      guidUsers: actor.guid ?? null,
+      guidApiLoginClients: actor.guidApiLoginClients ?? null,
+      actorEmail,
+      detail: [
+        `orden=${guid}`,
+        `linea=${result.item.lineNumber}`,
+        `producto=${result.item.productCode}`,
+        `motivo=${reasonCode}`,
+        `nota=${reasonNotes ?? '-'}`,
+        // Cuántas quedaron: si es 0, el próximo envío no puede salir, y eso explica
+        // solo un rechazo posterior.
+        `activosRestantes=${result.activosRestantes}`,
+      ].join(' | '),
+    });
+
+    return result;
+  }
+
+  /**
+   * REACTIVA una línea cancelada. El middleware lo frena si hubo un envío posterior a la
+   * cancelación: ese envío ya salió sin la línea.
+   */
+  async reactivateItem(
+    guid: string,
+    itemGuid: string,
+    actor: Actor,
+  ): Promise<ItemCancellationResult> {
+    const actorEmail = this.requireEmail(actor);
+    const result = await this.client.reactivateItem(guid, itemGuid, { actorEmail });
+
+    await this.audit.safeRecord({
+      action: 'REVISION_SAP_ITEM_REACTIVATE',
+      entity: 'BusinessOrderItems',
+      entityId: result.item.guid,
+      category: AuditCategory.SapReview,
+      guidUsers: actor.guid ?? null,
+      guidApiLoginClients: actor.guidApiLoginClients ?? null,
+      actorEmail,
+      detail: [
+        `orden=${guid}`,
+        `linea=${result.item.lineNumber}`,
+        `producto=${result.item.productCode}`,
+        `activosRestantes=${result.activosRestantes}`,
       ].join(' | '),
     });
 

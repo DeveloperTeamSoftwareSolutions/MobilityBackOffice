@@ -13,6 +13,8 @@ import {
   CenterChangeResult,
   DestinationChangeResult,
   GroupInvoiceChangeResult,
+  ItemCancellationResult,
+  NoSaleReason,
   ProductStock,
   RejectResult,
   ResendBucket,
@@ -39,6 +41,20 @@ const ORDER_PATH = (guid: string) => `${ORDERS_PATH}/${encodeURIComponent(guid)}
  * No cuelga del router de revisión, así que la ruta se arma aparte.
  */
 const SEND_PATH = '/v2/mobility/businessorders2sap-from-backoffice';
+
+/**
+ * Catálogo de motivos de no venta. Tampoco cuelga del router de revisión: es un maestro
+ * compartido con MobilityIA, y ése es justamente el punto — los dos tienen que nombrar
+ * los mismos motivos con los mismos códigos.
+ */
+const NO_SALE_REASONS_PATH = '/mobility/no-sale-reasons';
+
+/** Fila del catálogo tal como la manda el middleware (trae más campos de los que usamos). */
+interface MwNoSaleReason {
+  code?: string | null;
+  label?: string | null;
+  sortOrder?: number | null;
+}
 
 /** SAP puede demorar, y ahora son VARIAS llamadas —una por centro—, así que va más largo. */
 const SEND_TIMEOUT = 180000;
@@ -168,6 +184,22 @@ function mwMessage(err: unknown): string | undefined {
 }
 
 /**
+ * El 404 no es del recurso: es de la RUTA. El middleware que está del otro lado no tiene
+ * este endpoint.
+ *
+ * Los dos llegan como 404 y significan cosas opuestas: uno dice "esa orden no existe" —y
+ * manda a buscar un dato— y el otro dice "este Middleware está viejo", que se arregla
+ * con un deploy. Confundirlos hace perder el rato mirando la orden equivocada.
+ *
+ * Se reconoce porque Express contesta con su página HTML (`Cannot POST /ruta`) en vez del
+ * JSON `{ success, error }` que devuelve el middleware cuando la ruta existe.
+ */
+function esRutaInexistente(err: unknown): boolean {
+  const data = (err as { response?: { data?: unknown } })?.response?.data;
+  return typeof data === 'string' && /Cannot (POST|PUT|GET|DELETE)\s/i.test(data);
+}
+
+/**
  * El middleware rechazó la llamada por credenciales: falta `MIDDLEWARE_API_KEY` o no
  * coincide con la suya.
  *
@@ -196,6 +228,14 @@ function noLlego(err: unknown): boolean {
   const code = (err as { code?: string })?.code;
   return code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EHOSTUNREACH';
 }
+
+/**
+ * El Middleware del entorno no tiene el endpoint. No es un problema del dato ni de la
+ * orden: es una versión vieja, y se arregla con un deploy.
+ */
+const MIDDLEWARE_VIEJO =
+  'El Middleware de este entorno todavía no tiene esta operación: hay que actualizarlo a ' +
+  '1.369.0 o superior (y correr su migración de BusinessOrderItems). No se modificó nada.';
 
 /** Mensaje de credenciales, uno solo para todo el cliente. */
 const SIN_API_KEY =
@@ -417,12 +457,9 @@ export class RevisionSapClient {
    * Tarda: SAP puede demorar, así que el timeout es largo y propio.
    */
   /**
-   * ⚠️ HOY NO SE LLAMA: el servicio corta antes (2026-09-17).
-   *
-   * Esto pega contra el envío del Middleware, que manda la orden como UNA sola orden
-   * SAP — el camino de MobilityIA. BackOffice necesita el envío propio de Gustavo, que
-   * la parte por centro de distribución. Se conserva porque el contrato de la respuesta
-   * no cambia: lo que hay que reapuntar es el endpoint.
+   * Las líneas CANCELADAS no viajan: el middleware las excluye al armar el contexto del
+   * envío, así que este cliente no tiene que filtrar nada. Si quedaron todas canceladas,
+   * responde `422` y cae en la rama de "no se creó ningún pedido".
    */
   async resendToSap(guid: string, actorEmail: string): Promise<ResendResult> {
     try {
@@ -480,6 +517,62 @@ export class RevisionSapClient {
     }
   }
 
+  /**
+   * Catálogo de motivos de no venta, sólo los ACTIVOS.
+   *
+   * No cuelga del router de revisión: es un maestro del middleware que ya usa MobilityIA,
+   * y por eso tampoco va con `x-api-key` obligatoria. Se lee tal cual para que BackOffice
+   * y MobilityIA nombren los mismos motivos con los mismos códigos.
+   */
+  async listNoSaleReasons(): Promise<NoSaleReason[]> {
+    try {
+      const res = await firstValueFrom(
+        this.http.get<MwData<MwNoSaleReason[]>>(`${this.base()}${NO_SALE_REASONS_PATH}`, {
+          headers: this.headers(),
+          timeout: DEFAULT_TIMEOUT,
+        }),
+      );
+      return (res.data.data ?? []).map((r) => ({
+        code: String(r.code ?? '').trim(),
+        label: String(r.label ?? '').trim() || String(r.code ?? '').trim(),
+        sortOrder: r.sortOrder ?? null,
+      }));
+    } catch {
+      throw new ServiceUnavailableException('El catálogo de motivos no está disponible');
+    }
+  }
+
+  /**
+   * CANCELA una línea con un motivo del catálogo: deja de viajar a SAP, pero sigue
+   * viéndose con su motivo.
+   *
+   * El middleware valida el motivo contra el catálogo y frena la segunda cancelación de
+   * la misma línea (`409`), para que un doble clic no pise el motivo original ni la firma
+   * de quien canceló. Sus mensajes se propagan porque dicen exactamente qué pasó.
+   */
+  cancelItem(
+    guid: string,
+    itemGuid: string,
+    body: { reasonCode: string; reasonNotes: string | null; actorEmail: string },
+  ): Promise<ItemCancellationResult> {
+    return this.postLine(guid, itemGuid, 'cancel', body, 'No se pudo cancelar la línea');
+  }
+
+  /**
+   * REACTIVA una línea cancelada: vuelve a incluirse en el próximo envío.
+   *
+   * El middleware lo permite sólo si NO hubo un envío posterior a la cancelación — ese
+   * envío ya salió sin la línea y las órdenes SAP creadas son un hecho consumado. Cuando
+   * lo frena responde `409` con ese motivo, y es el mensaje que ve el usuario.
+   */
+  reactivateItem(
+    guid: string,
+    itemGuid: string,
+    body: { actorEmail: string },
+  ): Promise<ItemCancellationResult> {
+    return this.postLine(guid, itemGuid, 'reactivate', body, 'No se pudo reactivar la línea');
+  }
+
   private async putLine<T>(
     guid: string,
     itemGuid: string,
@@ -487,20 +580,50 @@ export class RevisionSapClient {
     body: object,
     unavailable: string,
   ): Promise<T> {
+    return this.callLine('put', guid, itemGuid, field, body, unavailable);
+  }
+
+  /**
+   * Cancelar y reactivar son POST y no PUT porque no editan un campo de la línea:
+   * estampan un hecho (la cancelación) y lo deshacen.
+   */
+  private async postLine<T>(
+    guid: string,
+    itemGuid: string,
+    field: 'cancel' | 'reactivate',
+    body: object,
+    unavailable: string,
+  ): Promise<T> {
+    return this.callLine('post', guid, itemGuid, field, body, unavailable);
+  }
+
+  private async callLine<T>(
+    method: 'put' | 'post',
+    guid: string,
+    itemGuid: string,
+    field: string,
+    body: object,
+    unavailable: string,
+  ): Promise<T> {
+    const url = `${this.base()}${ORDER_PATH(guid)}/items/${encodeURIComponent(itemGuid)}/${field}`;
+    const options = { headers: this.headers(), timeout: DEFAULT_TIMEOUT };
     try {
       const res = await firstValueFrom(
-        this.http.put<MwData<T>>(
-          `${this.base()}${ORDER_PATH(guid)}/items/${encodeURIComponent(itemGuid)}/${field}`,
-          body,
-          { headers: this.headers(), timeout: DEFAULT_TIMEOUT },
-        ),
+        method === 'put'
+          ? this.http.put<MwData<T>>(url, body, options)
+          : this.http.post<MwData<T>>(url, body, options),
       );
       return res.data.data;
     } catch (err) {
       const status = httpStatus(err);
       const message = mwMessage(err);
       if (esFaltaDeApiKey(status)) throw new ServiceUnavailableException(SIN_API_KEY);
+      // ANTES que el 404 de recurso: los dos son 404 y significan lo contrario.
+      if (esRutaInexistente(err)) throw new ServiceUnavailableException(MIDDLEWARE_VIEJO);
       if (status === 404) throw new NotFoundException(message ?? 'La orden o la línea no existen');
+      // 409 cubre varias cosas distintas —fuera de revisión, ya cancelada, ya enviada— y
+      // el middleware las distingue en el mensaje. Pisarlo con uno genérico borraría el
+      // único dato que le dice al usuario qué pasó.
       if (status === 409) {
         throw new ConflictException(message ?? 'La orden ya no está en revisión');
       }

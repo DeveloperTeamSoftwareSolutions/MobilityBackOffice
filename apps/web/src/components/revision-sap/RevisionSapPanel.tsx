@@ -9,7 +9,6 @@ import {
 } from './revision-sap.types';
 import { ReviewQueueList } from './ReviewQueueList';
 import { ReviewOrderDetail } from './ReviewOrderDetail';
-import { PreviewNotice } from './PreviewNotice';
 import './revision-sap.css';
 
 /** Alto de fila estimado para calcular cuántas entran en el viewport. */
@@ -126,7 +125,6 @@ export function RevisionSapPanel() {
           </p>
         </header>
 
-        <PreviewNotice />
 
         <div className="bo-rs__tabs" role="tablist">
           {VISTAS.map((v) => (

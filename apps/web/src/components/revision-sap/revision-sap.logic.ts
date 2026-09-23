@@ -432,12 +432,13 @@ export function blockingItemCount(
   drafts: LineDrafts,
   headerCenterCode: string | null,
   catalogs: ReviewCatalogs,
+  yaEnSap?: Map<number, string>,
 ): number {
-  // Sólo las ACTIVAS. Una línea cancelada no viaja, así que su destino vacío o su centro
-  // no permitido no pueden hacer rebotar el envío: sería un bloqueo sobre algo que no se
-  // manda, y cancelar la línea problemática dejaría de destrabar la orden — que es
-  // justamente para lo que sirve.
-  return activeItems(items).filter((item) =>
+  // Sólo las que van a VIAJAR. Una línea cancelada —o una que ya tiene su pedido en SAP—
+  // no se manda, así que su destino vacío o su centro no permitido no pueden hacer
+  // rebotar el envío: sería un bloqueo sobre algo que no se manda, y cancelar la línea
+  // problemática dejaría de destrabar la orden, que es justamente para lo que sirve.
+  return activeItems(items, yaEnSap).filter((item) =>
     itemWarnings(item, draftFor(item, drafts), headerCenterCode, catalogs).some((w) => w.blocking),
   ).length;
 }
@@ -549,14 +550,60 @@ export function groupSapOrdersByAttempt(sapOrders: SapOrder[]): SapSendAttempt[]
   return intentos;
 }
 
+/** Un número de pedido real: vacío o todo ceros no cuenta (SAP devuelve `0000000000`). */
+function tienePedido(value: string | null): boolean {
+  const v = (value ?? '').trim();
+  return v !== '' && !/^0+$/.test(v);
+}
+
+/**
+ * Las líneas que YA salieron en una orden SAP con pedido creado, y en cuál.
+ * Devuelve `lineNumber -> número de pedido`.
+ *
+ * Se calcula con las órdenes SAP que el detalle ya trae, sin pedirle nada nuevo al
+ * servidor: el dato está en pantalla, sólo había que leerlo.
+ *
+ * POR QUÉ IMPORTA (ORD00000487, 2026-09-23): el envío parte la orden por centro y cada
+ * uno se acepta o se rechaza por su cuenta. Tras un envío parcial, las líneas que
+ * salieron tienen pedido REAL en SAP — y la pantalla las seguía ofreciendo como si nada,
+ * así que el siguiente reenvío las mandaba otra vez. Un pedido creado dos veces es una
+ * venta facturada dos veces.
+ *
+ * Por LÍNEA y no por producto: el mismo producto puede estar en dos líneas (en la 487, el
+ * 1230904 está en la 1 y en la 2) y sólo una salió.
+ */
+export function lineasYaEnSap(sapOrders: SapOrder[]): Map<number, string> {
+  const porLinea = new Map<number, string>();
+  for (const orden of sapOrders) {
+    if (!tienePedido(orden.sapOrderNumber)) continue;
+    const pedido = (orden.sapOrderNumber ?? '').trim();
+    for (const item of orden.items ?? []) {
+      if (item.lineNumber == null) continue;
+      // El primero que la reclama se queda: si por algún motivo apareciera en dos
+      // pedidos, el más viejo es el que la sacó de circulación.
+      if (!porLinea.has(item.lineNumber)) porLinea.set(item.lineNumber, pedido);
+    }
+  }
+  return porLinea;
+}
+
 /** La línea está cancelada por BackOffice: no viaja a SAP. */
 export function isCancelled(item: ReviewItem): boolean {
   return Boolean(item.cancelledAt);
 }
 
-/** Las líneas que SÍ van a viajar. Es lo único que el envío toma en cuenta. */
-export function activeItems(items: ReviewItem[]): ReviewItem[] {
-  return items.filter((item) => !isCancelled(item));
+/**
+ * Las líneas que SÍ van a viajar. Es lo único que el envío toma en cuenta.
+ *
+ * Quedan afuera por DOS motivos distintos, y conviene no confundirlos:
+ *   - **cancelada** por BackOffice, con su motivo de no venta — una decisión;
+ *   - **ya tiene pedido** en SAP — un hecho consumado: mandarla otra vez lo duplicaría.
+ *
+ * `yaEnSap` es opcional para no obligar a cada llamador a tenerlo; sin él sólo se
+ * descartan las canceladas, que es el comportamiento de antes.
+ */
+export function activeItems(items: ReviewItem[], yaEnSap?: Map<number, string>): ReviewItem[] {
+  return items.filter((item) => !isCancelled(item) && !yaEnSap?.has(item.lineNumber));
 }
 
 /**
@@ -570,9 +617,10 @@ export function sapOrdersByCenter(
   items: ReviewItem[],
   drafts: LineDrafts,
   headerCenterCode: string | null,
+  yaEnSap?: Map<number, string>,
 ): { centerCode: string | null; lines: number[] }[] {
   const groups = new Map<string, number[]>();
-  for (const item of activeItems(items)) {
+  for (const item of activeItems(items, yaEnSap)) {
     const code = effectiveCenter(draftFor(item, drafts).centerCode, headerCenterCode).code ?? '';
     if (!groups.has(code)) groups.set(code, []);
     groups.get(code)?.push(item.lineNumber);
@@ -599,11 +647,12 @@ export function planResend(
   headerCenterCode: string | null,
   centers: CenterOption[],
   attemptsSoFar: number,
+  yaEnSap?: Map<number, string>,
 ): ResendPlan {
   const nombres = new Map(centers.map((c) => [c.centerCode, c.centerName]));
   const porCentro = new Map<string, ReviewItem[]>();
 
-  for (const item of activeItems(items)) {
+  for (const item of activeItems(items, yaEnSap)) {
     const code = effectiveCenter(draftFor(item, drafts).centerCode, headerCenterCode).code ?? '';
     if (!porCentro.has(code)) porCentro.set(code, []);
     porCentro.get(code)?.push(item);
@@ -620,11 +669,18 @@ export function planResend(
     heredados: lines.filter((item) => !draftFor(item, drafts).centerCode).length,
   }));
 
+  const enviables = activeItems(items, yaEnSap);
+
   return {
     // Por centro, para que dos previsualizaciones seguidas no bailen.
     orders: orders.sort((a, b) => (a.centerCode ?? '').localeCompare(b.centerCode ?? '')),
     attemptNumber: Math.max(0, attemptsSoFar) + 1,
-    cancelledCount: items.length - activeItems(items).length,
-    itemCount: activeItems(items).length,
+    // Las canceladas se cuentan SIN mezclar con las que ya salieron: son dos motivos
+    // distintos de quedar afuera y el modal los explica por separado.
+    cancelledCount: items.filter(isCancelled).length,
+    // Las que ya tienen pedido: no se van a mandar, y el operador tiene que saber que no
+    // es un olvido sino que ya están en SAP.
+    alreadyInSapCount: items.filter((i) => !isCancelled(i) && yaEnSap?.has(i.lineNumber)).length,
+    itemCount: enviables.length,
   };
 }

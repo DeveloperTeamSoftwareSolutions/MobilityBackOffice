@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  activeItems,
   blockingItemCount,
   cubreLaCantidad,
   draftsTrasRecarga,
@@ -8,6 +9,7 @@ import {
   initialDrafts,
   itemWarnings,
   lineChanges,
+  lineasYaEnSap,
   parseSapError,
   salesAreaParts,
   sapErrorTypeLabel,
@@ -815,5 +817,132 @@ describe('draftsTrasRecarga — lo que el usuario venía editando no se pierde',
   it('una línea que ya no está desaparece de los drafts', () => {
     const next = draftsTrasRecarga([previos[0]], previos, initialDrafts(previos));
     expect(Object.keys(next)).toEqual(['item-1']);
+  });
+});
+
+/**
+ * LO QUE YA SALIÓ A SAP NO SE VUELVE A OFRECER (reportado 2026-09-23, ORD00000487).
+ *
+ * El envío parte la orden por centro y cada uno se acepta o se rechaza por su cuenta.
+ * Tras un envío parcial, las líneas que salieron tienen pedido REAL en SAP — y la
+ * pantalla las seguía ofreciendo, así que el reenvío siguiente las mandaba otra vez. Un
+ * pedido creado dos veces es una venta facturada dos veces.
+ */
+describe('lineasYaEnSap', () => {
+  const ordenSap = (over: Partial<SapOrder> = {}): SapOrder => ({
+    guid: 'sap-1',
+    status: 'accepted',
+    statusCode: 'Authorized',
+    orderNumber: 'ORD00000487S66',
+    source: 'backoffice',
+    centerCode: '2105',
+    centerName: 'CD Norte',
+    attemptAt: '2026-09-23T10:00:00Z',
+    sapOrderNumber: '0002490547',
+    sapDispatchNumber: '0082949621',
+    error: null,
+    items: [
+      {
+        lineNumber: 1,
+        productCode: '1230904',
+        description: 'GRAMOXONE',
+        quantity: 1,
+        unitOfMeasure: 'L',
+        itemGuid: 'item-1',
+        centerCode: '2105',
+        deliveryDestinationCode: '30000124',
+        deliveryDestinationName: 'Inversiones',
+      },
+    ],
+    ...over,
+  });
+
+  /** EL CASO REAL: un centro salió con pedido, el otro fue rechazado. */
+  it('toma las líneas de la orden SAP que tiene pedido, y sólo ésas', () => {
+    const rechazada = ordenSap({
+      guid: 'sap-2',
+      orderNumber: 'ORD00000487S67',
+      status: 'rejected',
+      centerCode: '2107',
+      sapOrderNumber: null,
+      sapDispatchNumber: null,
+      error: '[E] no ampliado',
+      items: [{ ...ordenSap().items[0], lineNumber: 2, itemGuid: 'item-2' }],
+    });
+
+    const mapa = lineasYaEnSap([ordenSap(), rechazada]);
+
+    expect(mapa.get(1)).toBe('0002490547');
+    expect(mapa.has(2)).toBe(false);
+    expect(mapa.size).toBe(1);
+  });
+
+  /** SAP devuelve '0000000000' cuando no creó nada: eso no es un pedido. */
+  it('un número en ceros no cuenta como pedido', () => {
+    expect(lineasYaEnSap([ordenSap({ sapOrderNumber: '0000000000' })]).size).toBe(0);
+    expect(lineasYaEnSap([ordenSap({ sapOrderNumber: '   ' })]).size).toBe(0);
+    expect(lineasYaEnSap([ordenSap({ sapOrderNumber: null })]).size).toBe(0);
+  });
+
+  /**
+   * Un pedido SIN entrega igual es un pedido: la mercadería no se despacha, pero el
+   * documento existe en SAP y reenviarlo lo duplicaría. Eso se resuelve en SAP.
+   */
+  it('un pedido sin entrega también bloquea la línea', () => {
+    const mapa = lineasYaEnSap([
+      ordenSap({ status: 'accepted_no_dispatch', sapDispatchNumber: null }),
+    ]);
+    expect(mapa.get(1)).toBe('0002490547');
+  });
+
+  it('sin órdenes SAP no hay nada bloqueado', () => {
+    expect(lineasYaEnSap([]).size).toBe(0);
+  });
+});
+
+describe('las líneas ya enviadas no se cuentan como enviables', () => {
+  const items = [
+    item({ guid: 'item-1', lineNumber: 1, centerCode: '2801' }),
+    item({ guid: 'item-2', lineNumber: 2, centerCode: '2802' }),
+  ];
+  const yaEnSap = new Map([[1, '0002490547']]);
+
+  it('activeItems las deja afuera, igual que a las canceladas', () => {
+    expect(activeItems(items).map((i) => i.lineNumber)).toEqual([1, 2]);
+    expect(activeItems(items, yaEnSap).map((i) => i.lineNumber)).toEqual([2]);
+  });
+
+  it('la previsualización no las incluye, y las cuenta aparte', () => {
+    const plan = planResend(items, initialDrafts(items), '2801', catalogs.centers, 2, yaEnSap);
+
+    expect(plan.orders).toHaveLength(1);
+    expect(plan.orders[0].centerCode).toBe('2802');
+    expect(plan.itemCount).toBe(1);
+    expect(plan.alreadyInSapCount).toBe(1);
+    // No se mezclan con las canceladas: son dos motivos distintos de quedar afuera.
+    expect(plan.cancelledCount).toBe(0);
+  });
+
+  it('cancelada y ya-en-SAP se cuentan por separado', () => {
+    const conCancelada = [items[0], cancelada({ guid: 'item-2', lineNumber: 2 })];
+    const plan = planResend(conCancelada, initialDrafts(conCancelada), '2801', catalogs.centers, 1, yaEnSap);
+
+    expect(plan.cancelledCount).toBe(1);
+    expect(plan.alreadyInSapCount).toBe(1);
+    expect(plan.itemCount).toBe(0);
+    expect(plan.orders).toEqual([]);
+  });
+
+  /** Una línea que ya salió no puede hacer rebotar el envío: no se manda. */
+  it('no bloquean el envío aunque les falte el destino', () => {
+    const rota = [item({ guid: 'item-1', lineNumber: 1, centerCode: '2801', deliveryDestinationCode: null })];
+    expect(blockingItemCount(rota, initialDrafts(rota), '2801', catalogs)).toBe(1);
+    expect(blockingItemCount(rota, initialDrafts(rota), '2801', catalogs, yaEnSap)).toBe(0);
+  });
+
+  it('tampoco cuentan para las órdenes SAP que saldrían', () => {
+    expect(sapOrdersByCenter(items, initialDrafts(items), '2801', yaEnSap)).toEqual([
+      { centerCode: '2802', lines: [2] },
+    ]);
   });
 });

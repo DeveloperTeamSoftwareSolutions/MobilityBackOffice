@@ -346,6 +346,14 @@ export interface ResendPlan {
   attemptNumber: number;
   /** Líneas canceladas que quedan fuera: se cuentan para que el faltante no sorprenda. */
   cancelledCount: number;
+  /**
+   * Líneas que quedan fuera porque YA tienen pedido creado en SAP.
+   *
+   * Se cuenta aparte de las canceladas a propósito: son dos motivos distintos de no
+   * viajar —una decisión de BackOffice contra un hecho ya consumado en SAP— y mezclarlos
+   * haría leer "faltan 3" sin saber cuáles se pueden recuperar.
+   */
+  alreadyInSapCount: number;
   /** Líneas que sí viajan, sumando todos los centros. */
   itemCount: number;
 }

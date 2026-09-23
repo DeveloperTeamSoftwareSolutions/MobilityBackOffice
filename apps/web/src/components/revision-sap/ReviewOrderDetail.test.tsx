@@ -150,6 +150,22 @@ const sapOrders: SapOrder[] = [
   },
 ];
 
+/**
+ * Las mismas órdenes SAP pero SIN pedido creado: el intento salió y SAP rechazó todo.
+ *
+ * Es el escenario por defecto de una orden en revisión —nada resuelto todavía— y por eso
+ * lo usa el `beforeEach`. Con `sapOrders` a secas, la línea 1 ya tiene pedido y queda
+ * bloqueada para reenvío (2026-09-23), que es correcto pero no es lo que miden los tests
+ * de editar, cancelar o reactivar.
+ */
+const sapOrdersSinPedido: SapOrder[] = sapOrders.map((o) => ({
+  ...o,
+  status: 'rejected',
+  sapOrderNumber: null,
+  sapDispatchNumber: null,
+  error: '[E] El material no está ampliado para el centro.',
+}));
+
 const catalogs: ReviewCatalogs = {
   centers: [
     { centerCode: '2801', centerName: 'DW Alm. Externo' },
@@ -262,7 +278,9 @@ const envioAceptado = {
 beforeEach(() => {
   api.getReviewOrder.mockReset().mockResolvedValue(order());
   api.getReviewCatalogs.mockReset().mockResolvedValue(catalogs);
-  api.listSapOrders.mockReset().mockResolvedValue(sapOrders);
+  // Por defecto, nada salió todavía: es el estado normal de una orden en revisión. Los
+  // tests de la pestaña "Órdenes SAP" piden `sapOrders` (con una aceptada) explícitamente.
+  api.listSapOrders.mockReset().mockResolvedValue(sapOrdersSinPedido);
   api.changeItemDestination.mockReset().mockResolvedValue({});
   api.changeItemCenter.mockReset().mockResolvedValue({});
   api.changeGroupInvoice.mockReset().mockResolvedValue({ ok: true, unchanged: false, groupInvoice: true });
@@ -401,6 +419,9 @@ describe('ReviewOrderDetail', () => {
   });
 
   it('cada orden SAP muestra su centro y su estado, en su pestaña', async () => {
+    // Este sí necesita una ACEPTADA: es lo que mide. El default del beforeEach son dos
+    // rechazadas, que es el estado normal de una orden que sigue en revisión.
+    api.listSapOrders.mockResolvedValue(sapOrders);
     await renderDetail();
     // Los estados viven en la otra pestaña: no están hasta abrirla.
     expect(screen.queryByText('Aceptada')).toBeNull();
@@ -585,6 +606,7 @@ describe('ReviewOrderDetail', () => {
       ].slice(0, centros),
       attemptNumber: 3,
       cancelledCount: 0,
+      alreadyInSapCount: 0,
       itemCount: centros,
     });
 
@@ -800,7 +822,7 @@ describe('ReviewOrderDetail', () => {
           pendingChanges={0}
           blocking={0}
           groupInvoice={false}
-          plan={{ orders: [], attemptNumber: 2, cancelledCount: 3, itemCount: 0 }}
+          plan={{ orders: [], attemptNumber: 2, cancelledCount: 3, alreadyInSapCount: 0, itemCount: 0 }}
           sending={false}
           result={null}
           error={null}
@@ -1332,5 +1354,69 @@ describe('cancelar no descarta lo que estabas editando', () => {
     await waitFor(() => expect(centerSelect().value).toBe('2801'));
     // Y NO queda marcada como pendiente: el valor vino del servidor, no lo eligió nadie acá.
     expect(screen.queryByText('Sin guardar')).toBeNull();
+  });
+});
+
+/**
+ * LO QUE YA SALIÓ A SAP NO SE VUELVE A OFRECER (reportado 2026-09-23, ORD00000487).
+ *
+ * Una orden que salió partida en dos: un centro creó el pedido y el otro fue rechazado.
+ * La orden sigue en la bandeja —BackOffice tiene que resolver el centro que falló— pero
+ * la pestaña Productos volvía a ofrecer TODOS los productos, incluido el que ya tenía su
+ * pedido. El reenvío siguiente lo mandaba otra vez: dos pedidos por la misma venta.
+ *
+ * `sapOrders` es exactamente ese escenario: la línea 1 salió en el pedido 0099900101 y la
+ * línea 3 fue rechazada.
+ */
+describe('un producto que ya tiene pedido en SAP', () => {
+  beforeEach(() => {
+    api.listSapOrders.mockResolvedValue(sapOrders);
+  });
+
+  it('se muestra, pero apagado y diciendo en qué pedido salió', async () => {
+    await renderDetail();
+
+    // No desaparece: sigue estando, porque es parte de la orden.
+    expect(screen.getByText('1200183')).toBeTruthy();
+    expect(screen.getByText('Ya está en SAP')).toBeTruthy();
+    expect(screen.getByText(/Ya salió en el pedido/)).toBeTruthy();
+    expect(screen.getByText('0099900101')).toBeTruthy();
+  });
+
+  it('no se le puede cambiar el centro ni el destino', async () => {
+    await renderDetail();
+
+    expect(
+      (screen.getByLabelText('Centro de distribución de la línea 1') as HTMLSelectElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByLabelText('Destino de entrega de la línea 1') as HTMLSelectElement).disabled,
+    ).toBe(true);
+    // La línea 3, que NO salió, sigue editable: es la que BackOffice tiene que resolver.
+    expect(centerSelect().disabled).toBe(false);
+  });
+
+  /** Cancelarla no desharía el pedido —eso se resuelve en SAP— así que no se ofrece. */
+  it('no ofrece cancelarla', async () => {
+    await renderDetail();
+
+    const cancelables = screen.getAllByRole('button', { name: 'Cancelar línea' });
+    expect(cancelables).toHaveLength(1); // sólo la línea 3
+    expect(screen.getByText('Enviado')).toBeTruthy();
+  });
+
+  it('la previsualización no la incluye y explica por qué', async () => {
+    await renderDetail();
+    fireEvent.click(button('Reenviar a SAP'));
+
+    // Dentro del modal: el mismo texto también está en la fila de la tabla, detrás.
+    const modal = within(screen.getByRole('dialog'));
+    // Una sola orden SAP: la del centro que falló.
+    expect(modal.getByText('Orden SAP')).toBeTruthy();
+    expect(modal.getByText(/1 línea ya tiene pedido creado en SAP y no se reenvía/)).toBeTruthy();
+    // Y el producto que ya salió no está en el plan.
+    const plan = modal.getByText('Orden SAP').closest('li');
+    expect(plan?.textContent).toContain('1200135');
+    expect(plan?.textContent).not.toContain('1200183');
   });
 });

@@ -27,6 +27,11 @@ interface Props {
   busyItemGuid: string | null;
   /** Etiqueta del motivo por código, del catálogo. Sin ella se muestra el código. */
   reasonLabels: Record<string, string>;
+  /**
+   * Líneas que YA salieron en una orden SAP con pedido creado: `lineNumber -> N° pedido`.
+   * No se vuelven a enviar —lo duplicaría— así que se muestran apagadas y sin acciones.
+   */
+  yaEnSap: Map<number, string>;
 }
 
 /**
@@ -53,6 +58,7 @@ export function ReviewItemsTable({
   onReactivateItem,
   busyItemGuid,
   reasonLabels,
+  yaEnSap,
 }: Props) {
   // La línea entera, no sólo el código: el modal necesita la cantidad para decir si el
   // centro alcanza, y el guid para poder cargarle el centro elegido.
@@ -84,29 +90,36 @@ export function ReviewItemsTable({
             {items.map((item) => {
               const draft = draftFor(item, drafts);
               const cancelled = isCancelled(item);
-              // Una línea cancelada no viaja: avisarle que no tiene stock, o que su
-              // destino quedó fuera del área, sería ruido sobre algo que no va a salir.
-              const warnings = cancelled
+              // Ya salió en una orden SAP con pedido creado. No se vuelve a enviar —lo
+              // duplicaría— y tampoco se puede cancelar: lo que ya está en SAP se
+              // resuelve en SAP.
+              const pedidoEnSap = yaEnSap.get(item.lineNumber) ?? null;
+              const fueraDelEnvio = cancelled || pedidoEnSap !== null;
+              // Una línea que no viaja no necesita avisos: decirle que no tiene stock, o
+              // que su destino quedó fuera del área, sería ruido sobre algo que no sale.
+              const warnings = fueraDelEnvio
                 ? []
                 : itemWarnings(item, draft, headerCenterCode, catalogs);
               const saveError = saveErrors[item.guid];
               const changed =
-                !cancelled &&
+                !fueraDelEnvio &&
                 (draft.centerCode !== item.centerCode ||
                   draft.destinationCode !== item.deliveryDestinationCode);
               const centerKnown = catalogs.centers.some((c) => c.centerCode === draft.centerCode);
               const destination = catalogs.destinations.find(
                 (d) => d.destinationCode === draft.destinationCode,
               );
-              // Centro y destino quedan bloqueados mientras está cancelada: elegirlos no
-              // cambiaría nada y haría creer que la línea va a salir.
-              const editableLine = editable && !cancelled;
+              // Centro y destino quedan bloqueados si la línea no va a viajar: elegirlos
+              // no cambiaría nada y haría creer que va a salir.
+              const editableLine = editable && !fueraDelEnvio;
               const busy = busyItemGuid === item.guid;
               const rowClass = [
                 'bo-rs__item-row',
                 changed ? 'bo-rs__item-row--changed' : '',
                 warnings.length > 0 || saveError ? 'bo-rs__item-row--warned' : '',
-                cancelled ? 'bo-rs__item-row--cancelled' : '',
+                // Misma presentación apagada para los dos motivos de no viajar; lo que
+                // los distingue es la fila de abajo, que dice cuál es.
+                fueraDelEnvio ? 'bo-rs__item-row--cancelled' : '',
               ]
                 .filter(Boolean)
                 .join(' ');
@@ -120,6 +133,9 @@ export function ReviewItemsTable({
                       {changed && <span className="bo-rs__chip">Sin guardar</span>}
                       {cancelled && (
                         <span className="bo-rs__pill bo-rs__pill--muted">No se envía</span>
+                      )}
+                      {pedidoEnSap && (
+                        <span className="bo-rs__pill bo-rs__pill--ok">Ya está en SAP</span>
                       )}
                       <span className="bo-rs__cell-sub">{item.productDescription ?? '—'}</span>
                     </td>
@@ -196,7 +212,11 @@ export function ReviewItemsTable({
                       )}
                     </td>
                     <td className="bo-rs__cell--actions">
-                      {cancelled ? (
+                      {pedidoEnSap ? (
+                        // Sin acciones: ya tiene pedido en SAP. Cancelarla no lo
+                        // desharía —eso se resuelve en SAP— y reenviarla lo duplicaría.
+                        <span className="bo-rs__cell--muted">Enviado</span>
+                      ) : cancelled ? (
                         <button
                           type="button"
                           className="bo-rs__button bo-rs__button--ghost bo-rs__button--small"
@@ -232,6 +252,20 @@ export function ReviewItemsTable({
                       )}
                     </td>
                   </tr>
+                  {pedidoEnSap && (
+                    // El número de pedido va a la vista, no en un tooltip: es la respuesta
+                    // a "por qué este producto no se vuelve a enviar", y además es el dato
+                    // con el que se busca en SAP.
+                    <tr className="bo-rs__cancelled-row">
+                      <td />
+                      <td colSpan={5}>
+                        <span className="bo-rs__cancelled-reason">
+                          Ya salió en el pedido <strong>{pedidoEnSap}</strong>. No se vuelve
+                          a enviar: hacerlo crearía un segundo pedido por la misma venta.
+                        </span>
+                      </td>
+                    </tr>
+                  )}
                   {cancelled && (
                     // El motivo va en su propia fila y no en un tooltip: es la respuesta a
                     // "por qué esto no llegó a SAP", y tiene que leerse sin pasar el mouse.

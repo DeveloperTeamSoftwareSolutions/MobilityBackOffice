@@ -392,8 +392,7 @@ web  revision-sap.api.ts ──> api  /api/revision-sap/*  (rol RevisionSap)
 | `ReviewItemsTable.tsx` | Pestaña **Productos**: centro, destino, "Ver stock" y cancelar/reactivar por línea |
 | `GroupInvoiceModal.tsx` | Confirmación de agrupa factura, con lo que implica cada valor |
 | `RejectOrderModal.tsx` | Confirmación del rechazo: qué implica, y el motivo obligatorio |
-| `CancelItemModal.tsx` | Cancelar una línea: motivo del catálogo + nota, y la advertencia de la última |
-| `ResendModal.tsx` | **Previsualización** del envío (una orden SAP por centro, con sus productos y el intento) y, después, el resultado **por centro** |
+| `ResendModal.tsx` | Confirmación del reenvío (dice cuántos pedidos crea) y, después, el resultado **por centro** |
 | `SapOrdersPanel.tsx` | Pestaña **Órdenes SAP**: agrupadas por intento, con estado y productos de cada una. Solo consulta |
 | `SapErrorMessage.tsx` | El motivo de SAP: tipo como etiqueta y mensaje |
 | `ProductStockModal.tsx` | Stock por centro y almacén de un producto |

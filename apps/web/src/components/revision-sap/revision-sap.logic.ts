@@ -476,23 +476,7 @@ export function groupSapOrdersByAttempt(sapOrders: SapOrder[]): SapSendAttempt[]
   return intentos;
 }
 
-/** La línea está cancelada por BackOffice: no viaja a SAP. */
-export function isCancelled(item: ReviewItem): boolean {
-  return Boolean(item.cancelledAt);
-}
-
-/** Las líneas que SÍ van a viajar. Es lo único que el envío toma en cuenta. */
-export function activeItems(items: ReviewItem[]): ReviewItem[] {
-  return items.filter((item) => !isCancelled(item));
-}
-
-/**
- * Cuántas órdenes SAP saldrían: una por cada centro distinto de las líneas ACTIVAS.
- *
- * Las canceladas quedan fuera a propósito. Contarlas haría aparecer un centro que no va
- * a salir, y con todas las líneas de un centro canceladas ese centro directamente no
- * existe en el envío.
- */
+/** Cuántas órdenes SAP saldrían: una por cada centro distinto de las líneas. */
 export function sapOrdersByCenter(
   items: ReviewItem[],
   drafts: LineDrafts,

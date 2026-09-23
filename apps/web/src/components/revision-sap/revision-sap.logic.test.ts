@@ -107,11 +107,11 @@ describe('itemWarnings', () => {
 
   it('un centro ELEGIDO no permitido bloquea; el heredado de la cabecera solo avisa', () => {
     expect(kinds(item(), draft('2899', '30000124'), '2801')).toEqual([['centro-no-permitido', true]]);
-    // Heredar el de la cabecera son DOS problemas a la vez, y se dicen los dos: falta
-    // elegir centro (bloquea, porque el envío no hereda — 2026-09-23) y además el que
-    // heredaría tampoco está permitido para el cliente.
+    // Heredar el de la cabecera son DOS avisos, y ninguno bloquea: desde el Middleware
+    // 1.374.0 el envío hereda ese centro, así que es un dato —de dónde sale la línea— y
+    // no un error. El segundo agrega que, además, ese centro no está permitido.
     expect(kinds(item(), draft(null, '30000124'), '2800')).toEqual([
-      ['sin-centro-propio', true],
+      ['sin-centro-propio', false],
       ['centro-de-cabecera-no-permitido', false],
     ]);
   });
@@ -687,9 +687,9 @@ describe('lineChanges y blockingItemCount', () => {
   it('sin tocar nada no hay cambios, aunque la orden traiga un destino de otra área', () => {
     const drafts = initialDrafts(items);
     expect(lineChanges(items, drafts)).toEqual([]);
-    // 2 y no 1: al destino de otra área se le suma que NINGUNA de las dos líneas tiene
-    // centro propio, y sin eso el envío rebota (regla del 2026-09-23).
-    expect(blockingItemCount(items, drafts, '2801', catalogs)).toBe(2);
+    // Sólo el destino de otra área. Que las líneas hereden el centro de la cabecera ya no
+    // bloquea: el envío lo hereda (Middleware 1.374.0).
+    expect(blockingItemCount(items, drafts, '2801', catalogs)).toBe(1);
   });
 
   it('centro y destino de una misma línea son dos cambios, y corregir destraba', () => {
@@ -699,17 +699,7 @@ describe('lineChanges y blockingItemCount', () => {
       ['center', null, '2802'],
       ['destination', '30000112', '30000124'],
     ]);
-    // Corregir item-2 lo destraba a él. item-1 sigue bloqueando porque no tiene centro
-    // propio, y con eso el envío rebota la orden entera (regla del 2026-09-23). Antes
-    // esto esperaba 0: la pantalla lo daba por bueno y el servidor lo rechazaba.
-    expect(blockingItemCount(items, drafts, '2801', catalogs)).toBe(1);
-
-    // Con el centro elegido en las DOS, no queda nada bloqueando.
-    const todasConCentro = {
-      ...drafts,
-      'item-1': draft('2801', item({ guid: 'item-1' }).deliveryDestinationCode),
-    };
-    expect(blockingItemCount(items, todasConCentro, '2801', catalogs)).toBe(0);
+    expect(blockingItemCount(items, drafts, '2801', catalogs)).toBe(0);
   });
 });
 
@@ -726,16 +716,30 @@ describe('lineChanges y blockingItemCount', () => {
  *    silencio TODOS los cambios sin guardar. Pasaba igual con el destino.
  */
 describe('el centro propio de cada línea', () => {
-  it('sin centro propio bloquea, porque el envío no hereda el de la cabecera', () => {
-    const sinCentro = item({ centerCode: null });
-    const avisos = itemWarnings(sinCentro, draft(null, '30000124'), '2801', catalogs);
+  /**
+   * Desde el Middleware 1.374.0 el envío hereda el centro de la cabecera. El aviso queda,
+   * porque el operador tiene que poder ver DE DÓNDE va a salir cada línea, pero ya no
+   * traba: pedir el centro a mano en el 68% de las líneas era trabajo que el propio envío
+   * resuelve, y un aviso que salta siempre deja de leerse.
+   */
+  it('sin centro propio avisa de qué centro sale, y no bloquea', () => {
+    const avisos = itemWarnings(item({ centerCode: null }), draft(null, '30000124'), '2801', catalogs);
     const aviso = avisos.find((w) => w.kind === 'sin-centro-propio');
 
     expect(aviso).toBeTruthy();
-    expect(aviso?.blocking).toBe(true);
-    // Dice el porqué, no sólo "falta algo": es lo que evita el viaje en falso.
-    expect(aviso?.message).toMatch(/no hereda/);
+    expect(aviso?.blocking).toBe(false);
+    // Dice cuál, no sólo que falta: es el dato que el operador necesita para decidir.
     expect(aviso?.message).toMatch(/2801/);
+    expect(aviso?.message).toMatch(/cabecera/);
+  });
+
+  /** Lo único que sigue trabando: no hay centro en la línea NI en la cabecera. */
+  it('sin centro en la línea ni en la cabecera sí bloquea: no hay de dónde heredar', () => {
+    const avisos = itemWarnings(item({ centerCode: null }), draft(null, '30000124'), null, catalogs);
+    const aviso = avisos.find((w) => w.kind === 'sin-centro-propio');
+
+    expect(aviso?.blocking).toBe(true);
+    expect(aviso?.message).toMatch(/la cabecera tampoco/);
   });
 
   it('con centro propio no molesta', () => {
@@ -749,9 +753,11 @@ describe('el centro propio de cada línea', () => {
     expect(avisos.some((w) => w.kind === 'sin-centro-propio')).toBe(false);
   });
 
-  it('una línea sin centro propio hace bloquear el envío', () => {
+  it('una línea sin centro propio ya no bloquea el envío', () => {
     const items = [item({ guid: 'item-1', centerCode: null })];
-    expect(blockingItemCount(items, initialDrafts(items), '2801', catalogs)).toBe(1);
+    expect(blockingItemCount(items, initialDrafts(items), '2801', catalogs)).toBe(0);
+    // Pero sin cabecera de dónde heredar, sí.
+    expect(blockingItemCount(items, initialDrafts(items), null, catalogs)).toBe(1);
   });
 
   /** La previsualización tiene que DECIRLO, no mostrarlas como si fueran a salir. */

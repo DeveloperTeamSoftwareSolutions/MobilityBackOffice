@@ -741,13 +741,12 @@ describe('ReviewOrderDetail', () => {
     });
 
     /**
-     * EL CENTRO HEREDADO NO SALE. El envío agrupa por el CenterCode de la línea y no
-     * hereda el de la cabecera: con una sola así, rebota la orden entera con
-     * "Este endpoint agrupa por CenterCode y N item(s) no lo tienen".
-     * Antes la previsualización las mostraba bajo "Centro de la cabecera" como si fueran
-     * a salir, y el operador se enteraba al apretar el botón (reportado 2026-09-23).
+     * EL CENTRO HEREDADO SE DICE, pero no traba. Desde el Middleware 1.374.0 el envío
+     * hereda el centro de la cabecera, igual que el camino del vendedor. Lo que el modal
+     * tiene que hacer es que el operador sepa DE DÓNDE sale cada producto antes de crear
+     * pedidos reales — no impedirle enviar.
      */
-    it('avisa de las líneas que heredan el centro y no deja confirmar', () => {
+    it('avisa de las líneas que heredan el centro, sin impedir el envío', () => {
       const conHeredados = plan(1);
       conHeredados.orders[0] = { ...conHeredados.orders[0], heredados: 1 };
       render(
@@ -764,11 +763,11 @@ describe('ReviewOrderDetail', () => {
           onClose={() => undefined}
         />,
       );
-      expect(screen.getByText(/1 línea sin centro de distribución propio/)).toBeTruthy();
-      expect(screen.getByText(/no hereda/)).toBeTruthy();
+      expect(screen.getByText(/1 línea no tiene centro propio y sale con el de la cabecera/)).toBeTruthy();
+      // Y el botón sigue vivo: el envío la acepta.
       expect(
         (screen.getByRole('button', { name: /reenviar a SAP/i }) as HTMLButtonElement).disabled,
-      ).toBe(true);
+      ).toBe(false);
     });
 
     /** Las canceladas se cuentan aparte: el faltante no puede aparecer sin explicación. */

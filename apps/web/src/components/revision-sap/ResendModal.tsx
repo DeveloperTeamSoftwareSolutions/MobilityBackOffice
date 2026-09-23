@@ -63,11 +63,11 @@ export function ResendModal({
   // Sin líneas activas no hay nada que mandar: el envío rebotaría sin crear ningún
   // pedido. Se avisa acá en vez de dejar que el usuario descubra el rechazo.
   const sinNadaQueEnviar = centersToSend === 0;
-  // Líneas que heredan el centro de la cabecera. El envío agrupa por CenterCode de la
-  // LÍNEA y no hereda: con una sola de éstas rebota la orden entera. Es un rechazo
-  // seguro, no una probabilidad, así que el modal lo trata como tal.
+  // Líneas que salen con el centro de la CABECERA, por no tener uno propio. Desde el
+  // Middleware 1.374.0 el envío lo hereda —igual que el camino del vendedor—, así que
+  // esto ya no impide enviar: se muestra para que el operador sepa de qué centro va a
+  // salir cada producto antes de crear pedidos reales.
   const heredados = plan.orders.reduce((n, o) => n + o.heredados, 0);
-  const noVaASalir = sinNadaQueEnviar || heredados > 0;
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -121,15 +121,11 @@ export function ResendModal({
             ) : (
               <>
                 {heredados > 0 && (
-                  <p className="bo-rs__warning bo-rs__warning--blocking">
-                    <strong>
-                      {heredados === 1
-                        ? 'Hay 1 línea sin centro de distribución propio.'
-                        : `Hay ${heredados} líneas sin centro de distribución propio.`}
-                    </strong>{' '}
-                    El envío agrupa por el centro de <strong>cada línea</strong> y no hereda
-                    el de la cabecera: así como está, rebota la orden entera y no se crea
-                    ningún pedido. Elegí el centro en esas líneas y guardá antes de enviar.
+                  <p className="bo-rs__warning">
+                    {heredados === 1
+                      ? '1 línea no tiene centro propio y sale con el de la cabecera.'
+                      : `${heredados} líneas no tienen centro propio y salen con el de la cabecera.`}{' '}
+                    Si alguna tiene que salir de otro centro, elegilo antes de enviar.
                   </p>
                 )}
 
@@ -153,7 +149,7 @@ export function ResendModal({
                             : `Orden SAP ${i + 1} de ${centersToSend}`}
                         </strong>
                         <span
-                          className={`bo-rs__pill bo-rs__pill--${o.heredados > 0 ? 'danger' : 'muted'}`}
+                          className="bo-rs__pill bo-rs__pill--muted"
                         >
                           {o.centerCode
                             ? `Centro ${o.centerCode}${o.centerName ? ` · ${o.centerName}` : ''}`
@@ -162,8 +158,8 @@ export function ResendModal({
                         {o.heredados > 0 && (
                           <span className="bo-rs__cell--muted">
                             {o.heredados === 1
-                              ? '1 línea lo hereda: el envío la rechaza'
-                              : `${o.heredados} líneas lo heredan: el envío las rechaza`}
+                              ? '1 línea lo hereda de la cabecera'
+                              : `${o.heredados} líneas lo heredan de la cabecera`}
                           </span>
                         )}
                         <span className="bo-rs__cell--muted">
@@ -343,13 +339,11 @@ export function ResendModal({
               // centro de la cabecera. El servidor lo rechaza igual —es él quien manda—
               // pero dejar el botón vivo sería ofrecer algo que no funciona y devolver un
               // error donde ya sabíamos la respuesta.
-              disabled={sending || noVaASalir}
+              disabled={sending || sinNadaQueEnviar}
               title={
                 sinNadaQueEnviar
                   ? 'No queda ninguna línea para enviar: reactivá alguna o rechazá la orden'
-                  : heredados > 0
-                    ? 'Hay líneas sin centro propio: el envío las rechaza. Elegí el centro y guardá.'
-                    : undefined
+                  : undefined
               }
               onClick={onConfirm}
             >

@@ -311,28 +311,35 @@ consulta devuelve lo mismo, pero sin ninguno devuelve `[]`.
 |---|---|
 | Sin destino | Sí |
 | Destino fuera del área de venta de la orden | Sí (el Middleware también lo rechaza) |
-| **Sin centro propio** (lo hereda de la cabecera) | **Sí** — el envío no hereda: ver abajo |
+| **Sin centro propio** (lo hereda de la cabecera) | No: dice de qué centro sale. **Sí** si la cabecera tampoco lo tiene |
 | Centro **elegido** fuera de los permitidos del cliente | Sí (el Middleware también lo rechaza) |
 | Centro **heredado de la cabecera** fuera de los permitidos | No: avisa, puede ser el motivo del rechazo |
 | Centro sin stock / stock menor a lo pedido | No (decisión 4b) |
 
-### El centro va POR LÍNEA, y no se hereda — 2026-09-23
+### El centro de la línea se hereda de la cabecera — 2026-09-23
 
-El envío de BackOffice agrupa por el `CenterCode` de **cada línea** y **no** toma el de la
-cabecera. Una sola línea sin centro propio hace rebotar la orden entera:
+**Desde Middleware 1.374.0** (PR #714), la línea sin `CenterCode` propio **hereda el de la
+cabecera**, igual que el camino del vendedor.
+
+Antes el envío rebotaba la orden entera:
 
 > Este endpoint agrupa por CenterCode y 1 item(s) no lo tienen. Asignar CenterCode a cada
 > linea antes de reintentar.
 
-Hasta esta fecha la pantalla ofrecía *"mismo de la cabecera"* como si fuera una opción
-válida y no avisaba nada: el operador apretaba **Reenviar** y recién ahí se enteraba. Peor,
-la previsualización las mostraba agrupadas bajo "Centro de la cabecera", **como si fueran a
-salir**.
+Y pasaba casi siempre. Medido sobre las órdenes que pasaron por la bandeja: **15 de 22
+líneas (68%) llegan sin centro**, porque MobilityIA no lo guarda por línea. El operador
+tenía que tocarlas todas para mandar algo que el envío del vendedor manda sin preguntar.
 
-Ahora: la línea sin centro propio lleva un aviso **bloqueante** al lado, la previsualización
-cuenta cuántas heredan (`PlannedSapOrder.heredados`) y marca esa tarjeta en rojo, y el botón
-de confirmar queda apagado. Elegir el mismo centro que la cabecera **explícitamente** ya
-cuenta como centro propio: se guarda en la línea y el envío lo encuentra.
+En BackOffice el aviso quedó, pero **informativo**: dice *de qué centro sale* la línea, que
+es el dato que el operador necesita para decidir. Un aviso bloqueante que salta en el 68% de
+los casos deja de leerse, y se lleva puesto al que sí importa.
+
+**Sigue bloqueando un caso:** sin centro en la línea **ni** en la cabecera. Ahí no hay de
+dónde heredar y el envío lo rechaza — con un mensaje que ahora pide lo correcto (completar
+el centro de la orden), no asignarlo línea por línea.
+
+La previsualización cuenta cuántas líneas heredan (`PlannedSapOrder.heredados`) y lo dice,
+para que nadie cree pedidos reales sin saber de qué centro salen.
 
 ### Lo que estás editando no se pierde — 2026-09-23
 

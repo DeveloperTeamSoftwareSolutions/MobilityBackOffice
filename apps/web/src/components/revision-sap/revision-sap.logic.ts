@@ -359,23 +359,35 @@ export function itemWarnings(
 
   const center = effectiveCenter(draft.centerCode, headerCenterCode);
 
-  // SIN CENTRO PROPIO NO SE PUEDE ENVIAR, y no es una opinión de la pantalla: el envío
-  // de BackOffice agrupa POR CenterCode y **no hereda** el de la cabecera. Una línea sin
-  // centro propio hace rebotar la orden ENTERA con
-  //   "Este endpoint agrupa por CenterCode y N item(s) no lo tienen"
-  // y no se crea ningún pedido.
+  // SIN CENTRO PROPIO: la línea sale con el de la cabecera. Avisa, no bloquea.
   //
-  // Hasta el 2026-09-23 la pantalla ofrecía "mismo de la cabecera" como si fuera válido y
-  // no avisaba nada: el operador apretaba Reenviar y recién ahí se enteraba. Bloquea, para
-  // que el problema se vea al lado de la línea que lo causa y antes de intentar.
+  // Historia corta, porque el aviso cambió de sentido en el mismo día. El envío de
+  // BackOffice exigía CenterCode en cada línea y rebotaba la orden entera sin él, así que
+  // esto empezó siendo BLOQUEANTE. Pero el 68% de las líneas llega sin centro —MobilityIA
+  // no lo guarda por línea—, con lo cual el aviso saltaba casi siempre y pedía un trabajo
+  // manual que el envío del vendedor no pide.
+  //
+  // Desde el Middleware 1.374.0 el envío HEREDA el centro de la cabecera, igual que el
+  // camino del vendedor. Entonces ya no es un error: es un dato, y el operador tiene que
+  // poder verlo —qué centro va a usar esa línea— sin que le trabe el trabajo.
+  //
+  // Sin centro en la línea NI en la cabecera sí sigue bloqueando: ahí no hay de dónde
+  // heredar y el envío lo rechaza.
   if (!draft.centerCode) {
-    warnings.push({
-      kind: 'sin-centro-propio',
-      blocking: true,
-      message: headerCenterCode
-        ? `Elegí el centro de distribución. El envío no hereda el ${headerCenterCode} de la cabecera: lo necesita en la línea.`
-        : 'Elegí el centro de distribución: el envío lo necesita en cada línea.',
-    });
+    warnings.push(
+      headerCenterCode
+        ? {
+            kind: 'sin-centro-propio',
+            blocking: false,
+            message: `Sale con el centro ${headerCenterCode} de la cabecera. Elegí uno si tiene que salir de otro.`,
+          }
+        : {
+            kind: 'sin-centro-propio',
+            blocking: true,
+            message:
+              'Elegí el centro de distribución: la línea no tiene uno y la cabecera tampoco, así que el envío no tiene de dónde tomarlo.',
+          },
+    );
   }
 
   const allowed = catalogs.centers.some((c) => c.centerCode === center.code);

@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { AppModule } from './app.module';
 import { APP_NAME, APP_VERSION } from './version';
 import { TokenService } from './auth/token.service';
+import { run as runInContext } from './common/request-context';
 import {
   createRagProxy,
   createRagAuthGuard,
@@ -17,6 +18,10 @@ import {
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService);
+
+  // Quién hizo la llamada, para el header de rol que el middleware guarda en
+  // DocumentAuditLog. Va antes de las rutas: el guard lo completa.
+  app.use((_req: Request, _res: Response, next: NextFunction) => runInContext(() => next()));
 
   app.enableCors({
     origin: config.get<string>('corsOrigin'),

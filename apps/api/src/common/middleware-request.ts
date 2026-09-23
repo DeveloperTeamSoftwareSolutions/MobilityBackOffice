@@ -1,4 +1,5 @@
 import type { ConfigService } from '@nestjs/config';
+import { actorRole } from './request-context';
 
 /**
  * Base URL y headers comunes para hablar con MobilityMiddleWare.
@@ -31,10 +32,16 @@ export function middlewareBase(config: ConfigService): string {
  * - `x-source-app`: SIEMPRE. Es lo que hace atribuible la auditoría del middleware.
  * - `x-api-key`: solo si `MIDDLEWARE_API_KEY` está configurada. El middleware valida
  *   con `requireApiKey`, que es no-op cuando su propia env no está seteada.
+ * - `x-actor-role`: el rol del usuario, si hay una request en curso. El middleware
+ *   lo guarda en `DocumentAuditLog` junto a cada movimiento de una orden o
+ *   cotización: la app sola no alcanza, porque en la misma app actúan roles
+ *   distintos. Fuera de una request no se manda: no se adivina.
  */
 export function middlewareHeaders(config: ConfigService): Record<string, string> {
   const headers: Record<string, string> = { 'x-source-app': SOURCE_APP };
   const key = config.get<string>('middleware.apiKey');
   if (key) headers['x-api-key'] = key;
+  const rol = actorRole();
+  if (rol) headers['x-actor-role'] = rol;
   return headers;
 }

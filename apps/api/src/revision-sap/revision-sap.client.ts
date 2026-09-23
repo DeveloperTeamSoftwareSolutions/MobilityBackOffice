@@ -184,6 +184,22 @@ function mwMessage(err: unknown): string | undefined {
 }
 
 /**
+ * El 404 no es del recurso: es de la RUTA. El middleware que está del otro lado no tiene
+ * este endpoint.
+ *
+ * Los dos llegan como 404 y significan cosas opuestas: uno dice "esa orden no existe" —y
+ * manda a buscar un dato— y el otro dice "este Middleware está viejo", que se arregla
+ * con un deploy. Confundirlos hace perder el rato mirando la orden equivocada.
+ *
+ * Se reconoce porque Express contesta con su página HTML (`Cannot POST /ruta`) en vez del
+ * JSON `{ success, error }` que devuelve el middleware cuando la ruta existe.
+ */
+function esRutaInexistente(err: unknown): boolean {
+  const data = (err as { response?: { data?: unknown } })?.response?.data;
+  return typeof data === 'string' && /Cannot (POST|PUT|GET|DELETE)\s/i.test(data);
+}
+
+/**
  * El middleware rechazó la llamada por credenciales: falta `MIDDLEWARE_API_KEY` o no
  * coincide con la suya.
  *
@@ -212,6 +228,14 @@ function noLlego(err: unknown): boolean {
   const code = (err as { code?: string })?.code;
   return code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EHOSTUNREACH';
 }
+
+/**
+ * El Middleware del entorno no tiene el endpoint. No es un problema del dato ni de la
+ * orden: es una versión vieja, y se arregla con un deploy.
+ */
+const MIDDLEWARE_VIEJO =
+  'El Middleware de este entorno todavía no tiene esta operación: hay que actualizarlo a ' +
+  '1.369.0 o superior (y correr su migración de BusinessOrderItems). No se modificó nada.';
 
 /** Mensaje de credenciales, uno solo para todo el cliente. */
 const SIN_API_KEY =
@@ -594,6 +618,8 @@ export class RevisionSapClient {
       const status = httpStatus(err);
       const message = mwMessage(err);
       if (esFaltaDeApiKey(status)) throw new ServiceUnavailableException(SIN_API_KEY);
+      // ANTES que el 404 de recurso: los dos son 404 y significan lo contrario.
+      if (esRutaInexistente(err)) throw new ServiceUnavailableException(MIDDLEWARE_VIEJO);
       if (status === 404) throw new NotFoundException(message ?? 'La orden o la línea no existen');
       // 409 cubre varias cosas distintas —fuera de revisión, ya cancelada, ya enviada— y
       // el middleware las distingue en el mensaje. Pisarlo con uno genérico borraría el

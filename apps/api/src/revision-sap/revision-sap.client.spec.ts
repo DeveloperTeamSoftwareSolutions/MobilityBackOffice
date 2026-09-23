@@ -238,3 +238,77 @@ describe('RevisionSapClient.resendToSap — la respuesta por centro', () => {
     expect(r.skippedReason).toContain('GroupInvoice');
   });
 });
+
+/**
+ * DOS 404 QUE SIGNIFICAN LO CONTRARIO.
+ *
+ * El 2026-09-22, cancelar una línea contra un Middleware sin deployar mostró *"La orden o
+ * la línea no existen"*. La orden existía y estaba en pantalla: lo que no existía era el
+ * ENDPOINT. El mensaje mandó a mirar el dato cuando lo que faltaba era un deploy.
+ *
+ * Se distinguen por la forma de la respuesta: cuando la ruta existe, el middleware
+ * contesta su JSON `{ success, error }`; cuando no, contesta la página HTML de Express
+ * (`Cannot POST /ruta`).
+ */
+describe('RevisionSapClient — 404 de ruta vs 404 de recurso', () => {
+  const ITEM = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+
+  /** Express devuelve HTML, no JSON: el middleware no tiene el endpoint. */
+  const rutaInexistente = () => ({
+    response: {
+      status: 404,
+      data: '<!DOCTYPE html><html><body><pre>Cannot POST /api/mobility/backoffice-review/orders/x/items/y/cancel</pre></body></html>',
+    },
+  });
+
+  it('un Middleware viejo dice que hay que actualizarlo, no que falte la orden', async () => {
+    const { client, http } = make();
+    (http.post as jest.Mock).mockReturnValue(throwError(rutaInexistente));
+
+    const falla = client.cancelItem(ORDER, ITEM, {
+      reasonCode: 'NO_STOCK',
+      reasonNotes: null,
+      actorEmail: 'bo@duwest.com',
+    });
+
+    await expect(falla).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(
+      client.cancelItem(ORDER, ITEM, { reasonCode: 'NO_STOCK', reasonNotes: null, actorEmail: 'bo@duwest.com' }),
+    ).rejects.toMatchObject({ message: expect.stringContaining('1.369.0') });
+    // Y NO manda a buscar la orden, que está donde tiene que estar.
+    await expect(
+      client.cancelItem(ORDER, ITEM, { reasonCode: 'NO_STOCK', reasonNotes: null, actorEmail: 'bo@duwest.com' }),
+    ).rejects.not.toMatchObject({ message: expect.stringContaining('no existen') });
+  });
+
+  it('un 404 de verdad sigue diciendo que la orden o la línea no existen', async () => {
+    const { client, http } = make();
+    (http.post as jest.Mock).mockReturnValue(
+      throwError(() => httpError(404, 'La línea no es de esta orden')),
+    );
+
+    await expect(
+      client.cancelItem(ORDER, ITEM, { reasonCode: 'NO_STOCK', reasonNotes: null, actorEmail: 'bo@duwest.com' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      client.cancelItem(ORDER, ITEM, { reasonCode: 'NO_STOCK', reasonNotes: null, actorEmail: 'bo@duwest.com' }),
+    ).rejects.toMatchObject({ message: 'La línea no es de esta orden' });
+  });
+
+  it('reactivar y los cambios de línea usan el mismo criterio', async () => {
+    const { client, http } = make();
+    (http.post as jest.Mock).mockReturnValue(throwError(rutaInexistente));
+    await expect(
+      client.reactivateItem(ORDER, ITEM, { actorEmail: 'bo@duwest.com' }),
+    ).rejects.toMatchObject({ message: expect.stringContaining('1.369.0') });
+
+    (http.put as jest.Mock).mockReturnValue(throwError(rutaInexistente));
+    await expect(
+      client.changeItemCenter(ORDER, ITEM, {
+        centerCode: '2801',
+        actorEmail: 'bo@duwest.com',
+        reasonNotes: null,
+      }),
+    ).rejects.toMatchObject({ message: expect.stringContaining('1.369.0') });
+  });
+});

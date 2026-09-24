@@ -71,10 +71,13 @@ export interface ReviewItem {
   unitOfMeasure: string | null;
   /** Centro propio de la línea. Sin él, la línea sale con el de la cabecera. */
   centerCode: string | null;
-  /** Precio de venta de la línea. Sin costo ni margen: no viajan a esta sección. */
-  unitPrice: number | null;
-  discountPct: number | null;
-  lineTotal: number | null;
+  /**
+   * Precio de venta de la línea. Sin costo ni margen: no viajan a esta sección.
+   * Opcionales por lo mismo que `money`: un Middleware anterior a 1.376.0 no los manda.
+   */
+  unitPrice?: number | null;
+  discountPct?: number | null;
+  lineTotal?: number | null;
   deliveryDestinationCode: string | null;
   deliveryDestinationName: string | null;
   /**
@@ -138,8 +141,13 @@ export interface ReviewOrderDetail {
    * que cero: una orden sin total cargado y una de importe cero se muestran distinto.
    *
    * Sin costos ni margen: eso es rentabilidad interna y no viaja a esta sección.
+   *
+   * **OPCIONAL a propósito.** Un Middleware anterior a 1.376.0 no manda este objeto, y el
+   * front no puede asumir que está: darlo por hecho dejaba la pantalla EN BLANCO contra un
+   * Middleware sin actualizar (pasó el 2026-09-24). Una sección que pierde un dato tiene
+   * que mostrar el resto, no desaparecer.
    */
-  money: {
+  money?: {
     currency: string | null;
     subtotal: number | null;
     discount: number | null;

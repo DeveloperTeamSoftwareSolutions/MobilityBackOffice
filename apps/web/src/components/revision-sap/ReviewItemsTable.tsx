@@ -77,6 +77,12 @@ export function ReviewItemsTable({
     return <p className="bo-rs__empty">La orden no tiene productos.</p>;
   }
 
+  // Un Middleware anterior a 1.376.0 no manda los precios. Las columnas se muestran sólo
+  // si hay algo que poner: dos columnas de rayas no informan, ocupan.
+  const hayPrecios = items.some((i) => i.unitPrice != null || i.lineTotal != null);
+  // Las filas de detalle (motivo, avisos) abarcan todo menos la primera columna.
+  const colsDetalle = hayPrecios ? 7 : 5;
+
   return (
     <>
       <div className="bo-rs__table-wrap">
@@ -88,8 +94,8 @@ export function ReviewItemsTable({
               <th className="bo-rs__th--number">Cantidad</th>
               {/* Precio unitario y total de línea. Sin costo ni margen: eso es
                   rentabilidad interna y no viaja a esta sección. */}
-              <th className="bo-rs__th--number">Precio</th>
-              <th className="bo-rs__th--number">Total</th>
+              {hayPrecios && <th className="bo-rs__th--number">Precio</th>}
+              {hayPrecios && <th className="bo-rs__th--number">Total</th>}
               <th>Centro de distribución</th>
               <th>Destino de entrega</th>
               <th className="bo-rs__th--actions">Envío</th>
@@ -151,17 +157,21 @@ export function ReviewItemsTable({
                     <td className="bo-rs__cell--number">
                       {formatQuantity(item.quantity)} {item.unitOfMeasure ?? ''}
                     </td>
-                    <td className="bo-rs__cell--number">
-                      {formatMoney(item.unitPrice)}
-                      {/* El descuento va debajo del precio, que es lo que modifica.
-                          Sólo si hay: un "0 %" en cada línea es ruido. */}
-                      {(item.discountPct ?? 0) > 0 && (
-                        <span className="bo-rs__cell-sub">−{item.discountPct}%</span>
-                      )}
-                    </td>
-                    <td className="bo-rs__cell--number bo-rs__cell--strong">
-                      {formatMoney(item.lineTotal)}
-                    </td>
+                    {hayPrecios && (
+                      <td className="bo-rs__cell--number">
+                        {formatMoney(item.unitPrice)}
+                        {/* El descuento va debajo del precio, que es lo que modifica.
+                            Sólo si hay: un "0 %" en cada línea es ruido. */}
+                        {(item.discountPct ?? 0) > 0 && (
+                          <span className="bo-rs__cell-sub">−{item.discountPct}%</span>
+                        )}
+                      </td>
+                    )}
+                    {hayPrecios && (
+                      <td className="bo-rs__cell--number bo-rs__cell--strong">
+                        {formatMoney(item.lineTotal)}
+                      </td>
+                    )}
                     <td>
                       <select
                         className="bo-rs__select"
@@ -278,7 +288,7 @@ export function ReviewItemsTable({
                     // con el que se busca en SAP.
                     <tr className="bo-rs__cancelled-row">
                       <td />
-                      <td colSpan={7}>
+                      <td colSpan={colsDetalle}>
                         <span className="bo-rs__cancelled-reason">
                           Ya salió en el pedido <strong>{pedidoEnSap}</strong>. No se vuelve
                           a enviar: hacerlo crearía un segundo pedido por la misma venta.
@@ -291,7 +301,7 @@ export function ReviewItemsTable({
                     // "por qué esto no llegó a SAP", y tiene que leerse sin pasar el mouse.
                     <tr className="bo-rs__cancelled-row">
                       <td />
-                      <td colSpan={7}>
+                      <td colSpan={colsDetalle}>
                         <span className="bo-rs__cancelled-reason">
                           <strong>
                             {item.noSaleReasonCode
@@ -312,7 +322,7 @@ export function ReviewItemsTable({
                   {(warnings.length > 0 || saveError) && (
                     <tr className="bo-rs__warning-row">
                       <td />
-                      <td colSpan={7}>
+                      <td colSpan={colsDetalle}>
                         <ul className="bo-rs__warnings">
                           {saveError && (
                             <li className="bo-rs__warning bo-rs__warning--blocking">{saveError}</li>

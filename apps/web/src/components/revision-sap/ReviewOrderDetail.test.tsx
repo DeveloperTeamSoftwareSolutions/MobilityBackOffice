@@ -1448,3 +1448,58 @@ describe('un producto que ya tiene pedido en SAP', () => {
     expect(plan?.textContent).not.toContain('1200183');
   });
 });
+
+/**
+ * EL DETALLE NO PUEDE ROMPERSE PORQUE FALTE UN DATO (2026-09-24).
+ *
+ * Pasó de verdad: el front leía `order.money.total` dando por hecho que el Middleware lo
+ * manda, y contra uno anterior a 1.376.0 —que todavía no lo manda— `money` venía
+ * `undefined` y la pantalla quedaba EN BLANCO al abrir cualquier orden.
+ *
+ * La regla: una sección que pierde un dato muestra el resto. El front y el Middleware se
+ * deployan por separado, así que un campo nuevo siempre puede no estar.
+ */
+describe('contra un Middleware sin los precios', () => {
+  /** La orden como la devuelve un Middleware anterior a 1.376.0. */
+  function sinPrecios(): Detail {
+    const base = order();
+    const money = undefined as unknown as Detail['money'];
+    return {
+      ...base,
+      money,
+      items: base.items.map((i) => {
+        const { unitPrice: _p, discountPct: _d, lineTotal: _t, ...resto } = i;
+        return resto as typeof i;
+      }),
+    };
+  }
+
+  it('la pantalla sigue funcionando y no muestra el total', async () => {
+    api.getReviewOrder.mockResolvedValue(sinPrecios());
+    await renderDetail();
+
+    // Lo esencial sigue estando.
+    expect(screen.getByText('ORD00005729')).toBeTruthy();
+    expect(screen.getByText('1200183')).toBeTruthy();
+    expect(centerSelect()).toBeTruthy();
+    // Y el total simplemente no está: se omite el dato, no se rompe la página.
+    expect(screen.queryByText('Total de la orden')).toBeNull();
+  });
+
+  it('tampoco muestra las columnas de precio vacías', async () => {
+    api.getReviewOrder.mockResolvedValue(sinPrecios());
+    await renderDetail();
+
+    // Dos columnas de rayas no informan, ocupan.
+    expect(screen.queryByRole('columnheader', { name: 'Precio' })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Total' })).toBeNull();
+    // Con datos sí aparecen.
+    expect(screen.getByRole('columnheader', { name: 'Cantidad' })).toBeTruthy();
+  });
+
+  it('con un Middleware al día sí las muestra', async () => {
+    await renderDetail();
+    expect(screen.getByRole('columnheader', { name: 'Precio' })).toBeTruthy();
+    expect(screen.getByText('Total de la orden')).toBeTruthy();
+  });
+});

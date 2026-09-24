@@ -215,7 +215,7 @@ export function formatQuantity(quantity: number | null): string {
  * `null` se muestra como raya y NO como cero: una orden sin total cargado y una de
  * importe cero son cosas distintas, y confundirlas haría creer que no hay nada que cobrar.
  */
-export function formatMoney(amount: number | null, currency?: string | null): string {
+export function formatMoney(amount: number | null | undefined, currency?: string | null): string {
   if (amount == null) return '—';
   const n = amount.toLocaleString('es-AR', {
     minimumFractionDigits: 2,

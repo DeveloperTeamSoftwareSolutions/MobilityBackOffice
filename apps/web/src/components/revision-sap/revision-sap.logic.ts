@@ -495,15 +495,25 @@ export function sourceLabel(source: SapOrderSource): string {
 }
 
 /**
- * Margen para considerar que dos órdenes SAP salieron en el MISMO envío.
+ * Hueco máximo entre el fin de una orden SAP y el arranque de la siguiente para
+ * considerarlas parte del MISMO envío.
  *
- * El envío de BackOffice llama a SAP **una vez por centro, en serie**, y el middleware le
- * da hasta 120 s a cada llamada. Así que dos órdenes SAP del mismo envío pueden quedar
- * separadas por un par de minutos si SAP estuvo lento. Cinco minutos deja holgura sin
- * llegar a fusionar dos envíos distintos, que siempre tienen una persona mirando el
- * resultado en el medio.
+ * NO es "cuánto puede durar un envío": es cuánto puede pasar ENTRE dos de sus buckets.
+ * El envío de BackOffice llama a SAP una vez por centro **en serie**, así que el bucket
+ * siguiente arranca en cuanto vuelve el anterior — en la ORD00000494 fueron 5 ms. Entre
+ * dos envíos, en cambio, hay una persona leyendo el resultado y decidiendo: ahí el hueco
+ * se mide en decenas de segundos como mínimo.
+ *
+ * Diez segundos es holgado para la persistencia entre buckets y sigue muy por debajo de
+ * lo que tarda alguien en abrir el modal de reenvío y confirmarlo.
+ *
+ * ⚠️ ANTES ESTO ERA UNA VENTANA DE CINCO MINUTOS ENTRE ARRANQUES, y estaba mal: mezclaba
+ * el tiempo de SAP con el de la persona. En la ORD00000494 el tercer envío salió 51 s
+ * después del segundo —bien dentro de la ventana— y el bucket rechazado del segundo se
+ * mostraba como parte del tercero. Medir el HUECO en vez de la distancia hace que la
+ * regla no dependa de cuánto haya tardado SAP.
  */
-const MISMO_ENVIO_MS = 5 * 60 * 1000;
+const HUECO_ENTRE_BUCKETS_MS = 10 * 1000;
 
 const enMilisegundos = (iso: string | null): number | null => {
   if (!iso) return null;
@@ -523,8 +533,15 @@ const enMilisegundos = (iso: string | null): number | null => {
  * 3. **El centro no se repite.** El envío de BackOffice crea una orden SAP POR CENTRO: si
  *    el centro ya está en el grupo, esta fila es de otro envío. Es la señal más fuerte,
  *    porque no depende del reloj.
- * 4. **Y dentro de la ventana de tiempo**, como respaldo para el caso en que dos envíos
- *    usen centros distintos (por ejemplo, si entre uno y otro se corrigió el centro).
+ * 4. **Y son CONTIGUAS**: esta orden terminó justo cuando arrancó la primera del grupo.
+ *    Es el respaldo para cuando dos envíos usan centros distintos — por ejemplo, si entre
+ *    uno y otro se corrigió el centro, que es el caso más común de todos.
+ *
+ * La lista viene de la más nueva a la más vieja, así que `orden` es más vieja que todas
+ * las del grupo y lo que hay que medir es el hueco contra la **más vieja del grupo**: el
+ * fin de `orden` contra el arranque de aquélla. Comparar contra la fecha del intento
+ * —que es la de su orden más RECIENTE— haría crecer la distancia con cada bucket que se
+ * suma, y un envío de tres centros se partiría solo.
  */
 function esDelMismoEnvio(intento: SapSendAttempt, orden: SapOrder): boolean {
   const source = sourceOf(orden);
@@ -532,12 +549,16 @@ function esDelMismoEnvio(intento: SapSendAttempt, orden: SapOrder): boolean {
   if (source !== 'backoffice') return false;
   if (intento.orders.some((o) => o.centerCode === orden.centerCode)) return false;
 
-  const nuevo = enMilisegundos(orden.attemptAt);
-  const grupo = enMilisegundos(intento.attemptAt);
+  const masVieja = intento.orders[intento.orders.length - 1];
+  // `startedAt` es el arranque real; sin él (Middleware < 1.376.2) se cae a `attemptAt`,
+  // que es el fin. Peor aproximación —incluye lo que tardó SAP— pero sigue separando los
+  // envíos, porque el hueco entre dos personas es mucho mayor que el de un bucket.
+  const arranqueDelGrupo = enMilisegundos(masVieja.startedAt ?? masVieja.attemptAt);
+  const finDeEsta = enMilisegundos(orden.attemptAt);
   // Sin fecha en alguno de los dos no se puede comparar: se agrupa igual, porque las
   // otras tres condiciones ya se cumplieron.
-  if (nuevo === null || grupo === null) return true;
-  return Math.abs(grupo - nuevo) <= MISMO_ENVIO_MS;
+  if (arranqueDelGrupo === null || finDeEsta === null) return true;
+  return Math.abs(arranqueDelGrupo - finDeEsta) <= HUECO_ENTRE_BUCKETS_MS;
 }
 
 /**

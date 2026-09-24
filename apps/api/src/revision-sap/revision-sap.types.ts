@@ -316,7 +316,14 @@ export interface SapOrder {
   /** Centro del que sale esta orden SAP: con la orden partida, distingue una de otra. */
   centerCode: string | null;
   centerName: string | null;
+  /** Cuándo contestó SAP (o cuándo arrancó, si no contestó). El FIN del bucket. */
   attemptAt: string | null;
+  /**
+   * Cuándo ARRANCÓ este bucket. Permite saber qué órdenes SAP salieron en el mismo
+   * envío: los buckets de un envío son contiguos, entre dos envíos hay un hueco.
+   * Lo manda el Middleware desde 1.376.2; opcional para no romper con uno anterior.
+   */
+  startedAt?: string | null;
   sapOrderNumber: string | null;
   sapDispatchNumber: string | null;
   sapOrderCreatedAt: string | null;

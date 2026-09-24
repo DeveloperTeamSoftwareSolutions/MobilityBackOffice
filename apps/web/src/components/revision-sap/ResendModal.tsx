@@ -63,6 +63,11 @@ export function ResendModal({
   // Sin líneas activas no hay nada que mandar: el envío rebotaría sin crear ningún
   // pedido. Se avisa acá en vez de dejar que el usuario descubra el rechazo.
   const sinNadaQueEnviar = centersToSend === 0;
+  // Líneas que salen con el centro de la CABECERA, por no tener uno propio. Desde el
+  // Middleware 1.374.0 el envío lo hereda —igual que el camino del vendedor—, así que
+  // esto ya no impide enviar: se muestra para que el operador sepa de qué centro va a
+  // salir cada producto antes de crear pedidos reales.
+  const heredados = plan.orders.reduce((n, o) => n + o.heredados, 0);
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -115,6 +120,15 @@ export function ResendModal({
               </p>
             ) : (
               <>
+                {heredados > 0 && (
+                  <p className="bo-rs__warning">
+                    {heredados === 1
+                      ? '1 línea no tiene centro propio y sale con el de la cabecera.'
+                      : `${heredados} líneas no tienen centro propio y salen con el de la cabecera.`}{' '}
+                    Si alguna tiene que salir de otro centro, elegilo antes de enviar.
+                  </p>
+                )}
+
                 <p className="bo-rs__modal-text">
                   Va a ser el <strong>intento {plan.attemptNumber}</strong>. La orden sale{' '}
                   <strong>partida por centro de distribución</strong>:{' '}
@@ -134,11 +148,20 @@ export function ResendModal({
                             ? 'Orden SAP'
                             : `Orden SAP ${i + 1} de ${centersToSend}`}
                         </strong>
-                        <span className="bo-rs__pill bo-rs__pill--muted">
+                        <span
+                          className="bo-rs__pill bo-rs__pill--muted"
+                        >
                           {o.centerCode
                             ? `Centro ${o.centerCode}${o.centerName ? ` · ${o.centerName}` : ''}`
                             : 'Centro de la cabecera'}
                         </span>
+                        {o.heredados > 0 && (
+                          <span className="bo-rs__cell--muted">
+                            {o.heredados === 1
+                              ? '1 línea lo hereda de la cabecera'
+                              : `${o.heredados} líneas lo heredan de la cabecera`}
+                          </span>
+                        )}
                         <span className="bo-rs__cell--muted">
                           {o.items.length === 1 ? '1 producto' : `${o.items.length} productos`}
                         </span>
@@ -312,9 +335,10 @@ export function ResendModal({
             <button
               type="button"
               className="bo-rs__button"
-              // Sin líneas activas el envío no puede salir. El servidor lo rechaza igual
-              // —es él quien manda— pero dejar el botón vivo sería ofrecer algo que no
-              // funciona y devolver un error donde ya sabíamos la respuesta.
+              // El envío no puede salir: sin líneas activas, o con alguna que hereda el
+              // centro de la cabecera. El servidor lo rechaza igual —es él quien manda—
+              // pero dejar el botón vivo sería ofrecer algo que no funciona y devolver un
+              // error donde ya sabíamos la respuesta.
               disabled={sending || sinNadaQueEnviar}
               title={
                 sinNadaQueEnviar

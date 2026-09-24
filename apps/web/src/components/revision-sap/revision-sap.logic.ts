@@ -218,6 +218,47 @@ export function initialDrafts(items: ReviewItem[]): LineDrafts {
   );
 }
 
+/**
+ * Los drafts DESPUÉS de recargar la orden, conservando lo que el usuario venía editando.
+ *
+ * El problema que resuelve (reportado 2026-09-23): cancelar o reactivar una línea recarga
+ * la orden entera, y hasta ahora eso hacía `initialDrafts(frescos)` — que **descartaba en
+ * silencio** los cambios sin guardar de TODAS las demás líneas. Cambiabas el centro de un
+ * producto, cancelabas otro, y el primero volvía solo a su centro original. Pasaba igual
+ * con el destino.
+ *
+ * La regla: un draft se conserva sólo si el usuario lo había CAMBIADO —difiere de lo que
+ * la línea tenía guardada antes de recargar—. Si no lo tocó, se toma el valor fresco del
+ * servidor. Esa distinción importa: sin ella, un draft "sin tocar" pisaría un cambio que
+ * otra persona guardó mientras tanto, con un valor que este usuario nunca eligió.
+ */
+export function draftsTrasRecarga(
+  frescos: ReviewItem[],
+  previos: ReviewItem[],
+  drafts: LineDrafts,
+): LineDrafts {
+  const antes = new Map(previos.map((item) => [item.guid, item]));
+
+  return Object.fromEntries(
+    frescos.map((item) => {
+      const inicial: LineDraft = {
+        centerCode: item.centerCode,
+        destinationCode: item.deliveryDestinationCode,
+      };
+      const draft = drafts[item.guid];
+      const previo = antes.get(item.guid);
+      // Línea nueva, o sin draft: no hay nada que conservar.
+      if (!draft || !previo) return [item.guid, inicial];
+
+      const pendiente =
+        draft.centerCode !== previo.centerCode ||
+        draft.destinationCode !== previo.deliveryDestinationCode;
+
+      return [item.guid, pendiente ? draft : inicial];
+    }),
+  );
+}
+
 /** Lo elegido para una línea; si no se tocó, lo guardado. */
 export function draftFor(item: ReviewItem, drafts: LineDrafts): LineDraft {
   return (
@@ -317,6 +358,38 @@ export function itemWarnings(
   }
 
   const center = effectiveCenter(draft.centerCode, headerCenterCode);
+
+  // SIN CENTRO PROPIO: la línea sale con el de la cabecera. Avisa, no bloquea.
+  //
+  // Historia corta, porque el aviso cambió de sentido en el mismo día. El envío de
+  // BackOffice exigía CenterCode en cada línea y rebotaba la orden entera sin él, así que
+  // esto empezó siendo BLOQUEANTE. Pero el 68% de las líneas llega sin centro —MobilityIA
+  // no lo guarda por línea—, con lo cual el aviso saltaba casi siempre y pedía un trabajo
+  // manual que el envío del vendedor no pide.
+  //
+  // Desde el Middleware 1.374.0 el envío HEREDA el centro de la cabecera, igual que el
+  // camino del vendedor. Entonces ya no es un error: es un dato, y el operador tiene que
+  // poder verlo —qué centro va a usar esa línea— sin que le trabe el trabajo.
+  //
+  // Sin centro en la línea NI en la cabecera sí sigue bloqueando: ahí no hay de dónde
+  // heredar y el envío lo rechaza.
+  if (!draft.centerCode) {
+    warnings.push(
+      headerCenterCode
+        ? {
+            kind: 'sin-centro-propio',
+            blocking: false,
+            message: `Sale con el centro ${headerCenterCode} de la cabecera. Elegí uno si tiene que salir de otro.`,
+          }
+        : {
+            kind: 'sin-centro-propio',
+            blocking: true,
+            message:
+              'Elegí el centro de distribución: la línea no tiene uno y la cabecera tampoco, así que el envío no tiene de dónde tomarlo.',
+          },
+    );
+  }
+
   const allowed = catalogs.centers.some((c) => c.centerCode === center.code);
   if (center.code && catalogs.centers.length > 0 && !allowed) {
     warnings.push(
@@ -542,6 +615,9 @@ export function planResend(
     // Dentro de cada orden SAP, por número de línea: es el orden en que el usuario las
     // ve en la tabla de arriba.
     items: [...lines].sort((a, b) => a.lineNumber - b.lineNumber),
+    // Las que caen acá por HERENCIA de la cabecera y no por centro propio. El envío no
+    // hereda: con una sola de éstas la orden entera rebota.
+    heredados: lines.filter((item) => !draftFor(item, drafts).centerCode).length,
   }));
 
   return {

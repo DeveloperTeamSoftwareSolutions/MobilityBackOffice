@@ -311,9 +311,47 @@ consulta devuelve lo mismo, pero sin ninguno devuelve `[]`.
 |---|---|
 | Sin destino | Sí |
 | Destino fuera del área de venta de la orden | Sí (el Middleware también lo rechaza) |
+| **Sin centro propio** (lo hereda de la cabecera) | No: dice de qué centro sale. **Sí** si la cabecera tampoco lo tiene |
 | Centro **elegido** fuera de los permitidos del cliente | Sí (el Middleware también lo rechaza) |
 | Centro **heredado de la cabecera** fuera de los permitidos | No: avisa, puede ser el motivo del rechazo |
 | Centro sin stock / stock menor a lo pedido | No (decisión 4b) |
+
+### El centro de la línea se hereda de la cabecera — 2026-09-23
+
+**Desde Middleware 1.374.0** (PR #714), la línea sin `CenterCode` propio **hereda el de la
+cabecera**, igual que el camino del vendedor.
+
+Antes el envío rebotaba la orden entera:
+
+> Este endpoint agrupa por CenterCode y 1 item(s) no lo tienen. Asignar CenterCode a cada
+> linea antes de reintentar.
+
+Y pasaba casi siempre. Medido sobre las órdenes que pasaron por la bandeja: **15 de 22
+líneas (68%) llegan sin centro**, porque MobilityIA no lo guarda por línea. El operador
+tenía que tocarlas todas para mandar algo que el envío del vendedor manda sin preguntar.
+
+En BackOffice el aviso quedó, pero **informativo**: dice *de qué centro sale* la línea, que
+es el dato que el operador necesita para decidir. Un aviso bloqueante que salta en el 68% de
+los casos deja de leerse, y se lleva puesto al que sí importa.
+
+**Sigue bloqueando un caso:** sin centro en la línea **ni** en la cabecera. Ahí no hay de
+dónde heredar y el envío lo rechaza — con un mensaje que ahora pide lo correcto (completar
+el centro de la orden), no asignarlo línea por línea.
+
+La previsualización cuenta cuántas líneas heredan (`PlannedSapOrder.heredados`) y lo dice,
+para que nadie cree pedidos reales sin saber de qué centro salen.
+
+### Lo que estás editando no se pierde — 2026-09-23
+
+Cancelar o reactivar una línea recarga la orden entera. Eso hacía `initialDrafts(frescos)`,
+que **descartaba en silencio** los cambios sin guardar de todas las demás líneas: cambiabas
+el centro de un producto, cancelabas otro, y el primero volvía solo a su valor original.
+Pasaba igual con el destino.
+
+`draftsTrasRecarga` conserva un draft **sólo si el usuario lo había cambiado** —difiere de
+lo que la línea tenía guardada antes de recargar—. Si no lo tocó, gana el valor fresco del
+servidor. Esa distinción importa: sin ella, un draft "sin tocar" pisaría un cambio que otra
+persona guardó mientras tanto, con un valor que este usuario nunca eligió.
 
 Una línea **cancelada no genera avisos ni bloquea**: no viaja, así que su destino vacío no
 puede frenar el envío — si lo frenara, cancelar la línea problemática dejaría de destrabar

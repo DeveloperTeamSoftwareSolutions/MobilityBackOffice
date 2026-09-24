@@ -197,6 +197,8 @@ export interface LineChange {
 export type ItemWarningKind =
   | 'sin-destino'
   | 'destino-fuera-del-area'
+  /** Sin centro propio: el envío agrupa por CenterCode y no hereda el de la cabecera. */
+  | 'sin-centro-propio'
   | 'centro-no-permitido'
   | 'centro-de-cabecera-no-permitido'
   | 'sin-stock'
@@ -323,6 +325,14 @@ export interface PlannedSapOrder {
   centerName: string | null;
   /** Las líneas ACTIVAS que caen en este centro. Las canceladas no están. */
   items: ReviewItem[];
+  /**
+   * Cuántas de esas líneas NO tienen centro propio y lo heredan de la cabecera.
+   *
+   * No es un detalle: el envío agrupa por `CenterCode` de la línea y **no hereda**, así
+   * que con una sola de éstas rebota la orden entera sin crear ningún pedido. Se cuenta
+   * acá para que la previsualización lo diga en vez de mostrarlas como si fueran a salir.
+   */
+  heredados: number;
 }
 
 /**

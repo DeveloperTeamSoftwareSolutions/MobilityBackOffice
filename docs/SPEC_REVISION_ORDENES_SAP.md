@@ -11,7 +11,7 @@ Cuando MobilityIA envía una orden a SAP y SAP la rechaza (o la crea sin entrega
 Middleware deja `ProcessedBackoffice = 0`: la orden pasa a **revisión de BackOffice**,
 MobilityIA la deja en solo lectura y el vendedor ya no puede reenviarla. BackOffice:
 
-1. ve la cabecera y los ítems de la orden **sin precios, descuentos ni totales**;
+1. ve la cabecera y los ítems de la orden, **con precios y total** — sin costos ni margen;
 2. ve el motivo del rechazo de SAP, con los intentos anteriores;
 3. corrige **por ítem** el centro de distribución y el destino de entrega *(conectado)*;
 4. ve en cuántas órdenes SAP salió la orden y el estado de cada una *(conectado)*;
@@ -122,8 +122,8 @@ MobilityManager.
     (`markSentToSapAfterBackoffice` / `markPendingBackofficeReview`).
   - El mapa código → etiqueta vive en `revision-sap.logic.ts`: BackOffice no tenía
     ninguno (Soporte muestra el código crudo).
-- Cabecera sin precios: cliente, vendedor, área de venta con nombres, fecha, centro de
-  cabecera y **agrupa factura**, que es lo **único editable de la cabecera**.
+- Cabecera: cliente, vendedor, área de venta con nombres, fecha, centro de cabecera,
+  **total de la orden** y **agrupa factura**, que es lo **único editable de la cabecera**.
   - Cambiarlo **no** va con "Guardar cambios": se confirma aparte, con un aviso que
     enumera qué implica, porque no corrige una línea sino cómo se envía la orden entera.
   - Lo que dice el aviso está verificado en el código, no es interpretación:
@@ -341,6 +341,32 @@ el centro de la orden), no asignarlo línea por línea.
 La previsualización cuenta cuántas líneas heredan (`PlannedSapOrder.heredados`) y lo dice,
 para que nadie cree pedidos reales sin saber de qué centro salen.
 
+### Precios y total — 2026-09-24
+
+La sección nació **sin precios, descuentos ni totales**, a propósito. Se cambió a pedido de
+BackOffice: sin el monto no hay forma de **dimensionar** una orden trabada — no es lo mismo
+pelear por una de 60 dólares que por una de 60.000, y de eso depende con cuál empezar y
+cuándo conviene rechazar en vez de insistir.
+
+| Dónde | Qué se ve |
+|---|---|
+| **Cabecera del detalle** | **Total** de la orden con su moneda, destacado. Subtotal, descuento e impuestos sólo si son distintos de cero — si no, es ruido |
+| **Tabla de productos** | **Precio** unitario y **Total** de línea. El % de descuento va bajo el precio, y sólo si hay |
+| **Bandeja** | Nada. Una columna de monto competiría con el motivo del rechazo y el cliente, que es lo que se escanea para elegir qué orden abrir |
+| **Órdenes SAP** | Nada. Son el historial de lo que salió; el monto no agrega nada que el detalle no diga mejor |
+
+**Lo que sigue afuera, y es deliberado:** costos (`UnitCostLocal`, `UnitCostUsd`), `Margin`
+y las contraofertas (`ProposedPrice*`). **Precio es lo que se le cobra al cliente; el costo
+es rentabilidad interna**, que es otra conversación y otro permiso. Hay tests en los dos
+lados que cuidan esa línea — el del Middleware y el de la pantalla no se borraron cuando
+cambió la regla: cambiaron de objeto.
+
+Un monto en `null` se muestra como raya y **no como cero**: una orden sin total cargado y
+una de importe cero no son lo mismo.
+
+Requiere **Middleware ≥ 1.376.0**. Con uno anterior el detalle no trae `money` ni los
+precios por línea.
+
 ### Lo que ya tiene pedido en SAP no se vuelve a ofrecer — 2026-09-23
 
 Tras un envío **parcial**, las líneas que salieron tienen pedido **real** en SAP y las
@@ -430,7 +456,7 @@ web  revision-sap.api.ts ──> api  /api/revision-sap/*  (rol RevisionSap)
 | Endpoint BackOffice | Middleware | Qué hace |
 |---|---|---|
 | `GET /api/revision-sap/orders` | `GET /orders` | Bandeja |
-| `GET /api/revision-sap/orders/:guid` | `GET /orders/:guid` | Detalle sin precios |
+| `GET /api/revision-sap/orders/:guid` | `GET /orders/:guid` | Detalle con precios, sin costos |
 | `GET /api/revision-sap/orders/:guid/options?includeStock=1` | `GET /orders/:guid/options` | Centros, destinos y stock |
 | `PUT /api/revision-sap/orders/:guid/items/:itemGuid/destination` | `PUT …/destination` | Cambia el destino de una línea |
 | `PUT /api/revision-sap/orders/:guid/items/:itemGuid/center` | `PUT …/center` | Cambia el centro de una línea |

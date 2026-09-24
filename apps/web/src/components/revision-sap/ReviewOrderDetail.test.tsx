@@ -48,6 +48,7 @@ function order(over: Partial<Detail> = {}): Detail {
     orderDate: '2026-09-15T15:30:46.046Z',
     cancelledAt: null,
     groupInvoice: false,
+    money: { currency: 'USD', subtotal: 501.5, discount: 0, tax: 0, total: 501.5 },
     sap: {
       orderNumber: null,
       lastError: '[E] El material 1200135 no está ampliado para el centro 2802. | [W] Verificá la extensión.',
@@ -63,6 +64,9 @@ function order(over: Partial<Detail> = {}): Detail {
         quantity: 1,
         unitOfMeasure: 'PI',
         centerCode: '2801',
+        unitPrice: 250.75,
+        discountPct: 0,
+        lineTotal: 250.75,
         deliveryDestinationCode: '30000124',
         deliveryDestinationName: 'Inversiones',
         cancelledAt: null,
@@ -78,6 +82,9 @@ function order(over: Partial<Detail> = {}): Detail {
         quantity: 1,
         unitOfMeasure: 'L',
         centerCode: '2802',
+        unitPrice: 250.75,
+        discountPct: 0,
+        lineTotal: 250.75,
         deliveryDestinationCode: '30000124',
         deliveryDestinationName: 'Inversiones',
         cancelledAt: null,
@@ -313,14 +320,35 @@ function verOrdenesSap() {
 }
 
 describe('ReviewOrderDetail', () => {
-  it('muestra el motivo separado en tipo y mensaje, y no muestra precios', async () => {
+  it('muestra el motivo separado en tipo y mensaje', async () => {
     await renderDetail();
     expect(screen.getAllByText('Error').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Aviso').length).toBeGreaterThan(0);
     expect(
       screen.getAllByText('El material 1200135 no está ampliado para el centro 2802.').length,
     ).toBeGreaterThan(0);
-    expect(screen.queryByText(/precio|descuento|total/i)).toBeNull();
+  });
+
+  /**
+   * CAMBIO DE REGLA (2026-09-24). Este test antes exigía que NO hubiera precios en
+   * pantalla. Se cambió a pedido de BackOffice: sin el monto no hay forma de dimensionar
+   * una orden trabada.
+   *
+   * LO QUE SIGUE AFUERA es costo y margen, y por eso el test no se borró sino que cambió
+   * de objeto: precio es lo que se le cobra al cliente, el costo es rentabilidad interna.
+   */
+  it('muestra el total de la orden y el precio de cada línea', async () => {
+    await renderDetail();
+
+    expect(screen.getByText('Total de la orden')).toBeTruthy();
+    expect(screen.getByText('USD 501,50')).toBeTruthy();
+    // Dos líneas de 250,75: el precio unitario y el total de cada una.
+    expect(screen.getAllByText('250,75').length).toBeGreaterThan(0);
+  });
+
+  it('nunca muestra costos ni margen', async () => {
+    await renderDetail();
+    expect(screen.queryByText(/costo|margen|rentabilidad/i)).toBeNull();
   });
 
   it('dice si la orden agrupa factura', async () => {
@@ -1418,5 +1446,60 @@ describe('un producto que ya tiene pedido en SAP', () => {
     const plan = modal.getByText('Orden SAP').closest('li');
     expect(plan?.textContent).toContain('1200135');
     expect(plan?.textContent).not.toContain('1200183');
+  });
+});
+
+/**
+ * EL DETALLE NO PUEDE ROMPERSE PORQUE FALTE UN DATO (2026-09-24).
+ *
+ * Pasó de verdad: el front leía `order.money.total` dando por hecho que el Middleware lo
+ * manda, y contra uno anterior a 1.376.0 —que todavía no lo manda— `money` venía
+ * `undefined` y la pantalla quedaba EN BLANCO al abrir cualquier orden.
+ *
+ * La regla: una sección que pierde un dato muestra el resto. El front y el Middleware se
+ * deployan por separado, así que un campo nuevo siempre puede no estar.
+ */
+describe('contra un Middleware sin los precios', () => {
+  /** La orden como la devuelve un Middleware anterior a 1.376.0. */
+  function sinPrecios(): Detail {
+    const base = order();
+    const money = undefined as unknown as Detail['money'];
+    return {
+      ...base,
+      money,
+      items: base.items.map((i) => {
+        const { unitPrice: _p, discountPct: _d, lineTotal: _t, ...resto } = i;
+        return resto as typeof i;
+      }),
+    };
+  }
+
+  it('la pantalla sigue funcionando y no muestra el total', async () => {
+    api.getReviewOrder.mockResolvedValue(sinPrecios());
+    await renderDetail();
+
+    // Lo esencial sigue estando.
+    expect(screen.getByText('ORD00005729')).toBeTruthy();
+    expect(screen.getByText('1200183')).toBeTruthy();
+    expect(centerSelect()).toBeTruthy();
+    // Y el total simplemente no está: se omite el dato, no se rompe la página.
+    expect(screen.queryByText('Total de la orden')).toBeNull();
+  });
+
+  it('tampoco muestra las columnas de precio vacías', async () => {
+    api.getReviewOrder.mockResolvedValue(sinPrecios());
+    await renderDetail();
+
+    // Dos columnas de rayas no informan, ocupan.
+    expect(screen.queryByRole('columnheader', { name: 'Precio' })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Total' })).toBeNull();
+    // Con datos sí aparecen.
+    expect(screen.getByRole('columnheader', { name: 'Cantidad' })).toBeTruthy();
+  });
+
+  it('con un Middleware al día sí las muestra', async () => {
+    await renderDetail();
+    expect(screen.getByRole('columnheader', { name: 'Precio' })).toBeTruthy();
+    expect(screen.getByText('Total de la orden')).toBeTruthy();
   });
 });

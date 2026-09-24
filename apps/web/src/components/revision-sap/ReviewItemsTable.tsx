@@ -3,6 +3,7 @@ import { formatDateTime } from '../soporte/DocumentHeader';
 import {
   draftFor,
   effectiveCenter,
+  formatMoney,
   formatQuantity,
   isCancelled,
   itemWarnings,
@@ -35,7 +36,11 @@ interface Props {
 }
 
 /**
- * Ítems de la orden con su centro y su destino editables. Sin precios ni totales.
+ * Ítems de la orden con su centro y su destino editables.
+ *
+ * Con precio unitario y total de línea desde el 2026-09-24 — antes la sección era "sin
+ * precios" a propósito. **Sin costo ni margen**, que es otra cosa: precio es lo que se le
+ * cobra al cliente y el costo es rentabilidad interna.
  *
  * Acá se corrige lo que hizo que SAP rechazara: el centro y el destino de cada línea.
  * El stock no se muestra en la fila sino a pedido, en un modal: consultarlo para todos
@@ -72,6 +77,12 @@ export function ReviewItemsTable({
     return <p className="bo-rs__empty">La orden no tiene productos.</p>;
   }
 
+  // Un Middleware anterior a 1.376.0 no manda los precios. Las columnas se muestran sólo
+  // si hay algo que poner: dos columnas de rayas no informan, ocupan.
+  const hayPrecios = items.some((i) => i.unitPrice != null || i.lineTotal != null);
+  // Las filas de detalle (motivo, avisos) abarcan todo menos la primera columna.
+  const colsDetalle = hayPrecios ? 7 : 5;
+
   return (
     <>
       <div className="bo-rs__table-wrap">
@@ -81,6 +92,10 @@ export function ReviewItemsTable({
               <th className="bo-rs__th--number">#</th>
               <th>Producto</th>
               <th className="bo-rs__th--number">Cantidad</th>
+              {/* Precio unitario y total de línea. Sin costo ni margen: eso es
+                  rentabilidad interna y no viaja a esta sección. */}
+              {hayPrecios && <th className="bo-rs__th--number">Precio</th>}
+              {hayPrecios && <th className="bo-rs__th--number">Total</th>}
               <th>Centro de distribución</th>
               <th>Destino de entrega</th>
               <th className="bo-rs__th--actions">Envío</th>
@@ -142,6 +157,21 @@ export function ReviewItemsTable({
                     <td className="bo-rs__cell--number">
                       {formatQuantity(item.quantity)} {item.unitOfMeasure ?? ''}
                     </td>
+                    {hayPrecios && (
+                      <td className="bo-rs__cell--number">
+                        {formatMoney(item.unitPrice)}
+                        {/* El descuento va debajo del precio, que es lo que modifica.
+                            Sólo si hay: un "0 %" en cada línea es ruido. */}
+                        {(item.discountPct ?? 0) > 0 && (
+                          <span className="bo-rs__cell-sub">−{item.discountPct}%</span>
+                        )}
+                      </td>
+                    )}
+                    {hayPrecios && (
+                      <td className="bo-rs__cell--number bo-rs__cell--strong">
+                        {formatMoney(item.lineTotal)}
+                      </td>
+                    )}
                     <td>
                       <select
                         className="bo-rs__select"
@@ -258,7 +288,7 @@ export function ReviewItemsTable({
                     // con el que se busca en SAP.
                     <tr className="bo-rs__cancelled-row">
                       <td />
-                      <td colSpan={5}>
+                      <td colSpan={colsDetalle}>
                         <span className="bo-rs__cancelled-reason">
                           Ya salió en el pedido <strong>{pedidoEnSap}</strong>. No se vuelve
                           a enviar: hacerlo crearía un segundo pedido por la misma venta.
@@ -271,7 +301,7 @@ export function ReviewItemsTable({
                     // "por qué esto no llegó a SAP", y tiene que leerse sin pasar el mouse.
                     <tr className="bo-rs__cancelled-row">
                       <td />
-                      <td colSpan={5}>
+                      <td colSpan={colsDetalle}>
                         <span className="bo-rs__cancelled-reason">
                           <strong>
                             {item.noSaleReasonCode
@@ -292,7 +322,7 @@ export function ReviewItemsTable({
                   {(warnings.length > 0 || saveError) && (
                     <tr className="bo-rs__warning-row">
                       <td />
-                      <td colSpan={5}>
+                      <td colSpan={colsDetalle}>
                         <ul className="bo-rs__warnings">
                           {saveError && (
                             <li className="bo-rs__warning bo-rs__warning--blocking">{saveError}</li>

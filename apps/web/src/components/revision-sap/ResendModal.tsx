@@ -111,12 +111,16 @@ export function ResendModal({
             {sinNadaQueEnviar ? (
               <p className="bo-rs__warning bo-rs__warning--blocking">
                 <strong>No queda ninguna línea para enviar.</strong>{' '}
-                {plan.cancelledCount > 0
-                  ? `Las ${plan.cancelledCount} líneas de la orden están canceladas.`
-                  : 'La orden no tiene productos.'}{' '}
-                El envío rebotaría sin crear ningún pedido. Si la orden no va a salir, lo
-                que corresponde es <strong>rechazarla</strong>: cierra el documento y le
-                avisa al vendedor con el motivo.
+                {plan.alreadyInSapCount > 0 && plan.cancelledCount > 0
+                  ? `${plan.alreadyInSapCount} ya tienen pedido en SAP y ${plan.cancelledCount} están canceladas.`
+                  : plan.alreadyInSapCount > 0
+                    ? `Todas las líneas ya tienen su pedido creado en SAP: la orden ya salió, lo que quede se resuelve ahí.`
+                    : plan.cancelledCount > 0
+                      ? `Las ${plan.cancelledCount} líneas de la orden están canceladas.`
+                      : 'La orden no tiene productos.'}{' '}
+                {plan.alreadyInSapCount > 0
+                  ? 'Reenviarla duplicaría pedidos que ya existen.'
+                  : 'El envío rebotaría sin crear ningún pedido. Si la orden no va a salir, lo que corresponde es rechazarla: cierra el documento y le avisa al vendedor con el motivo.'}
               </p>
             ) : (
               <>
@@ -191,6 +195,16 @@ export function ResendModal({
                     ? '1 línea cancelada queda afuera'
                     : `${plan.cancelledCount} líneas canceladas quedan afuera`}
                   : no viajan a SAP. Si alguna tenía que ir, reactivala antes de enviar.
+                </li>
+              )}
+              {/* Se dice aparte de las canceladas a propósito: una es una decisión que se
+                  puede deshacer, la otra un hecho ya consumado en SAP. */}
+              {plan.alreadyInSapCount > 0 && !sinNadaQueEnviar && (
+                <li className="bo-rs__gi-effect">
+                  {plan.alreadyInSapCount === 1
+                    ? '1 línea ya tiene pedido creado en SAP y no se reenvía'
+                    : `${plan.alreadyInSapCount} líneas ya tienen pedido creado en SAP y no se reenvían`}
+                  : volver a mandarlas crearía un segundo pedido por la misma venta.
                 </li>
               )}
               {!sinNadaQueEnviar && (

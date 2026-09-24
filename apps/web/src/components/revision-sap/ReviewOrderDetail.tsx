@@ -21,6 +21,7 @@ import {
   groupSapOrdersByAttempt,
   initialDrafts,
   lineChanges,
+  lineasYaEnSap,
   planResend,
   salesAreaParts,
   statusLabel,
@@ -149,7 +150,18 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
     () => Object.fromEntries(reasons.map((r) => [r.code, r.label])),
     [reasons],
   );
-  const activos = useMemo(() => (order ? activeItems(order.items) : []), [order]);
+  /**
+   * Las líneas que YA salieron en una orden SAP con pedido creado, y en cuál.
+   *
+   * Sale de las órdenes SAP que el detalle ya carga: el dato estaba en pantalla, sólo
+   * había que leerlo. Sin esto, tras un envío parcial la pestaña volvía a ofrecer un
+   * producto que ya tenía su pedido, y el siguiente reenvío lo duplicaba.
+   */
+  const yaEnSap = useMemo(() => lineasYaEnSap(sapOrders), [sapOrders]);
+  const activos = useMemo(
+    () => (order ? activeItems(order.items, yaEnSap) : []),
+    [order, yaEnSap],
+  );
   /**
    * Cómo va a salir el próximo envío: una orden SAP por centro, con sus productos y el
    * número de intento. Se calcula con lo que hay EN PANTALLA —incluidos los cambios sin
@@ -169,14 +181,17 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
             order.centerCode,
             catalogs?.centers ?? [],
             groupSapOrdersByAttempt(sapOrders).length,
+            yaEnSap,
           )
-        : { orders: [], attemptNumber: 1, cancelledCount: 0, itemCount: 0 },
-    [order, drafts, catalogs, sapOrders],
+        : { orders: [], attemptNumber: 1, cancelledCount: 0, alreadyInSapCount: 0, itemCount: 0 },
+    [order, drafts, catalogs, sapOrders, yaEnSap],
   );
   const blocking = useMemo(
     () =>
-      order && catalogs ? blockingItemCount(order.items, drafts, order.centerCode, catalogs) : 0,
-    [order, catalogs, drafts],
+      order && catalogs
+        ? blockingItemCount(order.items, drafts, order.centerCode, catalogs, yaEnSap)
+        : 0,
+    [order, catalogs, drafts, yaEnSap],
   );
 
   const onChange = useCallback((itemGuid: string, next: LineDraft) => {
@@ -597,6 +612,7 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
             onReactivateItem={(item) => void onReactivateItem(item)}
             busyItemGuid={busyItemGuid}
             reasonLabels={reasonLabels}
+            yaEnSap={yaEnSap}
           />
         </section>
       ) : (

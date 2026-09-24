@@ -341,6 +341,40 @@ el centro de la orden), no asignarlo línea por línea.
 La previsualización cuenta cuántas líneas heredan (`PlannedSapOrder.heredados`) y lo dice,
 para que nadie cree pedidos reales sin saber de qué centro salen.
 
+### Lo que ya tiene pedido en SAP no se vuelve a ofrecer — 2026-09-23
+
+Tras un envío **parcial**, las líneas que salieron tienen pedido **real** en SAP y las
+otras no. La orden sigue en la bandeja —hay que resolver el centro que falló— pero la
+pestaña Productos volvía a ofrecer **todas**, así que el siguiente reenvío mandaba otra vez
+lo que ya estaba. **Un pedido creado dos veces es una venta facturada dos veces.**
+
+Pasó de verdad, en la **ORD00000487**:
+
+```
+intento 2  ORD00000487S66  centro 2105  pedido 0002490547 + entrega ✅  L1
+           ORD00000487S67  centro 2107  rechazada ❌                    L2
+intento 3  ORD00000487S68  centro 2105  rechazada ❌                    L1  ← otra vez
+```
+
+Esa vez SAP rechazó el duplicado. Si lo aceptaba, quedaban dos pedidos por la misma venta.
+
+| Dónde | Qué hace |
+|---|---|
+| **Middleware** (≥ 1.375.0) | Excluye del envío las líneas con pedido creado. Es la protección real: vale también para cualquier llamada directa a la API |
+| **BackOffice** | La línea se muestra **apagada**, con la píldora *"Ya está en SAP"* y el **número de pedido** en el que salió. Sin selectores y sin acciones |
+
+La línea **no desaparece**: es parte de la orden, y el número de pedido es con lo que se
+busca en SAP. Tampoco se puede cancelar — cancelarla no desharía el pedido; eso se resuelve
+en SAP.
+
+`lineasYaEnSap` lo calcula con las órdenes SAP que el detalle **ya carga**: el dato estaba
+en pantalla. Cruza **por número de línea**, no por producto — el mismo producto puede estar
+en dos líneas (en la 487, el `1230904` está en la 1 y en la 2) y sólo una salió.
+
+El modal de reenvío las cuenta **aparte de las canceladas**: son dos motivos distintos de
+no viajar —una decisión que se puede deshacer contra un hecho ya consumado— y mezclarlos
+haría leer "faltan 3" sin saber cuáles se pueden recuperar.
+
 ### Lo que estás editando no se pierde — 2026-09-23
 
 Cancelar o reactivar una línea recarga la orden entera. Eso hacía `initialDrafts(frescos)`,

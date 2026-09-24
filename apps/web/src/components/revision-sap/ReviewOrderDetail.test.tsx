@@ -48,6 +48,7 @@ function order(over: Partial<Detail> = {}): Detail {
     orderDate: '2026-09-15T15:30:46.046Z',
     cancelledAt: null,
     groupInvoice: false,
+    money: { currency: 'USD', subtotal: 501.5, discount: 0, tax: 0, total: 501.5 },
     sap: {
       orderNumber: null,
       lastError: '[E] El material 1200135 no está ampliado para el centro 2802. | [W] Verificá la extensión.',
@@ -63,6 +64,9 @@ function order(over: Partial<Detail> = {}): Detail {
         quantity: 1,
         unitOfMeasure: 'PI',
         centerCode: '2801',
+        unitPrice: 250.75,
+        discountPct: 0,
+        lineTotal: 250.75,
         deliveryDestinationCode: '30000124',
         deliveryDestinationName: 'Inversiones',
         cancelledAt: null,
@@ -78,6 +82,9 @@ function order(over: Partial<Detail> = {}): Detail {
         quantity: 1,
         unitOfMeasure: 'L',
         centerCode: '2802',
+        unitPrice: 250.75,
+        discountPct: 0,
+        lineTotal: 250.75,
         deliveryDestinationCode: '30000124',
         deliveryDestinationName: 'Inversiones',
         cancelledAt: null,
@@ -313,14 +320,35 @@ function verOrdenesSap() {
 }
 
 describe('ReviewOrderDetail', () => {
-  it('muestra el motivo separado en tipo y mensaje, y no muestra precios', async () => {
+  it('muestra el motivo separado en tipo y mensaje', async () => {
     await renderDetail();
     expect(screen.getAllByText('Error').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Aviso').length).toBeGreaterThan(0);
     expect(
       screen.getAllByText('El material 1200135 no está ampliado para el centro 2802.').length,
     ).toBeGreaterThan(0);
-    expect(screen.queryByText(/precio|descuento|total/i)).toBeNull();
+  });
+
+  /**
+   * CAMBIO DE REGLA (2026-09-24). Este test antes exigía que NO hubiera precios en
+   * pantalla. Se cambió a pedido de BackOffice: sin el monto no hay forma de dimensionar
+   * una orden trabada.
+   *
+   * LO QUE SIGUE AFUERA es costo y margen, y por eso el test no se borró sino que cambió
+   * de objeto: precio es lo que se le cobra al cliente, el costo es rentabilidad interna.
+   */
+  it('muestra el total de la orden y el precio de cada línea', async () => {
+    await renderDetail();
+
+    expect(screen.getByText('Total de la orden')).toBeTruthy();
+    expect(screen.getByText('USD 501,50')).toBeTruthy();
+    // Dos líneas de 250,75: el precio unitario y el total de cada una.
+    expect(screen.getAllByText('250,75').length).toBeGreaterThan(0);
+  });
+
+  it('nunca muestra costos ni margen', async () => {
+    await renderDetail();
+    expect(screen.queryByText(/costo|margen|rentabilidad/i)).toBeNull();
   });
 
   it('dice si la orden agrupa factura', async () => {

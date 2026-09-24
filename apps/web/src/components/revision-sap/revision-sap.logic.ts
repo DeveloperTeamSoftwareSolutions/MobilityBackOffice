@@ -208,6 +208,23 @@ export function formatQuantity(quantity: number | null): string {
   return quantity.toLocaleString('es-AR', { maximumFractionDigits: 3 });
 }
 
+/**
+ * Un monto, con su moneda. Siempre dos decimales: en una columna de plata, `1.234,5` y
+ * `1.234,50` cuestan de comparar de un vistazo.
+ *
+ * `null` se muestra como raya y NO como cero: una orden sin total cargado y una de
+ * importe cero son cosas distintas, y confundirlas haría creer que no hay nada que cobrar.
+ */
+export function formatMoney(amount: number | null, currency?: string | null): string {
+  if (amount == null) return '—';
+  const n = amount.toLocaleString('es-AR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const cur = (currency ?? '').trim();
+  return cur ? `${cur} ${n}` : n;
+}
+
 /** Lo de partida: el centro y el destino que la línea tiene guardados. */
 export function initialDrafts(items: ReviewItem[]): LineDrafts {
   return Object.fromEntries(

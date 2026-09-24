@@ -19,6 +19,7 @@ import {
   blockingItemCount,
   draftsTrasRecarga,
   groupSapOrdersByAttempt,
+  formatMoney,
   initialDrafts,
   lineChanges,
   lineasYaEnSap,
@@ -506,6 +507,26 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
           <div className="bo-rs__fact">
             <dt>Fecha de la orden</dt>
             <dd>{formatDateTime(order.orderDate)}</dd>
+          </div>
+          {/* El TOTAL, para dimensionar la orden. Es lo que decide con cuál empezar y
+              cuándo conviene rechazar en vez de insistir. El desglose va abajo, chico:
+              lo que se compara entre órdenes es el total. */}
+          <div className="bo-rs__fact">
+            <dt>Total de la orden</dt>
+            <dd>
+              <span className="bo-rs__total">
+                {formatMoney(order.money.total, order.money.currency)}
+              </span>
+              {(order.money.discount ?? 0) > 0 && (
+                <span className="bo-rs__cell-sub">
+                  Subtotal {formatMoney(order.money.subtotal)} · descuento{' '}
+                  {formatMoney(order.money.discount)}
+                </span>
+              )}
+              {(order.money.tax ?? 0) > 0 && (
+                <span className="bo-rs__cell-sub">Impuestos {formatMoney(order.money.tax)}</span>
+              )}
+            </dd>
           </div>
           <div className="bo-rs__fact">
             <dt>Centro de cabecera</dt>

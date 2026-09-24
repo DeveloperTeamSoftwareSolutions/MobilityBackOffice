@@ -71,6 +71,10 @@ export interface ReviewItem {
   unitOfMeasure: string | null;
   /** Centro propio de la línea. Sin él, la línea sale con el de la cabecera. */
   centerCode: string | null;
+  /** Precio de venta de la línea. Sin costo ni margen: no viajan a esta sección. */
+  unitPrice: number | null;
+  discountPct: number | null;
+  lineTotal: number | null;
   deliveryDestinationCode: string | null;
   deliveryDestinationName: string | null;
   /**
@@ -129,6 +133,19 @@ export interface ReviewOrderDetail {
   cancelledAt: string | null;
   /** Agrupa factura con la orden de compra del cliente: no puede salir parcial. */
   groupInvoice: boolean;
+  /**
+   * Los montos de la orden. `null` en cada campo es "no hay dato", que NO es lo mismo
+   * que cero: una orden sin total cargado y una de importe cero se muestran distinto.
+   *
+   * Sin costos ni margen: eso es rentabilidad interna y no viaja a esta sección.
+   */
+  money: {
+    currency: string | null;
+    subtotal: number | null;
+    discount: number | null;
+    tax: number | null;
+    total: number | null;
+  };
   sap: {
     orderNumber: string | null;
     lastError: string | null;

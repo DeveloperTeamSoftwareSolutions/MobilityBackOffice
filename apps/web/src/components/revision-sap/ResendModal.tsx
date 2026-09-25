@@ -223,10 +223,15 @@ export function ResendModal({
                   Los que salgan quedan creados en SAP igual.
                 </li>
               )}
+              {/* Este aviso EXPLICA la previsualización de arriba, no la contradice: lo
+                  que se muestra es lo guardado, que es lo único que viaja. Hasta el
+                  2026-09-25 el plan se armaba con los cambios en pantalla y anunciaba
+                  órdenes SAP que no se iban a crear (ORD00000499). */}
               {pendingChanges > 0 && (
                 <li className="bo-rs__gi-effect bo-rs__gi-effect--warn">
                   Tenés {pendingChanges === 1 ? '1 cambio sin guardar' : `${pendingChanges} cambios sin guardar`}:
-                  se reenviaría <strong>sin</strong> esos cambios. Guardalos primero.
+                  lo de arriba es <strong>lo guardado</strong>, que es lo que se va a
+                  enviar. Cerrá, guardá y volvé a entrar para reenviar con los cambios.
                 </li>
               )}
               {blocking > 0 && (

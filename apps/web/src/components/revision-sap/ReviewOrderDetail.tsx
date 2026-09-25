@@ -164,10 +164,25 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
     [order, yaEnSap],
   );
   /**
+   * Lo que está GUARDADO, que es lo único que viaja en un reenvío.
+   *
+   * El envío manda el guid de la orden y el Middleware lee la base: los cambios que están
+   * sólo en pantalla no existen para él.
+   */
+  const guardado = useMemo(() => (order ? initialDrafts(order.items) : {}), [order]);
+  /**
    * Cómo va a salir el próximo envío: una orden SAP por centro, con sus productos y el
-   * número de intento. Se calcula con lo que hay EN PANTALLA —incluidos los cambios sin
-   * guardar— porque es lo que el operador está por mandar; y sin las líneas canceladas,
-   * porque ésas no viajan.
+   * número de intento. Sin las líneas canceladas, porque ésas no viajan.
+   *
+   * ⚠️ SE CALCULA CON LO GUARDADO, NO CON LO QUE HAY EN PANTALLA. Antes usaba los drafts
+   * "porque es lo que el operador está por mandar", y esa premisa es falsa: el operador
+   * está por mandar lo que está en la base. Con un centro cambiado y sin guardar, la
+   * previsualización anunciaba DOS órdenes SAP y el envío creaba UNA
+   * (ORD00000499, 2026-09-25) — prometía algo que no iba a pasar, sobre una acción que
+   * crea pedidos reales en SAP y no se puede deshacer.
+   *
+   * El modal avisa aparte que hay cambios sin guardar; ese aviso ahora explica por qué la
+   * previsualización no refleja lo que se está editando, en vez de contradecirla.
    *
    * El número de intento sale de agrupar las órdenes SAP que ya existen: el próximo es el
    * siguiente. Es el mismo agrupamiento que muestra la pestaña "Órdenes SAP", así que los
@@ -178,21 +193,38 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
       order
         ? planResend(
             order.items,
-            drafts,
+            guardado,
             order.centerCode,
             catalogs?.centers ?? [],
             groupSapOrdersByAttempt(sapOrders).length,
             yaEnSap,
           )
         : { orders: [], attemptNumber: 1, cancelledCount: 0, alreadyInSapCount: 0, itemCount: 0 },
-    [order, drafts, catalogs, sapOrders, yaEnSap],
+    [order, guardado, catalogs, sapOrders, yaEnSap],
   );
+  /**
+   * Cuántos productos necesitan corrección SEGÚN LO QUE HAY EN PANTALLA. Es lo que frena
+   * el botón "Guardar cambios": no tiene sentido guardar algo que ya se sabe inválido.
+   */
   const blocking = useMemo(
     () =>
       order && catalogs
         ? blockingItemCount(order.items, drafts, order.centerCode, catalogs, yaEnSap)
         : 0,
     [order, catalogs, drafts, yaEnSap],
+  );
+  /**
+   * Y cuántos necesitan corrección SEGÚN LO GUARDADO. Es lo que tiene que mirar el modal
+   * de reenvío: si el operador corrigió en pantalla y no guardó, SAP va a rechazar igual,
+   * y decirle que está todo bien porque en pantalla se ve bien sería mentirle justo antes
+   * de crear pedidos que no se pueden deshacer.
+   */
+  const blockingGuardado = useMemo(
+    () =>
+      order && catalogs
+        ? blockingItemCount(order.items, guardado, order.centerCode, catalogs, yaEnSap)
+        : 0,
+    [order, catalogs, guardado, yaEnSap],
   );
 
   const onChange = useCallback((itemGuid: string, next: LineDraft) => {
@@ -661,7 +693,8 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
         <ResendModal
           orderNumber={order.orderNumber}
           pendingChanges={changes.length}
-          blocking={blocking}
+          // `blockingGuardado` y no `blocking`: el modal habla de lo que VA A VIAJAR.
+          blocking={blockingGuardado}
           plan={plan}
           groupInvoice={order.groupInvoice}
           sending={sending}

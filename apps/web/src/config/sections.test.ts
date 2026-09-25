@@ -19,6 +19,7 @@ const MATRIZ: Record<string, string[]> = {
     'soporte',
     'autorizadores',
     'revision-sap',
+    'consistencia',
   ],
   Soporte: ['soporte'],
   RevisionSap: ['revision-sap'],

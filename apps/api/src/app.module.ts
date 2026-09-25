@@ -10,6 +10,7 @@ import { SupportModule } from './support/support.module';
 import { TemplatesModule } from './templates/templates.module';
 import { RevisionSapModule } from './revision-sap/revision-sap.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
+import { ConsistencyModule } from './consistency/consistency.module';
 import { HealthModule } from './health/health.module';
 
 @Module({
@@ -27,6 +28,7 @@ import { HealthModule } from './health/health.module';
     TemplatesModule,
     RevisionSapModule,
     WarehousesModule,
+    ConsistencyModule,
     HealthModule,
   ],
 })

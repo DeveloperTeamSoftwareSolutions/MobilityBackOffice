@@ -34,4 +34,9 @@ export enum AuditCategory {
    * MobilityManager.
    */
   Warehouses = 'Warehouses',
+  /**
+   * Consistencia de datos: correcciones sobre la jerarquía comercial y los dueños de
+   * cartera hechas desde BackOffice.
+   */
+  Consistency = 'Consistency',
 }

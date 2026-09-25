@@ -12,6 +12,7 @@ import { PlantillasPage } from './pages/PlantillasPage';
 import { SoportePage } from './pages/SoportePage';
 import { AutorizadoresPage } from './pages/AutorizadoresPage';
 import { RevisionSapPage } from './pages/RevisionSapPage';
+import { ConsistenciaPage } from './pages/ConsistenciaPage';
 
 /**
  * Router de la aplicación. Punto único donde se declaran los módulos.
@@ -92,6 +93,18 @@ export function App(): JSX.Element {
                   fallback={<Navigate to="/" replace />}
                 >
                   <AutorizadoresPage />
+                </RoleGuard>
+              }
+            />
+
+            <Route
+              path="consistencia"
+              element={
+                <RoleGuard
+                  allow={['SuperAdmin']}
+                  fallback={<Navigate to="/" replace />}
+                >
+                  <ConsistenciaPage />
                 </RoleGuard>
               }
             />

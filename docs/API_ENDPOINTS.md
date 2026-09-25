@@ -1,7 +1,7 @@
 # API — Mobility BackOffice
 
-> Ultima actualizacion: 2026-09-18
-> Version: 2.36.0
+> Ultima actualizacion: 2026-09-25
+> Version: 2.44.0
 
 Toda respuesta incluye `success`. Los errores siguen el formato de Nest:
 `{ message, error, statusCode }`.
@@ -294,6 +294,43 @@ terminan en el mismo lugar ("no esta disponible en este entorno"):
 Con un Middleware anterior al piso, **las reservas por cliente siguen funcionando**: solo avisa la
 reserva por grupo.
 
+## Consistencia de datos
+
+**Todo el modulo exige rol `SuperAdmin`.** Detecta inconsistencias entre jerarquia comercial,
+carteras, usuarios y SAP, y corrige las que son dato comercial. Las reglas y las escrituras son
+del Middleware (`/mobility/backoffice-consistency`, **MW ≥ 1.378.0**); BackOffice agrega el actor
+del token y la auditoria central. Ver `docs/SPEC_CONSISTENCIA_DE_DATOS.md`.
+
+| Metodo | Ruta | Descripcion |
+|---|---|---|
+| GET | `/api/consistency/summary` | Conteo por grupo y por categoria (`JERARQUIA`, `CARTERA`, `USUARIOS_SAP`), `sapAccountsAvailable`, `generatedAt`. Query: `refresh=1` |
+| GET | `/api/consistency/findings` | Hallazgos paginados. Query: `page`, `limit` (max 200; 50.000 con `export=1`), `group`, `category`, `resolution`, `companyCode`, `search`, `sortBy`, `sortDir`, `refresh`. Devuelve `data`, `companies`, `generatedAt`, `pagination` |
+| GET | `/api/consistency/nodes` | Nodos de la jerarquia y roles validos de miembro, para el alta |
+| GET | `/api/consistency/customer-gaps` | Clientes de cartera vs SAP, **solo lectura**. Query: `gapType`, `companyCode`, `search`, `page`, `limit`, `sortBy`, `sortDir`, `export`. Devuelve `available` (ver abajo), `data`, `summary`, `pagination` |
+| POST | `/api/consistency/members` | Alta de un miembro. Body: `guidCommercialTeamHierarchies`, `memberSapUserId`, `memberName`, `role`, `memberGuidUsers?`, `reason`, `findingGroup?`. 201 |
+| PUT | `/api/consistency/members/:guid/sap-user-id` | Corrige el SapUserId. Body: `memberSapUserId`, `expectedSapUserId` (obligatorio, `null` si no tenia), `reason`, `findingGroup?` |
+| POST | `/api/consistency/members/:guid/remove` | Baja (soft delete). Body: `reason`, `findingGroup?` |
+| POST | `/api/consistency/portfolios/:guid/owner` | Dueno comercial de una cartera sin dueno. Body: `ownerSapUserId`, `ownerName`, `ownerGuidUsers?`, `ownerEmail?`, `reason`, `findingGroup?`. 201 |
+
+`sortBy` de hallazgos acepta `severity` (default), `companyCode`, `personName`, `sapUserId`,
+`group`. Filtros fuera de su lista son **400**, no se ignoran: un filtro ignorado en silencio
+devuelve "todo" y se lee como "esto es lo que hay".
+
+**Correcciones.** El actor sale del token (un `actorEmail` en el body se descarta). `reason` es
+obligatorio (5 a 500). Errores:
+
+| Status | Cuando | Se aplico? |
+|---|---|---|
+| 400 | Datos invalidos (aca o en el Middleware) | No |
+| 404 | El nodo, miembro o cartera ya no existe | No |
+| 409 | Ya esta en ese nodo · el miembro cambio desde que se listo · la cartera ya tiene dueno | No |
+| 503 "No se aplicó ningún cambio" | El Middleware respondio con error (su transaccion se deshace) o rechazo la credencial | No |
+| 503 "no se sabe si la corrección se aplicó" | Sin respuesta del Middleware (red, tiempo) | **No se sabe**: actualizar antes de reintentar |
+
+**`customer-gaps` y `available`.** Sale de `/v2/mobility/portfolio-gaps` (PR #727 del
+Middleware). Si el Middleware del ambiente no lo tiene (404), responde `available: false` con
+lista vacia: la pantalla dice "todavia no esta disponible" en vez de "no hay brechas".
+
 ## Auditoria
 
 Las escrituras dejan traza en `AuditLogs` con `AppId='MobilityBackOffice'`:
@@ -312,6 +349,10 @@ Las escrituras dejan traza en `AuditLogs` con `AppId='MobilityBackOffice'`:
 | `WAREHOUSE_CUSTOMER_GROUP_ADD` / `WAREHOUSE_CUSTOMER_GROUP_REMOVE` | `Warehouses` | `Warehouse` | codigo del almacen (el grupo y el estado resultante van en `Detail`) |
 | `WAREHOUSE_RESTRICT` / `WAREHOUSE_ENABLE` | `Warehouses` | `Warehouse` | codigo del almacen |
 | `CENTER_RESTRICT` / `CENTER_ENABLE` | `Warehouses` | `DistributionCenter` | `sociedad/centro` (el motivo va en `Detail`) |
+| `CONSISTENCY_MEMBER_CREATED` | `Consistency` | `CommercialTeamMembers` | guid del miembro nuevo (SapUserId, nombre, rol, nodo, hallazgo y motivo en `Detail`) |
+| `CONSISTENCY_MEMBER_SAPUSERID_CHANGED` | `Consistency` | `CommercialTeamMembers` | guid del miembro (antes, despues, hallazgo y motivo en `Detail`) |
+| `CONSISTENCY_MEMBER_REMOVED` | `Consistency` | `CommercialTeamMembers` | guid del miembro |
+| `CONSISTENCY_PORTFOLIO_OWNER_ASSIGNED` | `Consistency` | `Portfolios` | guid de la cartera |
 
 Las de Almacenes son **best-effort** (`safeRecord`): el CRUD ya ocurrio del lado del Middleware y un
 fallo del audit central no revierte nada ni rompe la respuesta. Lo que **no** es best-effort es

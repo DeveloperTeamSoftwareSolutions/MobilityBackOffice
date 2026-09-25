@@ -148,3 +148,18 @@ export function IconShieldCheck() {
     </svg>
   );
 }
+
+/**
+ * Consistencia de datos: dos piezas que tienen que encajar y un tilde. La sección
+ * detecta lo que no cierra entre jerarquía, carteras y usuarios, y lo corrige.
+ */
+export function IconConsistency() {
+  return (
+    <svg {...base}>
+      <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h4A1.5 1.5 0 0 1 8 2.5v1a.5.5 0 0 1-1 0v-1a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 .5.5h1a.5.5 0 0 1 0 1h-1A1.5 1.5 0 0 1 1 6.5v-4z" />
+      <path d="M5 9.5A1.5 1.5 0 0 1 6.5 8h7A1.5 1.5 0 0 1 15 9.5v4a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 5 13.5v-4zM6.5 9a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5h-7z" />
+      <path d="M12.354 10.146a.5.5 0 0 1 0 .708l-2.5 2.5a.5.5 0 0 1-.708 0l-1.25-1.25a.5.5 0 1 1 .708-.708l.896.897 2.146-2.147a.5.5 0 0 1 .708 0z" />
+      <path d="M10 4.5a.5.5 0 0 1 .5-.5h2A1.5 1.5 0 0 1 14 5.5v1a.5.5 0 0 1-1 0v-1a.5.5 0 0 0-.5-.5h-2a.5.5 0 0 1-.5-.5z" />
+    </svg>
+  );
+}

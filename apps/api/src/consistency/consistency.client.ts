@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -68,6 +69,8 @@ const NOT_FOUND_MESSAGES: Record<string, string> = {
  */
 @Injectable()
 export class ConsistencyClient {
+  private readonly logger = new Logger(ConsistencyClient.name);
+
   constructor(
     private readonly http: HttpService,
     private readonly config: ConfigService,
@@ -91,8 +94,8 @@ export class ConsistencyClient {
         }),
       );
       return res.data.data;
-    } catch {
-      throw new ServiceUnavailableException('No se pudo obtener el resumen de consistencia');
+    } catch (err) {
+      this.readError(err, 'el resumen de consistencia');
     }
   }
 
@@ -119,8 +122,8 @@ export class ConsistencyClient {
       );
       const { data, companies, generatedAt, pagination } = res.data;
       return { data, companies, generatedAt, pagination };
-    } catch {
-      throw new ServiceUnavailableException('No se pudieron obtener los hallazgos');
+    } catch (err) {
+      this.readError(err, 'los hallazgos');
     }
   }
 
@@ -133,8 +136,8 @@ export class ConsistencyClient {
         }),
       );
       return { data: res.data.data, roles: res.data.roles };
-    } catch {
-      throw new ServiceUnavailableException('No se pudieron obtener los nodos de la jerarquía');
+    } catch (err) {
+      this.readError(err, 'los nodos de la jerarquía');
     }
   }
 
@@ -215,6 +218,29 @@ export class ConsistencyClient {
         ...this.ctxBody(ctx),
       },
     );
+  }
+
+  /**
+   * Fallo de una lectura. Se dice la causa cuando es de configuración (credencial o
+   * versión del middleware) porque son las dos que quien despliega puede arreglar, y se
+   * registra el status y el code para no depender de adivinar desde el navegador.
+   */
+  private readError(err: unknown, what: string): never {
+    const status = httpStatus(err);
+    const code = middlewareErrorCode(err);
+    const resultado = status !== undefined ? `HTTP ${status}` : 'sin respuesta';
+    this.logger.warn(`No se pudo obtener ${what}: ${resultado}${code ? ` (${code})` : ''}`);
+    if (status === 401 || status === 403) {
+      throw new ServiceUnavailableException(
+        'El middleware rechazó la credencial de BackOffice: revisá que MIDDLEWARE_API_KEY coincida con la del middleware.',
+      );
+    }
+    if (status === 404) {
+      throw new ServiceUnavailableException(
+        'El middleware de este ambiente no tiene la sección de consistencia (requiere MobilityMiddleWare 1.378.0 o superior).',
+      );
+    }
+    throw new ServiceUnavailableException(`No se pudo obtener ${what}.`);
   }
 
   private ctxBody(ctx: WriteContext): Record<string, string> {

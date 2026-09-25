@@ -78,7 +78,27 @@ describe('ConsistencyClient — lecturas', () => {
   it('un fallo de lectura no expone el detalle del middleware', async () => {
     const { client, http } = make();
     (http.get as jest.Mock).mockReturnValue(throwError(() => httpError(500)));
-    await expect(client.getSummary(false)).rejects.toBeInstanceOf(ServiceUnavailableException);
+    const err = await client.getSummary(false).catch((e) => e);
+    expect(err).toBeInstanceOf(ServiceUnavailableException);
+    expect(err.message).toBe('No se pudo obtener el resumen de consistencia.');
+  });
+
+  it.each([401, 403])('un %s dice que es la credencial, no un fallo genérico', async (status) => {
+    const { client, http } = make();
+    (http.get as jest.Mock).mockReturnValue(throwError(() => httpError(status)));
+    const err = await client.listFindings({
+      page: 1, limit: 10, sortBy: 'severity', sortDir: 'ASC', exportAll: false, refresh: false,
+    }).catch((e) => e);
+    expect(err).toBeInstanceOf(ServiceUnavailableException);
+    expect(err.message).toContain('MIDDLEWARE_API_KEY');
+  });
+
+  it('un 404 dice que el middleware es anterior a 1.378.0', async () => {
+    const { client, http } = make();
+    (http.get as jest.Mock).mockReturnValue(throwError(() => httpError(404)));
+    const err = await client.listNodes().catch((e) => e);
+    expect(err).toBeInstanceOf(ServiceUnavailableException);
+    expect(err.message).toContain('1.378.0');
   });
 });
 

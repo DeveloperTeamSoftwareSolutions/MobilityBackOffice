@@ -30,6 +30,8 @@ usa el dev server de Vite en `:5183`, que proxyea `/api` al backend.
 ```bash
 npm install
 cp apps/api/.env.example apps/api/.env    # completar DATABASE_URL y BACKOFFICE_JWT_SECRET
+npm run dev                                # API (:3010) + front (:5183) en una sola terminal
+# o por separado, cada uno en su terminal:
 npm run dev:api                            # :3010
 npm run dev:web                            # :5183
 npm test                                   # backend (jest) + frontend (vitest)

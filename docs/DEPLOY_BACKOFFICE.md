@@ -173,9 +173,12 @@ Sirve para recorrer lo nuevo contra datos reales de QATEST sin tocar ningún ent
 ```bash
 git fetch origin && git checkout main && git pull
 npm ci
-npm run dev:api     # una terminal — API en :3010
-npm run dev:web     # otra terminal — front en :5183
+npm run dev         # API en :3010 + front en :5183, en una sola terminal
 ```
+
+`npm run dev` levanta las dos apps con `concurrently` y prefija cada línea con `[api]` o
+`[web]`. Si una de las dos no arranca, corta la otra. Para verlas en terminales separadas
+siguen existiendo `npm run dev:api` y `npm run dev:web`.
 
 El front de desarrollo (`:5183`) es el que conviene abrir: recarga solo al cambiar código. El
 `:3010` sirve el build, que recién existe después de `npm run build`.

@@ -572,18 +572,27 @@ export function ReviewOrderDetail({ guid, onBack }: Props) {
         </dl>
       </section>
 
-      <section className="bo-rs__card bo-rs__card--sap" aria-labelledby="bo-rs-sap-title">
-        <header className="bo-rs__card-head">
-          <h3 id="bo-rs-sap-title" className="bo-rs__card-title">
-            Motivo del rechazo de SAP
-          </h3>
-          <span className="bo-rs__cell--muted">
-            {order.sapAttempts.length === 1 ? '1 intento' : `${order.sapAttempts.length} intentos`}
-            {order.sap.lastAttemptAt ? ` · último ${formatDateTime(order.sap.lastAttemptAt)}` : ''}
-          </span>
-        </header>
-        <SapErrorMessage error={lastError} />
-      </section>
+      {/* SÓLO MIENTRAS LA ORDEN ESTÁ EN REVISIÓN (pedido 2026-09-25).
+          Este bloque existe para una cosa: decirle al operador QUÉ tiene que arreglar
+          antes de reenviar. En una orden ya resuelta no hay nada que arreglar, y el
+          cartel pasa a ser ruido que además se lee mal — anuncia un rechazo sobre una
+          orden que puede haber terminado bien.
+          El historial no se pierde: cada intento sigue en la pestaña "Órdenes SAP", con
+          su motivo y su resultado, que es donde se mira una orden ya cerrada. */}
+      {order.backoffice.inReview && (
+        <section className="bo-rs__card bo-rs__card--sap" aria-labelledby="bo-rs-sap-title">
+          <header className="bo-rs__card-head">
+            <h3 id="bo-rs-sap-title" className="bo-rs__card-title">
+              Motivo del rechazo de SAP
+            </h3>
+            <span className="bo-rs__cell--muted">
+              {order.sapAttempts.length === 1 ? '1 intento' : `${order.sapAttempts.length} intentos`}
+              {order.sap.lastAttemptAt ? ` · último ${formatDateTime(order.sap.lastAttemptAt)}` : ''}
+            </span>
+          </header>
+          <SapErrorMessage error={lastError} />
+        </section>
+      )}
 
       <div className="bo-rs__tabs" role="tablist">
         <button

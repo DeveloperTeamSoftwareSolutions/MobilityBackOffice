@@ -1,6 +1,6 @@
 # Roles y Permisos — Mobility BackOffice
 
-> Última actualización: 2026-09-18 · Versión: 2.37.0
+> Última actualización: 2026-09-25 · Versión: 2.44.0
 >
 > Qué puede hacer cada rol, cómo se decide, y cómo se registra en ITManager.
 
@@ -84,6 +84,7 @@ y (cuando exista) los templates de WhatsApp.
 | **Consola de soporte** | ✓ | ✓ | — | **—** | — | — |
 | **Matriz de autorizadores** | ✓ | — | — | **—** | **—** | **—** |
 | **Órdenes rechazadas por SAP** | ✓ | — | ✓ | **—** | **—** | **—** |
+| **Consistencia de datos** | ✓ | — | — | **—** | **—** | **—** |
 | *Cualquier sección futura sin rol deliberado* | ✓ | — | — | ✓ | — | — |
 
 "Inicio" es fijo y siempre visible; muestra solo las tarjetas de las secciones que el rol
@@ -102,6 +103,7 @@ puede abrir.
 | `/api/support/*` | **Soporte, SuperAdmin** |
 | `/api/authorizers/*` | **Solo SuperAdmin** |
 | `/api/revision-sap/*` | **RevisionSap, SuperAdmin** |
+| `/api/consistency/*` | **Solo SuperAdmin** — corrige jerarquía comercial y dueños de cartera compartidos con MobilityManager |
 | `/api/regions/sync` | Ninguno — se autentica por API key (máquina a máquina) |
 
 > **La UI oculta; el backend prohíbe.** Esconder una sección es comodidad, no seguridad:

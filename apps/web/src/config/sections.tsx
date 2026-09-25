@@ -7,6 +7,7 @@ import {
   IconShieldCheck,
   IconArrowRepeat,
   IconWarehouse,
+  IconConsistency,
 } from '../components/layout/icons';
 import type { BackOfficeRole } from '../types';
 import { roleAllows } from '../auth/roleAccess';
@@ -61,6 +62,18 @@ export const NAV_SECTIONS: NavSection[] = [
     roles: ['Administrador'],
     status: 'ready',
     icon: <IconWarehouse />,
+  },
+  {
+    key: 'consistencia',
+    label: 'Consistencia de datos',
+    description:
+      'Jerarquía comercial, carteras y usuarios que no cierran entre sí, y su corrección.',
+    path: '/consistencia',
+    group: 'Administración',
+    // Exclusiva de SuperAdmin: corrige datos maestros compartidos con MobilityManager.
+    roles: ['SuperAdmin'],
+    status: 'ready',
+    icon: <IconConsistency />,
   },
   {
     key: 'templates',

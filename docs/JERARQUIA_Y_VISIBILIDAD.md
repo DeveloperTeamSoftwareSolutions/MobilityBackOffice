@@ -1,7 +1,7 @@
 # Jerarquia y visibilidad — Mobility BackOffice
 
-> Ultima actualizacion: 2026-09-18
-> Version: 2.36.0
+> Ultima actualizacion: 2026-09-25
+> Version: 2.44.0
 
 Que ve cada usuario y por que. Documento vivo: actualizar en cada iteracion que agregue o cambie
 una seccion.
@@ -25,6 +25,7 @@ Eso no es una inconsistencia que haya que emparejar: es una diferencia en la nat
 | Consola de soporte | No | Es el rol de trazabilidad total del DevelopersTeam: recortarlo seria contrario a su razon de ser |
 | Ordenes rechazadas por SAP | No | Bandeja unica de BackOffice; el Middleware ya la sirve sin el scope de vendedor |
 | Matriz de autorizadores | No | Solo lectura y exclusiva de SuperAdmin; se pide por sociedad **elegida**, no por sociedad **permitida** |
+| Consistencia de datos | No | Exclusiva de SuperAdmin: para encontrar lo que no cierra hay que ver todas las sociedades; la sociedad es un **filtro**, no un recorte |
 | Plantillas de WhatsApp · RAG | No | La cuenta WABA es implicita en la key; el RAG tiene su propio tenant, manual |
 
 Quien es **admin en la jerarquia** (`Users.IsAdmin`) no se recorta por sociedad. Es un eje distinto

@@ -23,6 +23,7 @@ usa el dev server de Vite en `:5183`, que proxyea `/api` al backend.
 | Documentacion del RAG (embebido) | **completo** (v1.1.0) | SUPERADMIN, Marketing |
 | Templates de WhatsApp (Marketing) | pendiente | SUPERADMIN, Marketing |
 | Consola de soporte | **completa** (v2.3.0) | SUPERADMIN, Soporte |
+| Consistencia de datos | **completa** (v2.44.0) — requiere MobilityMiddleWare 1.378.0 | SUPERADMIN |
 
 ## Puesta en marcha
 

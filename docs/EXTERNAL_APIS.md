@@ -1,7 +1,7 @@
 # APIs y Endpoints Externos — Mobility BackOffice
 
-> Ultima actualizacion: 2026-09-18
-> Version: 2.36.0
+> Ultima actualizacion: 2026-09-25
+> Version: 2.44.0
 
 ## Integraciones activas
 
@@ -73,6 +73,14 @@ MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
   | POST · DELETE | `/mobility/warehouse-customers/groups` | Reserva y quita un grupo. Se guarda el **codigo** del grupo, nunca la lista de clientes. **MW ≥ 1.357.0** | `dbo.WarehouseCustomerGroups` | idem |
   | PUT | `/mobility/warehouse-customers/availability` | Libera un almacen (borra sus reservas) | `[SAPServices].[dbo].[Warehouses]` | idem |
   | PUT | `/mobility/warehouse-customers/center-restriction` | Restringe o libera un CENTRO entero, con motivo | `dbo.RestrictedCenters` | idem |
+  | GET | `/mobility/backoffice-consistency/summary` | **Consistencia de datos**: conteo de hallazgos por grupo. **MW ≥ 1.378.0**, `requireApiKey` | `CommercialTeamMembers`, `CommercialTeamHierarchies`, `PortfolioOwnerHistory`, `Portfolios`, `PortfolioCustomers`, `Users`, `UserApplicationRoles`, `Roles`, `VIEW_V2_UserAccountsMobility` | `src/consistency/consistency.client.ts` |
+  | GET | `/mobility/backoffice-consistency/findings` | Hallazgos paginados y filtrables, con `export=1` | idem | idem |
+  | GET | `/mobility/backoffice-consistency/nodes` | Nodos de la jerarquia y roles validos de miembro | `dbo.CommercialTeamHierarchies` | idem |
+  | POST | `/mobility/backoffice-consistency/members` | Alta de un miembro en la jerarquia. El MW audita en `Auditories` en la misma transaccion | `dbo.CommercialTeamMembers` + `dbo.Auditories` | idem |
+  | PUT | `/mobility/backoffice-consistency/members/:guid/sap-user-id` | Corrige el SapUserId de un miembro, con el valor esperado para no pisar | idem | idem |
+  | POST | `/mobility/backoffice-consistency/members/:guid/remove` | Baja (soft delete) de un miembro | idem | idem |
+  | POST | `/mobility/backoffice-consistency/portfolios/:guid/owner` | Dueno comercial de una cartera sin dueno; alinea el dueno de `Portfolios` | `dbo.PortfolioOwnerHistory` + `dbo.Portfolios` + `dbo.Auditories` | idem |
+  | GET | `/v2/mobility/portfolio-gaps` | Clientes de cartera vs SAP (`CLIENTE_NO_SINCRONIZADO`, `VE_SIN_CARTERA`, `SIN_AREA_DE_VENTA`, `CARTERA_SIN_VE`). **PR #727 del MW + su SQL** | `dbo.VIEW_V2_PortfolioGapsMobility` | idem |
 - **Cross-database y collations**: el join a `[SAPServices].[dbo].[Companies]` y el manejo de
   collations ocurren **dentro del Middleware** (via `VIEW_V2_CompaniesMobility`). BackOffice ya
   no depende de eso: es una preocupacion del Middleware, no de esta app.
@@ -102,6 +110,15 @@ MobilityManager. Ya no hay Prisma ni `DATABASE_URL`.
   desplegar el MW). El unico 404 real de esos endpoints trae `code: warehouse_not_found`.
   **Orden de deploy**: tabla `WarehouseCustomerGroups` → MW 1.357.0 → BackOffice 2.36.0.
   **No hay SQL propio de BackOffice**: las tablas son del Middleware y ya existen.
+- **Piso de version — consistencia de datos (desde BackOffice 2.44.0)**: la seccion pide
+  `/mobility/backoffice-consistency/*`, que existe desde **MW 1.378.0** (PR #729). Con un
+  Middleware anterior las lecturas responden **503** y la seccion muestra el error con reintento.
+  Las correcciones distinguen "no se aplico" (toda respuesta de error: la transaccion del MW se
+  deshace) de "no se sabe" (sin respuesta). La pestaña **Clientes vs SAP** pide
+  `/v2/mobility/portfolio-gaps` (PR #727); sin el, un **404 se traduce a `available: false`**, no a
+  una lista vacia.
+  **Orden de deploy**: MW 1.378.0 (sin SQL; requiere `MIDDLEWARE_API_KEY` en el MW) → BackOffice
+  2.44.0. Clientes vs SAP se enciende cuando el ambiente tenga el PR #727 y su SQL.
 
 ### WhatsApp WABA Admin — plantillas de WhatsApp
 

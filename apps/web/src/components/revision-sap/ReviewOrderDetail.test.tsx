@@ -602,6 +602,29 @@ describe('ReviewOrderDetail', () => {
     expect(button('Reenviar a SAP').disabled).toBe(true);
   });
 
+  /**
+   * El bloque "Motivo del rechazo de SAP" existe para una cosa: decir QUÉ hay que
+   * arreglar antes de reenviar. En una orden ya resuelta no hay nada que arreglar, y
+   * encima se lee mal — anuncia un rechazo sobre una orden que puede haber terminado
+   * bien (pedido 2026-09-25).
+   */
+  it('en una orden resuelta no sale el motivo del rechazo', async () => {
+    api.getReviewOrder.mockResolvedValue(
+      order({
+        statusCode: 'SentToSAP',
+        backoffice: { inReview: false, decidedBy: 'bo@duwest.com', decidedAt: '2026-09-25T10:00:00Z' },
+      }),
+    );
+    await renderDetail();
+
+    expect(screen.queryByText('Motivo del rechazo de SAP')).toBeNull();
+  });
+
+  it('pero mientras está en revisión sí sale: es lo que hay que resolver', async () => {
+    await renderDetail();
+    expect(screen.getByText('Motivo del rechazo de SAP')).toBeTruthy();
+  });
+
   it('si el envío falla, el modal lo dice y no se pierde', async () => {
     await renderDetail();
     api.resendToSap.mockRejectedValue(new Error('503'));

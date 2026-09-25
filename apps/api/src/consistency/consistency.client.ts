@@ -229,7 +229,18 @@ export class ConsistencyClient {
     const status = httpStatus(err);
     const code = middlewareErrorCode(err);
     const resultado = status !== undefined ? `HTTP ${status}` : 'sin respuesta';
-    this.logger.warn(`No se pudo obtener ${what}: ${resultado}${code ? ` (${code})` : ''}`);
+    // El texto del error del middleware va SOLO al log (nunca al navegador): es lo que
+    // dice por que fallo un 500 en su base, y sin el hay que ir a buscarlo del otro lado.
+    // Un 500 del middleware trae el motivo real en `detail` (su manejador central lo manda
+    // ahi), y `error` solo dice "Internal server error".
+    const cuerpo = (err as { response?: { data?: { error?: string; detail?: unknown } } })
+      ?.response?.data;
+    const detalle = [cuerpo?.error, typeof cuerpo?.detail === 'string' ? cuerpo.detail : null]
+      .filter(Boolean)
+      .join(' | ');
+    this.logger.warn(
+      `No se pudo obtener ${what}: ${resultado}${code ? ` (${code})` : ''}${detalle ? ` — ${detalle}` : ''}`,
+    );
     if (status === 401 || status === 403) {
       throw new ServiceUnavailableException(
         'El middleware rechazó la credencial de BackOffice: revisá que MIDDLEWARE_API_KEY coincida con la del middleware.',

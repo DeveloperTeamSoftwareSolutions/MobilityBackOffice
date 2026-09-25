@@ -584,14 +584,43 @@ describe('ReviewOrderDetail', () => {
    * La orden de prueba tiene líneas en 2801 y 2802, así que salen DOS pedidos. Decirlo
    * antes importa: es la diferencia entre crear uno y crear dos cosas irreversibles.
    */
-  it('avisa cuántos pedidos va a crear, contando los cambios sin guardar', async () => {
+  it('avisa cuántos pedidos va a crear', async () => {
     await renderDetail();
-    // Unifico las dos líneas en un solo centro: ahora sería UN pedido, no dos.
+    fireEvent.click(button('Reenviar a SAP'));
+    expect(screen.getByText(/se crean 2 órdenes SAP, una por centro/)).toBeTruthy();
+    expect(screen.getByText(/Crea 2 pedidos reales en SAP/)).toBeTruthy();
+  });
+
+  /**
+   * ⚠️ ESTE TEST FIJABA EL BUG. Se llamaba "contando los cambios sin guardar" y exigía
+   * que la previsualización usara lo que había en pantalla, con la premisa de que "es lo
+   * que el operador está por mandar".
+   *
+   * Es falsa: el reenvío manda el guid de la orden y el Middleware lee la BASE. Con un
+   * centro cambiado y sin guardar, el modal anunciaba DOS órdenes SAP y el envío creaba
+   * UNA (ORD00000499, 2026-09-25) — prometía algo que no iba a pasar, sobre una acción
+   * que crea pedidos reales en SAP y no se puede deshacer.
+   */
+  it('la previsualización muestra LO GUARDADO, no los cambios en pantalla', async () => {
+    await renderDetail();
+    // Unifico las dos líneas en un solo centro, SIN guardar.
     fireEvent.change(centerSelect(), { target: { value: '2801' } });
 
     fireEvent.click(button('Reenviar a SAP'));
-    expect(screen.getByText(/todas las líneas van juntas en una sola orden SAP/)).toBeTruthy();
-    expect(screen.getByText(/Crea un pedido real en SAP/)).toBeTruthy();
+
+    // Sigue anunciando las DOS órdenes que realmente se van a crear.
+    expect(screen.getByText(/se crean 2 órdenes SAP, una por centro/)).toBeTruthy();
+    expect(screen.queryByText(/todas las líneas van juntas en una sola orden SAP/)).toBeNull();
+  });
+
+  /** Y el aviso explica por qué la previsualización no refleja lo que se está editando. */
+  it('el aviso de cambios sin guardar explica la previsualización', async () => {
+    await renderDetail();
+    fireEvent.change(centerSelect(), { target: { value: '2801' } });
+    fireEvent.click(button('Reenviar a SAP'));
+
+    expect(screen.getByText(/lo de arriba es/)).toBeTruthy();
+    expect(screen.getByText(/lo guardado/)).toBeTruthy();
   });
 
   it('una orden fuera de revisión ya no se reenvía', async () => {

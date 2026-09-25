@@ -51,6 +51,15 @@ const ESTADOS: Record<string, string> = {
   Processed: 'Procesada',
   PendingBackofficeReview: 'Pendiente revisión Backoffice',
   SentToSAP: 'Enviado a SAP',
+  /**
+   * Tiene pedido en SAP pero NO salió completa (Middleware 1.379.0, pedido 2026-09-25):
+   * quedó algún centro rechazado por resolver, o se cancelaron líneas por no venta.
+   *
+   * Importa en esta pantalla más que en ninguna: es el estado que queda cuando el reenvío
+   * parte la orden por centro y uno de los buckets se rechaza — o sea, justo lo que
+   * BackOffice está mirando. Antes ese caso decía `SentToSAP`, que se lee como terminada.
+   */
+  PartiallySentToSAP: 'Procesada parcialmente',
   PendingDispatch: 'Pendiente despacho',
   Dispatched: 'Despachada',
   Invoiced: 'Facturada',
@@ -74,6 +83,9 @@ export function statusTone(statusCode: string | null): 'ok' | 'warn' | 'danger' 
     case 'Rejected':
     case 'Annulled':
       return 'danger';
+    // El parcial NO es `ok`: la orden salió, pero puede quedar trabajo acá mismo. `warn`
+    // es lo que dice eso sin gritar un error que no hubo.
+    case 'PartiallySentToSAP':
     case 'Processed':
     case 'PendingDispatch':
     case 'ReadyForApprove':

@@ -18,6 +18,8 @@ import {
   sourceLabel,
   stockByCenter,
   stockFor,
+  statusLabel,
+  statusTone,
 } from './revision-sap.logic';
 import {
   LineDraft,
@@ -900,5 +902,34 @@ describe('las líneas ya enviadas no se cuentan como enviables', () => {
     expect(sapOrdersByCenter(items, initialDrafts(items), '2801', yaEnSap)).toEqual([
       { centerCode: '2802', lines: [2] },
     ]);
+  });
+});
+
+/**
+ * EL ESTADO DE UNA ORDEN QUE SALIO A SAP PERO NO COMPLETA (pedido 2026-09-25).
+ *
+ * 'PartiallySentToSAP' lo escribe el Middleware (1.379.0) cuando el reenvio parte la orden
+ * por centro y uno de los buckets se rechaza, o cuando salio todo pero con lineas
+ * canceladas por no venta. Importa en ESTA pantalla mas que en ninguna: es justo el caso
+ * que BackOffice esta mirando. Antes ese caso decia 'SentToSAP', que se lee como terminada.
+ */
+describe('el estado parcial se muestra distinto de "salió entera"', () => {
+  it('tiene etiqueta propia, no el codigo crudo', () => {
+    expect(statusLabel('PartiallySentToSAP')).toBe('Procesada parcialmente');
+    // Y el de al lado no cambio: son dos cosas distintas.
+    expect(statusLabel('SentToSAP')).toBe('Enviado a SAP');
+  });
+
+  it('avisa (warn), no se pinta como terminada', () => {
+    // 'ok' es para las que ya salieron y no dejaron nada; el parcial puede dejar trabajo
+    // en esta misma bandeja. Y no es 'danger': no hubo un error, salio a medias.
+    expect(statusTone('PartiallySentToSAP')).toBe('warn');
+    expect(statusTone('SentToSAP')).toBe('ok');
+  });
+
+  it('un estado desconocido sigue mostrandose crudo, no como guion', () => {
+    // Si manana el Middleware agrega otro estado, es preferible ver el codigo que nada.
+    expect(statusLabel('LoQueSea')).toBe('LoQueSea');
+    expect(statusTone('LoQueSea')).toBe('muted');
   });
 });
